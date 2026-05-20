@@ -1,0 +1,38 @@
+[project]
+name = "okr-automation-backend"
+version = "0.1.0"
+description = "FastAPI backend for OKR automation and FI SK-CTKT workflow"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "pydantic-settings>=2.4.0",
+  "python-multipart>=0.0.9",
+  "python-jose[cryptography]>=3.3.0",
+  "bcrypt>=4.1.0",
+  "sqlalchemy>=2.0.32",
+  "psycopg[binary]>=3.2.1",
+  "openpyxl>=3.1.5",
+  "alembic>=1.13.2",
+  "redis>=5.0.8",
+  "openai>=1.50.0",
+  "python-dotenv>=1.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+  "hypothesis>=6.112.0",
+  "httpx>=0.27.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["alembic*", "tests*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100

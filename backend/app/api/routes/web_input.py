@@ -1,0 +1,181 @@
+from pathlib import Path
+
+from fastapi import APIRouter, Depends
+from fastapi.responses import FileResponse, PlainTextResponse
+from sqlalchemy.orm import Session
+
+from app.core.security import Role, require_role
+from app.db.session import get_db
+from app.schemas.web_input import LockRequest, WebInputSaveRequest
+from app.services.okr.email_report import email_report_path, generate_email_report, write_email_report_file
+from app.services.okr.report_template import generate_excel_from_web_input
+from app.services.okr.web_input import (
+    assert_team_access,
+    get_current_input_report,
+    lock_report,
+    preview_for_report,
+    save_draft,
+    serialize_web_input,
+    statuses_for_period,
+    submit_report,
+    unlock_report,
+)
+from app.services.repositories import audit
+
+
+router = APIRouter(prefix="/okr/web-input", tags=["okr-web-input"])
+
+READ_ROLES = (Role.ADMIN, Role.WORKSHOP_LEADER, Role.FI_COORDINATOR, Role.TEAM_ACCOUNT)
+WRITE_ROLES = (Role.ADMIN, Role.TEAM_ACCOUNT)
+
+
+@router.get("/status")
+def web_input_status(
+    month: int,
+    year: int,
+    principal: dict = Depends(require_role(*READ_ROLES)),
+    db: Session = Depends(get_db),
+):
+    return statuses_for_period(db, month, year, principal)
+
+
+@router.get("/{team}/{month}/{year}")
+def get_web_input(
+    team: str,
+    month: int,
+    year: int,
+    principal: dict = Depends(require_role(*READ_ROLES)),
+    db: Session = Depends(get_db),
+):
+    assert_team_access(principal, team, write=False)
+    report = get_current_input_report(db, team, month, year)
+    return serialize_web_input(report, team, month, year)
+
+
+@router.put("/{team}/{month}/{year}/draft")
+def put_web_input_draft(
+    team: str,
+    month: int,
+    year: int,
+    payload: WebInputSaveRequest,
+    principal: dict = Depends(require_role(*WRITE_ROLES)),
+    db: Session = Depends(get_db),
+):
+    report = save_draft(db, team, month, year, payload.data, principal, payload.expected_version)
+    return serialize_web_input(report, team, month, year)
+
+
+@router.post("/{team}/{month}/{year}/submit")
+def post_web_input_submit(
+    team: str,
+    month: int,
+    year: int,
+    payload: WebInputSaveRequest,
+    principal: dict = Depends(require_role(*WRITE_ROLES)),
+    db: Session = Depends(get_db),
+):
+    report = submit_report(db, team, month, year, payload.data, principal)
+    return serialize_web_input(report, team, month, year)
+
+
+@router.post("/{team}/{month}/{year}/lock")
+def post_web_input_lock(
+    team: str,
+    month: int,
+    year: int,
+    payload: LockRequest,
+    principal: dict = Depends(require_role(Role.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    report = lock_report(db, team, month, year, payload.reason, principal)
+    return serialize_web_input(report, team, month, year)
+
+
+@router.post("/{team}/{month}/{year}/unlock")
+def post_web_input_unlock(
+    team: str,
+    month: int,
+    year: int,
+    payload: LockRequest,
+    principal: dict = Depends(require_role(Role.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    report = unlock_report(db, team, month, year, payload.reason, principal)
+    return serialize_web_input(report, team, month, year)
+
+
+@router.get("/{team}/{month}/{year}/preview")
+def get_web_input_preview(
+    team: str,
+    month: int,
+    year: int,
+    principal: dict = Depends(require_role(*READ_ROLES)),
+    db: Session = Depends(get_db),
+):
+    assert_team_access(principal, team, write=False)
+    report = get_current_input_report(db, team, month, year)
+    return preview_for_report(report, team, month, year)
+
+
+@router.get("/{team}/{month}/{year}/export/excel")
+def export_web_input_excel(
+    team: str,
+    month: int,
+    year: int,
+    principal: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER, Role.FI_COORDINATOR, Role.TEAM_ACCOUNT)),
+    db: Session = Depends(get_db),
+):
+    assert_team_access(principal, team, write=False)
+    report = get_current_input_report(db, team, month, year)
+    if report is None:
+        from app.services.okr.web_input import _error
+
+        raise _error(404, "REPORT_NOT_FOUND", "Không tìm thấy báo cáo")
+    path = Path(report.file_path) if report.file_path else generate_excel_from_web_input(report)
+    if not path.exists():
+        path = generate_excel_from_web_input(report)
+    audit(db, principal["user_id"], "TeamReport", report.id, "export_excel", {"team": team, "month": month, "year": year})
+    db.commit()
+    return FileResponse(path, filename=path.name)
+
+
+@router.get("/{team}/{month}/{year}/export/email")
+def export_web_input_email(
+    team: str,
+    month: int,
+    year: int,
+    principal: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER, Role.FI_COORDINATOR, Role.TEAM_ACCOUNT)),
+    db: Session = Depends(get_db),
+):
+    assert_team_access(principal, team, write=False)
+    report = get_current_input_report(db, team, month, year)
+    if report is None:
+        from app.services.okr.web_input import _error
+
+        raise _error(404, "REPORT_NOT_FOUND", "Không tìm thấy báo cáo")
+    audit(db, principal["user_id"], "TeamReport", report.id, "export_email", {"team": team, "month": month, "year": year})
+    db.commit()
+    return {"text": generate_email_report(report), "filename": email_report_path(report).name}
+
+
+@router.get("/{team}/{month}/{year}/export/email/download")
+def download_web_input_email(
+    team: str,
+    month: int,
+    year: int,
+    principal: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER, Role.FI_COORDINATOR, Role.TEAM_ACCOUNT)),
+    db: Session = Depends(get_db),
+):
+    assert_team_access(principal, team, write=False)
+    report = get_current_input_report(db, team, month, year)
+    if report is None:
+        from app.services.okr.web_input import _error
+
+        raise _error(404, "REPORT_NOT_FOUND", "Không tìm thấy báo cáo")
+    path = write_email_report_file(report)
+    audit(db, principal["user_id"], "TeamReport", report.id, "download_email", {"team": team, "month": month, "year": year})
+    db.commit()
+    return PlainTextResponse(
+        path.read_text(encoding="utf-8"),
+        headers={"Content-Disposition": f'attachment; filename="{path.name}"'},
+    )

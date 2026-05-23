@@ -39,8 +39,8 @@ def test_dashboard_payload_shape_and_team_scope(client, admin_headers):
     team_dashboard = client.get("/api/v1/okr/dashboard/4/2026", headers=team_headers)
     assert team_dashboard.status_code == 200
     team_payload = team_dashboard.json()
-    assert [row["team"] for row in team_payload["teams"]] == ["TBCH"]
-    assert [row["team"] for row in team_payload["monthly_history"]] == ["TBCH"]
+    assert [row["team"] for row in team_payload["teams"]] == ["TBHTĐK", "TBCH", "TBĐL", "TCĐK"]
+    assert [row["team"] for row in team_payload["monthly_history"]] == ["TBHTĐK", "TBCH", "TBĐL", "TCĐK"]
 
 
 def test_dashboard_latest_endpoint_returns_resolved_period(client, admin_headers):

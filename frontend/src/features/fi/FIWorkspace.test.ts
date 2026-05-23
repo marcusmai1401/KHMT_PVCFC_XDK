@@ -24,10 +24,17 @@ describe("FI action visibility", () => {
     expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Reviewed" })).toEqual(["approve", "reject"]);
   });
 
-  it("shows no actions for Workshop_Leader", () => {
-    expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Submitted" })).toEqual([]);
-    expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Reviewed" })).toEqual([]);
+  it("shows approve and reject for reviewer roles on pending items", () => {
+    expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Submitted" })).toEqual(["approve", "reject"]);
+    expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Deferred" })).toEqual(["approve", "reject"]);
+    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Deferred" })).toEqual(["approve", "reject"]);
     expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Approved" })).toEqual([]);
+  });
+
+  it("allows historical pending items to be reviewed but not deleted", () => {
+    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Submitted", is_historical_import: true })).toEqual(["approve", "reject"]);
+    expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Deferred", is_historical_import: true })).toEqual(["approve", "reject"]);
+    expect(visibleActionsForSk("Admin", "admin", { status: "Approved", is_historical_import: true })).toEqual([]);
   });
 
   it("keeps KHMT assignment admin-only", () => {

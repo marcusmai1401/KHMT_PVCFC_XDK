@@ -8,6 +8,19 @@ export function setToken(value: string) {
   token = value;
 }
 
+type QueryParams = Record<string, string | number | boolean | undefined | null>;
+
+function toQuery(params: QueryParams = {}) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      query.set(key, String(value));
+    }
+  });
+  const text = query.toString();
+  return text ? `?${text}` : "";
+}
+
 async function readErrorMessage(response: Response): Promise<string> {
   const body = await response.text();
   if (!body) {
@@ -72,6 +85,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ user_id: userId, password })
     }),
+  sandboxSwitchRole: (userId: string) =>
+    request<{ access_token: string }>("/auth/sandbox/switch-role", {
+      method: "POST",
+      body: JSON.stringify({ user_id: userId })
+    }),
+  sandboxReset: () => request<any>("/auth/sandbox/reset", { method: "POST" }),
   krMapping: () => request<any[]>("/okr/kr-mapping"),
   headcount: () => request<any>("/admin/headcount"),
   auditLog: () => request<any[]>("/admin/audit-log"),
@@ -93,6 +112,11 @@ export const api = {
   },
   downloadReportTemplate: () => requestBlob("/okr/reports/template"),
   exportDashboard: () => requestBlob("/okr/dashboard/export", { method: "POST" }),
+  updateLeaderKpiAllocation: (month: number, year: number, team: string, payload: { a1?: number | null; a2?: number | null }) =>
+    request<DashboardPayload>(`/okr/leader-kpi-allocation/${month}/${year}/${encodeURIComponent(team)}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
   clientDebugLog: (payload: { source: string; event: string; message?: string; data?: Record<string, unknown> }) =>
     request<{ ok: boolean }>("/okr/client-debug-log", {
       method: "POST",
@@ -142,10 +166,10 @@ export const api = {
     requestBlob(`/okr/web-input/${encodeURIComponent(team)}/${month}/${year}/export/email/download`),
   createSk: (payload: any) =>
     request<any>("/fi/sk-ctkt", { method: "POST", body: JSON.stringify(payload) }),
-  listSk: () => request<any[]>("/fi/sk-ctkt"),
+  listSk: (filters: QueryParams = {}) => request<any[]>(`/fi/sk-ctkt${toQuery(filters)}`),
   getSk: (id: string) => request<any>(`/fi/sk-ctkt/${id}`),
   deleteSk: (id: string) => request<any>(`/fi/sk-ctkt/${id}`, { method: "DELETE" }),
-  publicSk: () => request<any[]>("/fi/sk-ctkt/public"),
+  publicSk: (filters: QueryParams = {}) => request<any[]>(`/fi/sk-ctkt/public${toQuery(filters)}`),
   notifications: () => request<any[]>("/notifications"),
   markNotificationRead: (id: string) => request<any>(`/notifications/${id}/read`, { method: "PUT" }),
   transitionSk: (id: string, action: string, payload: any = {}) =>

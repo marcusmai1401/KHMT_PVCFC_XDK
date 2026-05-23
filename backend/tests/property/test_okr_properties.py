@@ -184,7 +184,7 @@ def test_property_monthly_history_completeness(months: list[int]):
         principal={"role": "Team_Account", "user_id": "TBCH"},
     )
 
-    history = data["monthly_history"][0]["months"]
+    history = next(row for row in data["monthly_history"] if row["team"] == "TBCH")["months"]
     assert len(history) == 12
     for item in history:
         if item["month"] in months:

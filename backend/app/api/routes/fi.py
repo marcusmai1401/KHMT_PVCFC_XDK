@@ -94,10 +94,13 @@ def list_sk(
     khmt_year: int | None = Query(default=None, ge=2020, le=2100),
     status: str | None = None,
     q: str | None = None,
+    include_historical: bool = False,
     principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
     query = select(SKCTKTModel)
+    if not include_historical:
+        query = query.where(SKCTKTModel.is_historical_import.is_(False))
     if team:
         query = query.where(SKCTKTModel.team == team)
     if khmt_month:
@@ -128,17 +131,18 @@ def public_sk(
     khmt_month: int | None = Query(default=None, ge=1, le=12),
     khmt_year: int | None = Query(default=None, ge=2020, le=2100),
     q: str | None = None,
-    _: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
+    historical: bool | None = None,
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
-    cache_key = f"fi:public_sk:v2:{team or ''}:{author or ''}:{khmt_month or ''}:{khmt_year or ''}:{q or ''}"
+    namespace = "sandbox" if principal.get("sandbox") else "prod"
+    cache_key = f"fi:public_sk:v5:{namespace}:{team or ''}:{author or ''}:{khmt_month or ''}:{khmt_year or ''}:{q or ''}:{historical if historical is not None else ''}"
     cached = cache_get(cache_key)
     if cached is not None:
         return cached
-    query = select(SKCTKTModel).where(
-        SKCTKTModel.is_historical_import.is_(False),
-        SKCTKTModel.status != SKStatus.DRAFT.value,
-    )
+    query = select(SKCTKTModel).where(SKCTKTModel.status != SKStatus.DRAFT.value)
+    if historical is not None:
+        query = query.where(SKCTKTModel.is_historical_import.is_(historical))
     if team:
         query = query.where(SKCTKTModel.team == team)
     if khmt_month:
@@ -251,12 +255,22 @@ def review(record_id: str, payload: TransitionRequest, principal: dict = Depends
 
 
 @router.post("/sk-ctkt/{record_id}/approve")
-def approve(record_id: str, payload: TransitionRequest = TransitionRequest(), principal: dict = Depends(require_role(Role.FI_COORDINATOR, Role.ADMIN)), db: Session = Depends(get_db)):
+def approve(
+    record_id: str,
+    payload: TransitionRequest = TransitionRequest(),
+    principal: dict = Depends(require_role(Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
+    db: Session = Depends(get_db),
+):
     return _transition(record_id, "approve", payload, principal, db)
 
 
 @router.post("/sk-ctkt/{record_id}/reject")
-def reject(record_id: str, payload: TransitionRequest, principal: dict = Depends(require_role(Role.FI_COORDINATOR, Role.ADMIN)), db: Session = Depends(get_db)):
+def reject(
+    record_id: str,
+    payload: TransitionRequest,
+    principal: dict = Depends(require_role(Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
+    db: Session = Depends(get_db),
+):
     return _transition(record_id, "reject", payload, principal, db)
 
 

@@ -217,4 +217,15 @@ describe("api client auth contract", () => {
     await api.getSk("sk1");
     expect(fetchMock).toHaveBeenLastCalledWith("/api/v1/fi/sk-ctkt/sk1", expect.any(Object));
   });
+
+  it("passes FI list filters through query params", async () => {
+    setToken("signed-token");
+    fetchMock.mockResolvedValue(okJson([]));
+
+    await api.listSk({ include_historical: true, team: "TBĐL" });
+    expect(fetchMock).toHaveBeenCalledWith("/api/v1/fi/sk-ctkt?include_historical=true&team=TB%C4%90L", expect.any(Object));
+
+    await api.publicSk({ historical: true, team: "TCĐK" });
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/v1/fi/sk-ctkt/public?historical=true&team=TC%C4%90K", expect.any(Object));
+  });
 });

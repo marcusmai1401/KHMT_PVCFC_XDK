@@ -2,8 +2,8 @@ import type { ObjectiveStatus } from "../types/dashboard";
 
 const labels: Record<ObjectiveStatus, string> = {
   completed: "Hoàn thành",
-  at_risk: "Có rủi ro",
-  failed: "Không đạt",
+  at_risk: "Không Đạt",
+  failed: "Không Đạt",
   no_plan: "Không có KH",
   no_data: "Chưa có dữ liệu",
 };

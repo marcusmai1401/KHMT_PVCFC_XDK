@@ -134,12 +134,24 @@ export interface LeaderKPIAllocation {
   cap_note?: string;
 }
 
+export interface ManualLeaderKPIAllocation {
+  team: string;
+  team_name?: string;
+  a1?: number | null;
+  a2?: number | null;
+  updated_at?: string | null;
+  updated_by?: string | null;
+}
+
 export interface DashboardTeamRow {
   team: string;
   team_name: string;
+  has_report?: boolean;
   discipline_status: string;
+  discipline_description?: string;
   monthly_assessment: string;
   leader_kpi_allocation?: LeaderKPIAllocation;
+  leader_kpi_manual_allocation?: ManualLeaderKPIAllocation;
   kr_statuses: Record<string, TeamStatus>;
 }
 
@@ -148,6 +160,8 @@ export interface DashboardPayload {
   teams: DashboardTeamRow[];
   leader_kpi_allocations: LeaderKPIAllocation[];
   kpi_allocation_summary: Record<string, number>;
+  manual_leader_kpi_allocations?: ManualLeaderKPIAllocation[];
+  manual_kpi_allocation_summary?: Record<string, number>;
   period?: DashboardPeriod | { month: number; year: number; label?: string; data_state?: "ready" | "partial" | "no_data"; source?: string };
   matrix?: Record<string, any>;
   monthly_history?: MonthlyHistoryEntry[];

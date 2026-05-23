@@ -85,7 +85,7 @@ def test_export_writes_hidden_mapping_warning_sheet(tmp_path):
     assert sheet["C2"].value == "data!A117:D127"
 
 
-def test_dashboard_view_keeps_backward_keys_and_filters_team_account():
+def test_dashboard_view_keeps_backward_keys_and_exposes_full_workshop_to_team_account():
     reports = [_report("TBCH", 4, "O3.KR2", 12)]
     data = build_dashboard_view(
         4,
@@ -96,13 +96,32 @@ def test_dashboard_view_keeps_backward_keys_and_filters_team_account():
         principal={"role": "Team_Account", "user_id": "TBCH"},
     )
     assert "columns" in data and "teams" in data
-    assert [team["team"] for team in data["teams"]] == ["TBCH"]
-    assert len(data["monthly_history"][0]["months"]) == 12
-    assert data["monthly_history"][0]["months"][3]["source"] == "db"
+    assert [team["team"] for team in data["teams"]] == ["TBHTĐK", "TBCH", "TBĐL", "TCĐK"]
+    assert data["teams"][0]["monthly_assessment"] == "N/A"
+    assert data["teams"][0]["has_report"] is False
+    tbch_history = next(row for row in data["monthly_history"] if row["team"] == "TBCH")
+    assert len(tbch_history["months"]) == 12
+    assert tbch_history["months"][3]["source"] == "db"
     assert data["source_references"]["unconfirmed_blocks"][0]["mapping_status"] == "needs_confirmation"
     assert data["period"] == {"month": 4, "year": 2026, "label": "T4/2026", "data_state": "ready"}
     assert [section["objective_code"] for section in data["objective_sections"]] == ["O1", "O2", "O3", "O4", "O5", "O6"]
     assert data["technical_metadata"]["source_references"]["unconfirmed_blocks"]
+
+
+def test_dashboard_matrix_exposes_discipline_description():
+    reports = [_report("TBCH", 4, "O3.KR2", 12)]
+    reports[0]["team_level"] = {
+        "monthly_assessment": "Không hoàn thành",
+        "discipline_status": "NOK",
+        "discipline_description": "Một nhân sự Đội TBCH không tuân thủ đúng HDBD",
+    }
+
+    data = build_dashboard_view(4, 2026, reports, history_reports=reports)
+    team = next(row for row in data["teams"] if row["team"] == "TBCH")
+
+    assert team["discipline_status"] == "NOK"
+    assert team["discipline_description"] == "Một nhân sự Đội TBCH không tuân thủ đúng HDBD"
+    assert team["kr_statuses"]["O1.KR1"] == "NG"
 
 
 def test_dashboard_view_marks_empty_period_and_exposes_latest_data_period():

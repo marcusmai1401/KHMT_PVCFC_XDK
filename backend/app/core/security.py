@@ -34,9 +34,11 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def create_access_token(subject: str, role: Role) -> str:
+def create_access_token(subject: str, role: Role, *, sandbox: bool = False) -> str:
     expires = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_minutes)
     payload: dict[str, Any] = {"sub": subject, "role": role.value, "exp": expires}
+    if sandbox:
+        payload["sandbox"] = True
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
@@ -50,15 +52,19 @@ def decode_token(token: str) -> dict[str, Any]:
 def current_principal(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
     db: Session = Depends(get_db),
-) -> dict[str, str]:
+) -> dict[str, Any]:
     if credentials is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chưa đăng nhập")
     payload = decode_token(credentials.credentials)
     user_id = str(payload["sub"])
+    if payload.get("sandbox"):
+        from app.services.sandbox import ensure_sandbox_data
+
+        ensure_sandbox_data()
     user = db.get(User, user_id)
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Phiên đăng nhập không hợp lệ")
-    return {"user_id": user.id, "role": user.role}
+    return {"user_id": user.id, "role": user.role, "sandbox": bool(payload.get("sandbox"))}
 
 
 def require_role(*roles: Role):

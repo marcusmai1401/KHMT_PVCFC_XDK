@@ -3,6 +3,9 @@ import json
 
 from openpyxl import Workbook, load_workbook
 
+from app.db.session import create_session
+from app.models.domain import SKCTKTModel
+
 
 def _login(client, user_id: str, password: str) -> dict[str, str]:
     response = client.post("/api/v1/auth/login", json={"user_id": user_id, "password": password})
@@ -125,8 +128,8 @@ def test_fi_team_draft_is_private_until_submitted(client, admin_headers):
     fi_list_after_submit = client.get("/api/v1/fi/sk-ctkt", headers=fi_headers)
     assert record_id in {item["id"] for item in fi_list_after_submit.json()}
     leader_list_before_approve = client.get("/api/v1/fi/sk-ctkt", headers=leader_headers)
-    assert record_id not in {item["id"] for item in leader_list_before_approve.json()}
-    assert client.get(f"/api/v1/fi/sk-ctkt/{record_id}", headers=leader_headers).status_code == 403
+    assert record_id in {item["id"] for item in leader_list_before_approve.json()}
+    assert client.get(f"/api/v1/fi/sk-ctkt/{record_id}", headers=leader_headers).status_code == 200
     public_after_submit = client.get("/api/v1/fi/sk-ctkt/public", headers=team_headers)
     assert record_id in {item["id"] for item in public_after_submit.json()}
 
@@ -232,6 +235,53 @@ def test_public_sk_is_internal_and_excludes_drafts(client):
     assert record_id not in {item["id"] for item in client.get("/api/v1/fi/sk-ctkt/public", headers=team_headers).json()}
     assert client.post(f"/api/v1/fi/sk-ctkt/{record_id}/submit", headers=team_headers, json={}).status_code == 200
     assert record_id in {item["id"] for item in client.get("/api/v1/fi/sk-ctkt/public", headers=team_headers).json()}
+
+
+def test_legacy_sk_is_history_and_can_be_reviewed_from_history(client, admin_headers):
+    team_headers = _login(client, "TBCH", "tbch-pass")
+    fi_headers = _login(client, "fi", "fi-pass")
+    with create_session() as db:
+        db.add(
+            SKCTKTModel(
+                id="sk-legacy",
+                sk_code="HIST-TBCH-TBCH-99",
+                title="Legacy BM01",
+                author_name="Tác giả cũ",
+                author_user_id="historical-import",
+                team="TBCH",
+                content_description="Nội dung legacy",
+                completion_plan="T6/2026",
+                status="Submitted",
+                status_history=[],
+                is_public=False,
+                is_counted_for_okr=False,
+                is_historical_import=True,
+                bm01_source_file="FI xlsx/BM 01 Dang ky - Danh gia SK _Rev1.xlsx",
+                bm01_source_sheet="TBCH",
+                bm01_source_row=99,
+                bm01_raw_conclusion="",
+            )
+        )
+        db.commit()
+
+    processing = client.get("/api/v1/fi/sk-ctkt", headers=team_headers)
+    assert processing.status_code == 200
+    assert "sk-legacy" not in {item["id"] for item in processing.json()}
+
+    processing_with_history = client.get("/api/v1/fi/sk-ctkt?include_historical=true", headers=team_headers)
+    assert "sk-legacy" in {item["id"] for item in processing_with_history.json()}
+
+    legacy_history = client.get("/api/v1/fi/sk-ctkt/public?historical=true&team=TBCH", headers=team_headers)
+    assert legacy_history.status_code == 200
+    assert "sk-legacy" in {item["id"] for item in legacy_history.json()}
+
+    current_public = client.get("/api/v1/fi/sk-ctkt/public?historical=false&team=TBCH", headers=team_headers)
+    assert "sk-legacy" not in {item["id"] for item in current_public.json()}
+
+    transition = client.post("/api/v1/fi/sk-ctkt/sk-legacy/approve", headers=fi_headers, json={})
+    assert transition.status_code == 200
+    assert transition.json()["status"] == "Approved"
+    assert transition.json()["is_historical_import"] is True
 
 
 def test_okr_duplicate_requires_confirmation_and_export_is_valid_xlsx(client, admin_headers):

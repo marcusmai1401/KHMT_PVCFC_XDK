@@ -11,9 +11,14 @@ from app.models.domain import SKCTKTModel, SKCodeSequenceModel, SKImageModel
 from app.services.fi.workflow import FIAction, SKStatus, is_public_status, next_status
 from app.services.repositories import audit, make_id, model_to_dict, notify
 
-LEADER_VISIBLE_STATUSES = {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}
 NON_DRAFT_STATUSES = {status.value for status in SKStatus if status != SKStatus.DRAFT}
 OWNER_DELETABLE_STATUSES = {SKStatus.DRAFT.value}
+REVIEWABLE_STATUSES = {
+    SKStatus.SUBMITTED.value,
+    SKStatus.REVIEWED.value,
+    SKStatus.DEFERRED.value,
+}
+HISTORICAL_REVIEW_ACTIONS = {FIAction.APPROVE.value, FIAction.REJECT.value}
 
 
 def _utc_now() -> datetime:
@@ -32,10 +37,21 @@ def generate_sk_code(db: Session, team: str, year: int) -> str:
     return f"{prefix}-{value:04d}"
 
 
+def _int_or_default(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def create_sk_ctkt(db: Session, payload: dict[str, Any], actor: str) -> SKCTKTModel:
     now = _utc_now()
     team = payload["team"]
-    year = int(payload.get("year") or now.year)
+    year = _int_or_default(payload.get("year") or payload.get("registration_year"), now.year)
+    registration_month = _int_or_default(payload.get("registration_month"), now.month)
+    if registration_month < 1 or registration_month > 12:
+        registration_month = now.month
+    registration_year = _int_or_default(payload.get("registration_year"), year)
     record = SKCTKTModel(
         id=make_id("sk"),
         sk_code=generate_sk_code(db, team, year),
@@ -46,7 +62,20 @@ def create_sk_ctkt(db: Session, payload: dict[str, Any], actor: str) -> SKCTKTMo
         content_description=payload["content_description"],
         completion_plan=payload["completion_plan"],
         status=SKStatus.DRAFT.value,
-        status_history=[],
+        status_history=[
+            {
+                "from_status": None,
+                "to_status": SKStatus.DRAFT.value,
+                "changed_by": actor,
+                "changed_at": now.isoformat(),
+                "reason": "web_registration",
+                "comments": {
+                    "registration_month": registration_month,
+                    "registration_year": registration_year,
+                    "source": "web",
+                },
+            }
+        ],
         consider_for_khmt=False,
         is_public=False,
         is_counted_for_okr=False,
@@ -64,14 +93,13 @@ def create_sk_ctkt(db: Session, payload: dict[str, Any], actor: str) -> SKCTKTMo
 def can_view_sk(record: SKCTKTModel, principal: dict[str, str]) -> bool:
     role = principal["role"]
     user_id = principal["user_id"]
-    if role == Role.TEAM_ACCOUNT.value:
-        return record.team == user_id
-    if role == Role.ADMIN.value:
-        return record.status in NON_DRAFT_STATUSES
-    if role == Role.FI_COORDINATOR.value:
-        return record.status in NON_DRAFT_STATUSES
-    if role == Role.WORKSHOP_LEADER.value:
-        return record.status in LEADER_VISIBLE_STATUSES
+    if record.status in NON_DRAFT_STATUSES:
+        return role in {
+            Role.TEAM_ACCOUNT.value,
+            Role.ADMIN.value,
+            Role.FI_COORDINATOR.value,
+            Role.WORKSHOP_LEADER.value,
+        }
     return record.author_user_id == user_id
 
 
@@ -122,12 +150,9 @@ def _validate_actor_for_transition(record: SKCTKTModel, action: str, actor: str,
             SKStatus.NEED_MORE_INFO.value,
         }:
             raise PermissionError("Chỉ hủy được SK ở trạng thái Nháp hoặc Cần bổ sung")
-    if role == Role.FI_COORDINATOR.value:
-        if action in {FIAction.APPROVE.value, FIAction.REJECT.value} and record.status not in {
-            SKStatus.SUBMITTED.value,
-            SKStatus.REVIEWED.value,
-        }:
-            raise PermissionError("Chỉ duyệt/từ chối được SK ở trạng thái Chờ duyệt hoặc Đã xem xét")
+    if role in {Role.FI_COORDINATOR.value, Role.WORKSHOP_LEADER.value}:
+        if action in {FIAction.APPROVE.value, FIAction.REJECT.value} and record.status not in REVIEWABLE_STATUSES:
+            raise PermissionError("Chỉ duyệt/từ chối được SK ở trạng thái Chờ xét duyệt, Đã xem xét hoặc Xem xét sau")
 
 
 def transition_sk_ctkt(
@@ -142,6 +167,12 @@ def transition_sk_ctkt(
     record = db.get(SKCTKTModel, record_id)
     if record is None:
         raise KeyError("SK-CTKT not found")
+    if record.is_historical_import:
+        if action not in HISTORICAL_REVIEW_ACTIONS or record.status not in {
+            SKStatus.SUBMITTED.value,
+            SKStatus.DEFERRED.value,
+        }:
+            raise PermissionError("FI legacy chỉ cho xét duyệt các mục Chờ xét duyệt hoặc Xem xét sau")
     _validate_actor_for_transition(record, action, actor, role)
     result = next_status(record.status, action, role, note)
     before = record.status
@@ -152,6 +183,12 @@ def transition_sk_ctkt(
         record.fi_coordinator_comments = comments
     if note:
         record.decision_note = note
+    if record.is_historical_import:
+        record.is_counted_for_okr = (
+            record.status in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}
+            and record.khmt_month is not None
+            and record.khmt_year is not None
+        )
     if record.status == SKStatus.SUBMITTED.value:
         record.submitted_at = now
     elif record.status == SKStatus.REVIEWED.value:
@@ -197,6 +234,8 @@ def assign_khmt(db: Session, record_id: str, month: int, year: int, actor: str) 
     record = db.get(SKCTKTModel, record_id)
     if record is None:
         raise KeyError("SK-CTKT not found")
+    if record.is_historical_import:
+        raise ValueError("FI legacy chỉ dùng để tra cứu lịch sử, không gán KHMT từ workflow")
     if record.status not in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}:
         raise ValueError("Only Approved or Completed SK-CTKT can be assigned to KHMT")
     record.khmt_month = month

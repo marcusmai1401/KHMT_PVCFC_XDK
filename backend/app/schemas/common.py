@@ -25,6 +25,8 @@ class SKCreate(BaseModel):
     title: str
     content_description: str
     completion_plan: str
+    registration_month: int | None = Field(default=None, ge=1, le=12)
+    registration_year: int | None = Field(default=None, ge=2020, le=2100)
     author_user_id: str | None = None
     year: int | None = None
 
@@ -73,6 +75,11 @@ class HeadcountUpdate(BaseModel):
     effective_month: int = Field(default=1, ge=1, le=12)
     effective_year: int = Field(default=2026, ge=2020, le=2100)
     notes: str | None = None
+
+
+class LeaderKPIAllocationUpdate(BaseModel):
+    a1: int | None = Field(default=None, ge=0, le=99)
+    a2: int | None = Field(default=None, ge=0, le=99)
 
 
 class SystemConfigUpdate(BaseModel):

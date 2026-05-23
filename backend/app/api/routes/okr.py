@@ -13,9 +13,10 @@ from app.core.config import settings
 from app.core.security import Role, require_role
 from app.db.session import get_db
 from app.models.domain import HistoricalSnapshotModel, KRMappingModel, SystemConfigModel, TeamHeadcountModel, TeamReportModel, WarningModel
-from app.schemas.common import WarningResolveRequest
+from app.schemas.common import LeaderKPIAllocationUpdate, WarningResolveRequest
 from app.services.cache import cache_delete_prefix, cache_get, cache_set
 from app.services.fi.service import count_for_okr
+from app.services.okr.constants import TEAM_DISPLAY_NAMES, TEAMS
 from app.services.okr.dashboard import build_dashboard_view, export_dashboard_workbook
 from app.services.okr.historical_snapshot import import_historical_snapshot, snapshots_to_dicts
 from app.services.okr.kpi_rules import kpi_rule_periods
@@ -100,6 +101,50 @@ def _period_filter(periods: list[tuple[int, int]]):
 def _deadline_day(db: Session) -> int:
     record = db.get(SystemConfigModel, "submission_deadline_day")
     return int(record.value if record else 25)
+
+
+def _manual_leader_kpi_key(month: int, year: int) -> str:
+    return f"leader_kpi_manual_allocations:{year}:{month}"
+
+
+def _nullable_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _manual_leader_kpi_allocations(db: Session, month: int, year: int) -> dict[str, dict[str, Any]]:
+    record = db.get(SystemConfigModel, _manual_leader_kpi_key(month, year))
+    raw = record.value if record and isinstance(record.value, dict) else {}
+    rows: dict[str, dict[str, Any]] = {}
+    for team in TEAMS:
+        value = raw.get(team) if isinstance(raw.get(team), dict) else {}
+        rows[team] = {
+            "team": team,
+            "team_name": TEAM_DISPLAY_NAMES[team],
+            "a1": _nullable_int(value.get("a1")),
+            "a2": _nullable_int(value.get("a2")),
+            "updated_at": value.get("updated_at"),
+            "updated_by": value.get("updated_by"),
+        }
+    return rows
+
+
+def _apply_manual_leader_kpi_allocations(data: dict[str, Any], manual_rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    visible_teams = [row.get("team") for row in data.get("teams", []) if row.get("team") in TEAMS]
+    for row in data.get("teams", []):
+        team = row.get("team")
+        if team in manual_rows:
+            row["leader_kpi_manual_allocation"] = manual_rows[team]
+    data["manual_leader_kpi_allocations"] = [manual_rows[team] for team in visible_teams if team in manual_rows]
+    data["manual_kpi_allocation_summary"] = {
+        "A1": sum(int(manual_rows[team].get("a1") or 0) for team in visible_teams if team in manual_rows),
+        "A2": sum(int(manual_rows[team].get("a2") or 0) for team in visible_teams if team in manual_rows),
+    }
+    return data
 
 
 def _late_warning_if_needed(db: Session, report: TeamReportModel) -> None:
@@ -343,7 +388,8 @@ def resolve_warning(
 
 
 def _dashboard_payload(month: int, year: int, principal: dict, db: Session) -> dict[str, Any]:
-    cache_key = f"okr:dashboard:{month}:{year}:{principal['role']}:{principal['user_id']}"
+    namespace = "sandbox" if principal.get("sandbox") else "prod"
+    cache_key = f"okr:dashboard:v2:{namespace}:{month}:{year}:{principal['role']}:{principal['user_id']}"
     cached = cache_get(cache_key)
     if cached is not None:
         return cached
@@ -402,9 +448,42 @@ def _dashboard_payload(month: int, year: int, principal: dict, db: Session) -> d
         fi_counts_by_team=count_for_okr(db, month, year),
         principal=principal,
     )
+    data = _apply_manual_leader_kpi_allocations(data, _manual_leader_kpi_allocations(db, month, year))
     ttl = min(int(settings.dashboard_cache_ttl_seconds), 300)
     cache_set(cache_key, data, ttl)
     return data
+
+
+@router.put("/leader-kpi-allocation/{month}/{year}/{team}")
+def update_leader_kpi_allocation(
+    month: int,
+    year: int,
+    team: str,
+    payload: LeaderKPIAllocationUpdate,
+    principal: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER)),
+    db: Session = Depends(get_db),
+):
+    if team not in TEAMS:
+        raise HTTPException(status_code=404, detail="Không tìm thấy đội/tổ")
+    key = _manual_leader_kpi_key(month, year)
+    record = db.get(SystemConfigModel, key)
+    current = dict(record.value) if record and isinstance(record.value, dict) else {}
+    current[team] = {
+        "a1": payload.a1,
+        "a2": payload.a2,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_by": principal["user_id"],
+    }
+    if record is None:
+        record = SystemConfigModel(key=key, value=current, updated_by=principal["user_id"])
+        db.add(record)
+    else:
+        record.value = current
+        record.updated_by = principal["user_id"]
+    audit(db, principal["user_id"], "LeaderKPIAllocation", f"{year}-{month}:{team}", "upsert", current[team])
+    db.commit()
+    cache_delete_prefix("okr:dashboard")
+    return _dashboard_payload(month, year, principal, db)
 
 
 @router.get("/dashboard/latest")

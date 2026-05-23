@@ -8,6 +8,7 @@ from openpyxl.cell.cell import MergedCell
 from app.core.config import settings
 from app.services.okr.constants import DATA_SHEET_BLOCKS, DASHBOARD_COLUMNS, TEAM_DISPLAY_NAMES, TEAMS
 from app.services.okr.chart_blocks import CHART_CONFIGS, build_chart_blocks, select_chart_snapshots_for_period
+from app.services.okr.evaluation_rules import has_discipline_violation
 from app.services.okr.evaluation_rules import source_references as evaluation_rule_source_references
 from app.services.okr.historical_snapshot import UNCONFIRMED_BLOCKS
 from app.services.okr.kr_mapping import load_master_kr_mapping
@@ -80,25 +81,31 @@ def build_dashboard_matrix(
     leader_allocations = build_leader_kpi_allocations(history_reports or team_reports, *period) if period else []
     leader_by_team = {row["team"]: row for row in leader_allocations}
     by_team = {team: {} for team in TEAMS}
-    monthly = {team: "Hoàn thành" for team in TEAMS}
-    discipline = {team: "OK" for team in TEAMS}
+    report_teams: set[str] = set()
+    monthly = {team: "N/A" for team in TEAMS}
+    discipline = {team: "#N/A" for team in TEAMS}
+    discipline_descriptions = {team: "" for team in TEAMS}
 
     for report in team_reports:
         team = report.get("team")
         if team not in by_team:
             continue
+        report_teams.add(team)
         for assessment in report.get("assessments", []):
             by_team[team][assessment["workshop_kr_code"]] = assessment["dashboard_status"]
         summary = report.get("team_level", {})
         monthly[team] = summary.get("monthly_assessment", monthly[team])
         discipline[team] = summary.get("discipline_status", discipline[team])
+        discipline_descriptions[team] = summary.get("discipline_description") or discipline_descriptions[team]
 
     rows = []
     for team in TEAMS:
         row = {
             "team": team,
             "team_name": TEAM_DISPLAY_NAMES[team],
+            "has_report": team in report_teams,
             "discipline_status": discipline[team],
+            "discipline_description": discipline_descriptions[team],
             "monthly_assessment": monthly[team],
             "leader_kpi_allocation": leader_by_team.get(
                 team,
@@ -121,6 +128,8 @@ def build_dashboard_matrix(
             row["kr_statuses"][code] = by_team[team].get(code, "#N/A")
         rows.append(row)
 
+    _apply_discipline_status_overrides(rows)
+
     return {
         "columns": master_records,
         "dashboard_columns": DASHBOARD_COLUMNS,
@@ -129,6 +138,95 @@ def build_dashboard_matrix(
         "kpi_allocation_summary": summarize_leader_kpi_allocations(leader_allocations),
         "workshop_staff_displayed": False,
     }
+
+
+def _normalize_match_text(value: str | None) -> str:
+    text = str(value or "").strip().lower()
+    replacements = {
+        "đ": "d",
+        "á": "a",
+        "à": "a",
+        "ả": "a",
+        "ã": "a",
+        "ạ": "a",
+        "ă": "a",
+        "ắ": "a",
+        "ằ": "a",
+        "ẳ": "a",
+        "ẵ": "a",
+        "ặ": "a",
+        "â": "a",
+        "ấ": "a",
+        "ầ": "a",
+        "ẩ": "a",
+        "ẫ": "a",
+        "ậ": "a",
+        "é": "e",
+        "è": "e",
+        "ẻ": "e",
+        "ẽ": "e",
+        "ẹ": "e",
+        "ê": "e",
+        "ế": "e",
+        "ề": "e",
+        "ể": "e",
+        "ễ": "e",
+        "ệ": "e",
+        "í": "i",
+        "ì": "i",
+        "ỉ": "i",
+        "ĩ": "i",
+        "ị": "i",
+        "ó": "o",
+        "ò": "o",
+        "ỏ": "o",
+        "õ": "o",
+        "ọ": "o",
+        "ô": "o",
+        "ố": "o",
+        "ồ": "o",
+        "ổ": "o",
+        "ỗ": "o",
+        "ộ": "o",
+        "ơ": "o",
+        "ớ": "o",
+        "ờ": "o",
+        "ở": "o",
+        "ỡ": "o",
+        "ợ": "o",
+        "ú": "u",
+        "ù": "u",
+        "ủ": "u",
+        "ũ": "u",
+        "ụ": "u",
+        "ư": "u",
+        "ứ": "u",
+        "ừ": "u",
+        "ử": "u",
+        "ữ": "u",
+        "ự": "u",
+        "ý": "y",
+        "ỳ": "y",
+        "ỷ": "y",
+        "ỹ": "y",
+        "ỵ": "y",
+    }
+    for source, target in replacements.items():
+        text = text.replace(source, target)
+    return text
+
+
+def _discipline_description_matches_o1_kr1(description: str | None) -> bool:
+    text = _normalize_match_text(description)
+    return "hdbd" in text or ("bao duong dinh ky" in text and "quan trac" in text)
+
+
+def _apply_discipline_status_overrides(rows: list[dict[str, Any]]) -> None:
+    for row in rows:
+        if not has_discipline_violation(row.get("discipline_status")):
+            continue
+        if _discipline_description_matches_o1_kr1(row.get("discipline_description")):
+            row.setdefault("kr_statuses", {})["O1.KR1"] = "NG"
 
 
 def _short_assessment(value: str | None) -> str | None:
@@ -146,8 +244,6 @@ def _short_assessment(value: str | None) -> str | None:
 
 
 def _visible_teams(principal: dict[str, str] | None) -> list[str]:
-    if principal and principal.get("role") == "Team_Account" and principal.get("user_id") in TEAMS:
-        return [principal["user_id"]]
     return list(TEAMS)
 
 

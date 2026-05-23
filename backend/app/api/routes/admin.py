@@ -90,13 +90,14 @@ def update_user_role(
 
 
 @router.get("/kr-mapping")
-def kr_mapping(_: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER)), db: Session = Depends(get_db)):
-    cached = cache_get("admin:kr_mapping")
+def kr_mapping(principal: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER)), db: Session = Depends(get_db)):
+    cache_key = f"admin:{'sandbox' if principal.get('sandbox') else 'prod'}:kr_mapping"
+    cached = cache_get(cache_key)
     if cached is not None:
         return cached
     records = db.execute(select(KRMappingModel).order_by(KRMappingModel.dashboard_column)).scalars().all()
     data = sorted((model_to_dict(record) for record in records), key=_kr_sort_key)
-    cache_set("admin:kr_mapping", data, 24 * 60 * 60)
+    cache_set(cache_key, data, 24 * 60 * 60)
     return data
 
 
@@ -129,14 +130,15 @@ def update_kr_mapping(
         updated.append(record)
     audit(db, principal["user_id"], "KRMapping", "bulk", "update", {"count": len(updated)})
     db.commit()
-    cache_delete_prefix("admin:kr_mapping")
+    cache_delete_prefix("admin:")
     cache_delete_prefix("okr:dashboard")
     return [model_to_dict(record) for record in updated]
 
 
 @router.get("/headcount")
-def headcount(_: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER)), db: Session = Depends(get_db)):
-    cached = cache_get("admin:headcount")
+def headcount(principal: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER)), db: Session = Depends(get_db)):
+    cache_key = f"admin:{'sandbox' if principal.get('sandbox') else 'prod'}:headcount"
+    cached = cache_get(cache_key)
     if cached is not None:
         return cached
     records = db.execute(select(TeamHeadcountModel)).scalars().all()
@@ -153,7 +155,7 @@ def headcount(_: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER)),
     }
     workshop = next((record.total_headcount for record in records if record.team == "Workshop_Staff"), 0)
     data = {"teams": teams, "workshop_staff": workshop}
-    cache_set("admin:headcount", data, 60 * 60)
+    cache_set(cache_key, data, 60 * 60)
     return data
 
 
@@ -187,7 +189,7 @@ def update_headcount(
         record.notes = payload.notes
     audit(db, principal["user_id"], "Headcount", record.id, "upsert", model_to_dict(record))
     db.commit()
-    cache_delete_prefix("admin:headcount")
+    cache_delete_prefix("admin:")
     cache_delete_prefix("okr:dashboard")
     return model_to_dict(record)
 

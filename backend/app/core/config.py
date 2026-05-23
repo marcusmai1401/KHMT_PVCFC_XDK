@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     workspace_dir: Path = WORKSPACE_DIR
     storage_dir: Path = workspace_dir / "storage"
     source_okr_workbook: Path = workspace_dir / "OKR tháng 04-2026 - X.ĐK.xlsx"
-    source_bm01_workbook: Path = workspace_dir / "BM 01 Dang ky - Danh gia SK _Rev1.xlsx"
+    source_bm01_workbook: Path = workspace_dir / "FI xlsx" / "BM 01 Dang ky - Danh gia SK _Rev1.xlsx"
     max_excel_upload_mb: int = 10
     max_image_upload_mb: int = 5
     dashboard_cache_ttl_seconds: int = 300

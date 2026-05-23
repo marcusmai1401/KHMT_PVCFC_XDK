@@ -13,6 +13,10 @@ def test_fi_can_approve_directly_from_submitted():
     assert next_status("Submitted", "approve", "FI_Coordinator").to_status.value == "Approved"
 
 
+def test_fi_can_approve_deferred():
+    assert next_status("Deferred", "approve", "FI_Coordinator").to_status.value == "Approved"
+
+
 def test_fi_can_reject_from_submitted_with_note():
     assert next_status("Submitted", "reject", "FI_Coordinator", decision_note="Không đủ thông tin").to_status.value == "Rejected"
 
@@ -27,11 +31,10 @@ def test_invalid_transition_rejected():
         next_status("Draft", "approve", "FI_Coordinator")
 
 
-def test_workshop_leader_has_no_actions():
-    with pytest.raises(PermissionError):
-        next_status("Submitted", "approve", "Workshop_Leader")
-    with pytest.raises(PermissionError):
-        next_status("Submitted", "reject", "Workshop_Leader")
+def test_workshop_leader_can_review_submitted_and_deferred():
+    assert next_status("Submitted", "approve", "Workshop_Leader").to_status.value == "Approved"
+    assert next_status("Deferred", "approve", "Workshop_Leader").to_status.value == "Approved"
+    assert next_status("Submitted", "reject", "Workshop_Leader", decision_note="Không phù hợp").to_status.value == "Rejected"
 
 
 def test_decision_note_required_for_reject():

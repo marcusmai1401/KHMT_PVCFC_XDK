@@ -1,0 +1,68 @@
+name: okr-system
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-okr_automation}
+      POSTGRES_USER: ${POSTGRES_USER:-okr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-okr} -d ${POSTGRES_DB:-okr_automation}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      OKR_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-okr}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-okr_automation}
+      OKR_REDIS_URL: redis://redis:6379/0
+      OKR_STORAGE_DIR: /app/storage
+      OKR_SOURCE_OKR_WORKBOOK: /app/KHMT_T1_T2_T3_T4/OKR tháng 04-2026 - X.ĐK.xlsx
+      OKR_SOURCE_BM01_WORKBOOK: /app/FI xlsx/BM 01 Dang ky - Danh gia SK _Rev1.xlsx
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE: /api/v1
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_started
+
+volumes:
+  postgres_data:

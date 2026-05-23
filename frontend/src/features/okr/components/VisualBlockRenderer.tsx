@@ -1,5 +1,5 @@
-import { Activity, BarChart3, ClipboardList, LineChart, Radar, TrendingUp } from "lucide-react";
-import type React from "react";
+import { Activity, BarChart3, ClipboardList, LineChart, Radar, Target, TrendingUp } from "lucide-react";
+import React from "react";
 import type { ChartDataset, VisualBlock } from "../types/dashboard";
 import { vn } from "../i18n";
 import { NoDataBlock, NoPlanBlock } from "./EmptyBlocks";
@@ -65,6 +65,26 @@ function formatAxisValue(value: number, format?: string) {
   return format === "percent" ? `${(value * 100).toFixed(0)}%` : formatValue(value);
 }
 
+function percentValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = typeof value === "number" ? value : Number.parseFloat(String(value));
+  if (!Number.isFinite(numeric)) return null;
+  const percent = numeric >= 0 && numeric <= 1 ? numeric * 100 : numeric;
+  return Math.max(0, Math.min(100, percent));
+}
+
+function formatPercentValue(value: unknown) {
+  const percent = percentValue(value);
+  return percent === null ? "-" : `${Math.round(percent)}%`;
+}
+
+function numberValue(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (value === null || value === undefined || value === "") return 0;
+  const parsed = Number.parseFloat(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function ChartShell({
   title,
   icon,
@@ -95,6 +115,10 @@ function ChartShell({
 }
 
 function BarChartInline({ title, payload, visualId, kind }: { title: string; payload?: Record<string, any>; visualId?: string; kind?: string }) {
+  if (visualId === "o5_training") {
+    return <TrainingChartInline title={title} payload={payload} visualId={visualId} kind={kind} />;
+  }
+
   const series = datasets(payload);
   const blockLabels = labels(payload);
   const max = maxValue(series);
@@ -126,7 +150,107 @@ function BarChartInline({ title, payload, visualId, kind }: { title: string; pay
   );
 }
 
+function trainingStatus(plan: number, actual: number) {
+  if (plan <= 0 && actual <= 0) return { tone: "empty", statusLabel: "Không phát sinh" };
+  if (plan > 0 && actual >= plan) return { tone: "done", statusLabel: "Đạt kế hoạch" };
+  if (actual > 0) return { tone: "progress", statusLabel: "Đang thực hiện" };
+  return { tone: "planned", statusLabel: "Theo kế hoạch" };
+}
+
+function TrainingChartInline({ title, payload, visualId, kind }: { title: string; payload?: Record<string, any>; visualId?: string; kind?: string }) {
+  const series = datasets(payload);
+  const blockLabels = labels(payload);
+  const planDataset = series.find((dataset) => /k[eế]\s*ho[aạ]ch/i.test(vn(dataset.label))) ?? series[0];
+  const actualDataset = series.find((dataset) => /th[uự]c\s*hi[eệ]n/i.test(vn(dataset.label))) ?? series[1] ?? series[0];
+  const rows = blockLabels.map((label, index) => {
+    const plan = numberValue(planDataset?.data?.[index]);
+    const actual = numberValue(actualDataset?.data?.[index]);
+    const status = trainingStatus(plan, actual);
+    const completion = plan > 0 ? Math.round((actual / plan) * 100) : actual > 0 ? 100 : 0;
+    return { monthLabel: label, plan, actual, completion, ...status };
+  });
+  const max = Math.max(1, ...rows.flatMap((row) => [row.plan, row.actual]));
+  const totalPlan = rows.reduce((sum, row) => sum + row.plan, 0);
+  const totalActual = rows.reduce((sum, row) => sum + row.actual, 0);
+  const completionRate = totalPlan > 0 ? Math.round((totalActual / totalPlan) * 100) : 0;
+  const completedMonths = rows.filter((row) => row.plan > 0 && row.actual >= row.plan).length;
+  const plannedMonths = rows.filter((row) => row.plan > 0).length;
+  const remaining = Math.max(0, totalPlan - totalActual);
+  const peakMonth = rows.reduce(
+    (best, row) => (row.plan > best.plan ? row : best),
+    rows[0] ?? { monthLabel: "-", plan: 0, actual: 0, completion: 0, tone: "empty", statusLabel: "Không phát sinh" },
+  );
+
+  return (
+    <ChartShell title={title} icon={<BarChart3 size={17} />} kind={kind} visualId={visualId}>
+      <div className="training-dashboard">
+        <section className="training-summary-panel" aria-label="Tổng quan đào tạo nội bộ">
+          <div className="training-summary-main">
+            <span className="training-kicker">O5.KR3</span>
+            <h4>Tiến độ đào tạo theo tháng</h4>
+            <div className="training-total">
+              <strong>{formatValue(totalActual)}</strong>
+              <span>/ {formatValue(totalPlan)} giờ</span>
+            </div>
+            <div className="training-total-track">
+              <span style={{ width: `${Math.min(100, completionRate)}%` }} />
+            </div>
+            <small>{completionRate}% hoàn thành kế hoạch năm</small>
+          </div>
+          <div className="training-summary-stats">
+            <span><strong>{completedMonths}</strong> tháng đạt KH</span>
+            <span><strong>{plannedMonths}</strong> tháng có KH</span>
+            <span><strong>{formatValue(remaining)}</strong> giờ còn lại</span>
+            <span><strong>{peakMonth?.monthLabel ?? "-"}</strong> tháng trọng điểm</span>
+          </div>
+        </section>
+
+        <div className="training-month-grid" aria-label="Kế hoạch và thực hiện đào tạo từng tháng">
+          {rows.map((row) => {
+            const planWidth = `${Math.max(row.plan > 0 ? 4 : 0, (row.plan / max) * 100)}%`;
+            const actualWidth = `${Math.max(row.actual > 0 ? 4 : 0, (row.actual / max) * 100)}%`;
+            return (
+              <article className={`training-month-card tone-${row.tone}`} key={row.monthLabel}>
+                <div className="training-month-head">
+                  <strong>{row.monthLabel}</strong>
+                  <span>{row.monthLabel.replace("T", "Tháng ")}</span>
+                </div>
+                <div className="training-month-bars">
+                  <div>
+                    <span>Kế hoạch</span>
+                    <i><b style={{ width: planWidth }} /></i>
+                    <strong>{formatValue(row.plan)}</strong>
+                  </div>
+                  <div>
+                    <span>Thực hiện</span>
+                    <i><b style={{ width: actualWidth }} /></i>
+                    <strong>{formatValue(row.actual)}</strong>
+                  </div>
+                </div>
+                <div className="training-month-footer">
+                  <strong>{row.completion}%</strong>
+                  <span>{row.statusLabel}</span>
+                </div>
+                {row.monthLabel === peakMonth?.monthLabel && row.plan > 0 ? <p>Tháng trọng điểm</p> : null}
+              </article>
+            );
+          })}
+        </div>
+      </div>
+    </ChartShell>
+  );
+}
+
 function BarLineChartInline({ title, payload, visualId, kind }: { title: string; payload?: Record<string, any>; visualId?: string; kind?: string }) {
+  const [hoveredItem, setHoveredItem] = React.useState<{
+    x: number;
+    y: number;
+    title: string;
+    label: string;
+    value: string;
+    color: string;
+  } | null>(null);
+
   const series = datasets(payload);
   const blockLabels = labels(payload);
   const barSeries = series.filter((dataset) => dataset.chart_type !== "line");
@@ -134,10 +258,10 @@ function BarLineChartInline({ title, payload, visualId, kind }: { title: string;
   const leftScale = axisScale(maxValue(barSeries));
   const rightScale = axisScale(Math.max(1, ...numericValues(lineSeries)), 4, lineSeries.some((dataset) => dataset.value_format === "percent"));
   const axis = axisLabels(payload);
-  const width = 520;
+  const width = 560;
   const height = 230;
-  const chartLeft = 52;
-  const chartRight = width - 52;
+  const chartLeft = 75;
+  const chartRight = width - 75;
   const chartTop = 18;
   const chartBottom = height - 52;
   const innerWidth = chartRight - chartLeft;
@@ -182,7 +306,28 @@ function BarLineChartInline({ title, payload, visualId, kind }: { title: string;
             const barHeight = (value / leftScale.max) * (chartBottom - chartTop);
             const x = chartLeft + index * step + (step - groupWidth) / 2 + datasetIndex * barWidth;
             const y = chartBottom - barHeight;
-            return <rect key={`${dataset.label}-${index}`} x={x} y={y} width={barWidth} height={barHeight} rx="4" fill={dataset.color || "#f97316"} />;
+            return (
+              <rect
+                key={`${dataset.label}-${index}`}
+                x={x}
+                y={y}
+                width={barWidth}
+                height={barHeight}
+                rx="4"
+                fill={dataset.color || "#f97316"}
+                onMouseEnter={() =>
+                  setHoveredItem({
+                    x: x + barWidth / 2,
+                    y: y,
+                    title: blockLabels[index] || "",
+                    label: vn(dataset.label),
+                    value: formatDatasetValue(value, dataset.value_format),
+                    color: dataset.color || "#f97316",
+                  })
+                }
+                onMouseLeave={() => setHoveredItem(null)}
+              />
+            );
           }))}
           {linePoints.map((points, datasetIndex) => {
             const path = points.filter(Boolean).map((point) => `${point!.x},${point!.y}`).join(" ");
@@ -191,17 +336,37 @@ function BarLineChartInline({ title, payload, visualId, kind }: { title: string;
           })}
           {linePoints.flatMap((points, datasetIndex) => points.map((point, index) => {
             const dataset = lineSeries[datasetIndex];
-            return point ? <circle key={`${dataset.label}-${index}`} cx={point.x} cy={point.y} r="4" fill={dataset.color || "currentColor"} /> : null;
+            const value = dataset.data[index];
+            return point ? (
+              <circle
+                key={`${dataset.label}-${index}`}
+                cx={point.x}
+                cy={point.y}
+                r="4"
+                fill={dataset.color || "currentColor"}
+                onMouseEnter={() =>
+                  setHoveredItem({
+                    x: point.x,
+                    y: point.y,
+                    title: blockLabels[index] || "",
+                    label: vn(dataset.label),
+                    value: formatDatasetValue(value, dataset.value_format),
+                    color: dataset.color || "currentColor",
+                  })
+                }
+                onMouseLeave={() => setHoveredItem(null)}
+              />
+            ) : null;
           }))}
           {blockLabels.map((label, index) => (
             <text key={label} x={chartLeft + index * step + step / 2} y={height - 29} textAnchor="middle">{label}</text>
           ))}
           <text className="chart-axis-title" x={(chartLeft + chartRight) / 2} y={height - 8} textAnchor="middle">{axis.x}</text>
-          <text className="chart-axis-title" x={14} y={(chartTop + chartBottom) / 2} textAnchor="middle" transform={`rotate(-90 14 ${(chartTop + chartBottom) / 2})`}>
+          <text className="chart-axis-title" x={18} y={(chartTop + chartBottom) / 2} textAnchor="middle" transform={`rotate(-90 18 ${(chartTop + chartBottom) / 2})`}>
             {axis.leftY}
           </text>
           {lineSeries.length ? (
-            <text className="chart-axis-title" x={width - 14} y={(chartTop + chartBottom) / 2} textAnchor="middle" transform={`rotate(90 ${width - 14} ${(chartTop + chartBottom) / 2})`}>
+            <text className="chart-axis-title" x={width - 18} y={(chartTop + chartBottom) / 2} textAnchor="middle" transform={`rotate(90 ${width - 18} ${(chartTop + chartBottom) / 2})`}>
               {axis.rightY}
             </text>
           ) : null}
@@ -218,6 +383,23 @@ function BarLineChartInline({ title, payload, visualId, kind }: { title: string;
           ))}
         </div>
         {Array.isArray(payload?.summary_items) && payload.summary_items.length ? <SummaryBadges items={payload.summary_items} /> : null}
+        {hoveredItem && (
+          <div
+            className="okr-chart-tooltip"
+            style={{
+              left: `${(hoveredItem.x / width) * 100}%`,
+              top: `${(hoveredItem.y / height) * 100}%`,
+              borderLeftColor: hoveredItem.color,
+            }}
+          >
+            <div className="tooltip-title">{hoveredItem.title}</div>
+            <div className="tooltip-row">
+              <span className="tooltip-color-dot" style={{ backgroundColor: hoveredItem.color }} />
+              <span className="tooltip-label">{hoveredItem.label}:</span>
+              <strong className="tooltip-value">{hoveredItem.value}</strong>
+            </div>
+          </div>
+        )}
       </div>
     </ChartShell>
   );
@@ -308,31 +490,33 @@ function MetricTable({ title, payload, visualId, kind }: { title: string; payloa
     <ChartShell title={title} icon={<ClipboardList size={17} />} kind={kind} visualId={visualId}>
       <div className="metric-table-stack">
         {columns.length ? (
-          <table className="metric-table">
-            <thead>
-              <tr>
-                {columns.map((column: any) => <th key={column.key}>{vn(String(column.label || column.key))}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row: Record<string, any>, rowIndex: number) => (
-                <tr key={String(row.team || rowIndex)}>
-                  {columns.map((column: any) => (
-                    <td key={column.key}>
-                      {column.key === "team_name" ? (
-                        <>
-                          <strong>{formatValue(row[column.key])}</strong>
-                          {row.team ? <small>{row.team}</small> : null}
-                        </>
-                      ) : (
-                        formatDatasetValue(row[column.key], column.format)
-                      )}
-                    </td>
-                  ))}
+          <div className="metric-table-wrapper">
+            <table className="metric-table">
+              <thead>
+                <tr>
+                  {columns.map((column: any) => <th key={column.key}>{vn(String(column.label || column.key))}</th>)}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((row: Record<string, any>, rowIndex: number) => (
+                  <tr key={String(row.team || rowIndex)}>
+                    {columns.map((column: any) => (
+                      <td key={column.key}>
+                        {column.key === "team_name" ? (
+                          <div className="team-cell-info" title={formatValue(row[column.key])}>
+                            <strong>{row.team || formatValue(row[column.key])}</strong>
+                            {row.team ? <small className="team-fullname">{formatValue(row[column.key])}</small> : null}
+                          </div>
+                        ) : (
+                          formatDatasetValue(row[column.key], column.format)
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : null}
         {Array.isArray(payload?.summary_items) && payload.summary_items.length ? <SummaryBadges items={payload.summary_items} /> : null}
         {notes.length ? (
@@ -439,32 +623,226 @@ function ProgressCard({ title, payload, visualId, kind }: { title: string; paylo
   );
 }
 
-function RadarChartInline({ title, payload, visualId, kind }: { title: string; payload?: Record<string, any>; visualId?: string; kind?: string }) {
+const competencyMilestones = [
+  { value: "25%", label: "Xây dựng" },
+  { value: "50%", label: "Review góp ý" },
+  { value: "75%", label: "Phản biện" },
+  { value: "100%", label: "Chuẩn hóa KNL và bậc" },
+];
+
+function radarCoordinate(centerX: number, centerY: number, radius: number, index: number, total: number, scale = 1) {
+  const angle = (Math.PI * 2 * index) / Math.max(total, 1) - Math.PI / 2;
+  return {
+    x: centerX + Math.cos(angle) * radius * scale,
+    y: centerY + Math.sin(angle) * radius * scale,
+  };
+}
+
+function radarPolygon(total: number, centerX: number, centerY: number, radius: number, scale: number) {
+  return Array.from({ length: total }, (_, index) => {
+    const point = radarCoordinate(centerX, centerY, radius, index, total, scale);
+    return `${point.x},${point.y}`;
+  }).join(" ");
+}
+
+function competencyLabelLines(label: string) {
+  const parts = label.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 4 && parts[0] === "KNL") {
+    return [`${parts[0]} ${parts[1]}`, parts.slice(2, -1).join(" "), parts[parts.length - 1]];
+  }
+  return parts.length > 2 ? [parts.slice(0, 2).join(" "), parts.slice(2).join(" ")] : [label];
+}
+
+function competencyTone(percent: number | null) {
+  if (percent === null) return "empty";
+  if (percent >= 100) return "complete";
+  if (percent >= 75) return "review";
+  if (percent >= 50) return "progress";
+  if (percent > 0) return "start";
+  return "empty";
+}
+
+function CompetencyRadarInline({ title, payload, visualId, kind }: { title: string; payload?: Record<string, any>; visualId?: string; kind?: string }) {
   const blockLabels = labels(payload);
   const values = datasets(payload)[0]?.data ?? [];
-  const numeric = values.map((value) => (typeof value === "number" ? value : 0));
-  const max = Math.max(1, ...numeric);
+  const percents = blockLabels.map((_, index) => percentValue(values[index]));
+  const plotted = percents.map((value) => value ?? 0);
+  const validValues = percents.filter((value): value is number => value !== null);
+  const average = validValues.length ? Math.round(validValues.reduce((sum, value) => sum + value, 0) / validValues.length) : 0;
+  const completed = validValues.filter((value) => value >= 100).length;
+  const inProgress = validValues.filter((value) => value > 0 && value < 100).length;
+
+  const width = 460;
+  const height = 350;
+  const centerX = 230;
+  const centerY = 174;
+  const radius = 108;
+  const labelRadius = 158;
+  const total = Math.max(blockLabels.length, 3);
+  const dataPoints = plotted.map((percent, index) => {
+    const point = radarCoordinate(centerX, centerY, radius, index, total, percent / 100);
+    return `${point.x},${point.y}`;
+  }).join(" ");
+  const axisPoints = blockLabels.map((label, index) => {
+    const point = radarCoordinate(centerX, centerY, radius, index, total);
+    const labelPoint = radarCoordinate(centerX, centerY, labelRadius, index, total);
+    const anchor: "middle" | "start" | "end" = Math.abs(labelPoint.x - centerX) < 8 ? "middle" : labelPoint.x > centerX ? "start" : "end";
+    return { label, point, labelPoint, anchor };
+  });
+
+  return (
+    <ChartShell title={title} icon={<Radar size={17} />} kind={kind} visualId={visualId}>
+      <div className="competency-radar-layout">
+        <section className="competency-goal-panel" aria-label="Mục tiêu khung năng lực">
+          <span className="competency-kicker"><Target size={16} />Mục tiêu</span>
+          <h4>KR1. Xây dựng khung năng lực</h4>
+          <div className="competency-main-metric">
+            <strong>{blockLabels.length}</strong>
+            <span>vị trí chức danh</span>
+          </div>
+          <div className="competency-mini-stats">
+            <span><strong>{completed}</strong> chuẩn hóa</span>
+            <span><strong>{inProgress}</strong> đang làm</span>
+            <span><strong>{average}%</strong> trung bình</span>
+          </div>
+          <dl className="competency-milestones">
+            {competencyMilestones.map((item) => (
+              <div key={item.value}>
+                <dt>{item.value}</dt>
+                <dd>{item.label}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        <div className="competency-radar-stage">
+          <svg className="okr-chart competency-radar-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={title}>
+            {[1, 0.75, 0.5, 0.25].map((scale) => (
+              <polygon
+                className={`competency-radar-ring ${scale === 1 ? "outer" : ""}`}
+                key={scale}
+                points={radarPolygon(total, centerX, centerY, radius, scale)}
+              />
+            ))}
+            {axisPoints.map(({ point, label }, index) => (
+              <line className="competency-radar-axis" key={`axis-${label}-${index}`} x1={centerX} y1={centerY} x2={point.x} y2={point.y} />
+            ))}
+            <line className="competency-radar-main-axis" x1={centerX} y1={centerY - radius} x2={centerX} y2={centerY + radius} />
+            {[100, 75, 50, 25, 0].map((tick) => (
+              <text className="competency-radar-scale" key={tick} x={centerX - 12} y={centerY - (radius * tick) / 100 + 5} textAnchor="end">
+                {tick}%
+              </text>
+            ))}
+            {dataPoints ? <polygon className="competency-radar-data" points={dataPoints} /> : null}
+            {plotted.map((percent, index) => {
+              const point = radarCoordinate(centerX, centerY, radius, index, total, percent / 100);
+              return <circle className="competency-radar-point" key={`${blockLabels[index]}-${index}`} cx={point.x} cy={point.y} r="4.5" />;
+            })}
+            {axisPoints.map(({ label, labelPoint, anchor }) => (
+              <text className="competency-radar-label" key={label} x={labelPoint.x} y={labelPoint.y} textAnchor={anchor}>
+                {competencyLabelLines(label).map((line, lineIndex) => (
+                  <tspan key={line} x={labelPoint.x} dy={lineIndex === 0 ? 0 : 15}>{line}</tspan>
+                ))}
+              </text>
+            ))}
+          </svg>
+        </div>
+
+        <div className="competency-position-list" aria-label="Tiến độ từng vị trí">
+          {blockLabels.map((label, index) => {
+            const percent = percents[index];
+            return (
+              <div className={`competency-position-item tone-${competencyTone(percent)}`} key={label}>
+                <div className="competency-position-head">
+                  <span className="competency-position-dot" />
+                  <span title={label}>{label}</span>
+                  <strong>{formatPercentValue(values[index])}</strong>
+                </div>
+                <span className="competency-position-track"><span style={{ width: `${percent ?? 0}%` }} /></span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </ChartShell>
+  );
+}
+
+function RadarChartInline({ title, payload, visualId, kind }: { title: string; payload?: Record<string, any>; visualId?: string; kind?: string }) {
+  if (visualId === "o5_competency") {
+    return <CompetencyRadarInline title={title} payload={payload} visualId={visualId} kind={kind} />;
+  }
+
+  const blockLabels = labels(payload);
+  const values = datasets(payload)[0]?.data ?? [];
+  const numeric = values.map((value) => percentValue(value) ?? 0);
+  const max = 100;
   const size = 220;
   const center = size / 2;
   const radius = 86;
+
+  // Compute radar vertices
   const points = numeric.map((value, index) => {
     const angle = (Math.PI * 2 * index) / Math.max(numeric.length, 1) - Math.PI / 2;
     const scaled = (value / max) * radius;
     return `${center + Math.cos(angle) * scaled},${center + Math.sin(angle) * scaled}`;
   });
+
+  // Compute spokes (grid axes)
+  const spokes = numeric.map((_, index) => {
+    const angle = (Math.PI * 2 * index) / Math.max(numeric.length, 1) - Math.PI / 2;
+    const x = center + Math.cos(angle) * radius;
+    const y = center + Math.sin(angle) * radius;
+    return { x, y };
+  });
+
   return (
     <ChartShell title={title} icon={<Radar size={17} />} kind={kind} visualId={visualId}>
       <div className="radar-layout">
-        <svg className="okr-chart radar-chart" viewBox={`0 0 ${size} ${size}`} role="img" aria-label={title}>
-          <circle cx={center} cy={center} r={radius} />
-          <circle cx={center} cy={center} r={radius * 0.66} />
-          <circle cx={center} cy={center} r={radius * 0.33} />
-          {points.length ? <polygon points={points.join(" ")} /> : null}
-        </svg>
+        <div className="radar-chart-container">
+          <svg className="okr-chart radar-chart" viewBox={`0 0 ${size} ${size}`} role="img" aria-label={title}>
+            {/* Concentric grid circles representing 25%, 50%, 75%, 100% */}
+            <circle cx={center} cy={center} r={radius} className="radar-grid-circle outer" />
+            <circle cx={center} cy={center} r={radius * 0.75} className="radar-grid-circle" />
+            <circle cx={center} cy={center} r={radius * 0.50} className="radar-grid-circle" />
+            <circle cx={center} cy={center} r={radius * 0.25} className="radar-grid-circle" />
+
+            {/* Scale Labels */}
+            <text x={center - 6} y={center - radius + 4} className="radar-grid-label">100%</text>
+            <text x={center - 6} y={center - radius * 0.75 + 4} className="radar-grid-label">75%</text>
+            <text x={center - 6} y={center - radius * 0.50 + 4} className="radar-grid-label">50%</text>
+            <text x={center - 6} y={center - radius * 0.25 + 4} className="radar-grid-label">25%</text>
+
+            {/* Grid Spokes */}
+            {spokes.map((spoke, idx) => (
+              <line
+                key={idx}
+                x1={center}
+                y1={center}
+                x2={spoke.x}
+                y2={spoke.y}
+                className="radar-grid-spoke"
+              />
+            ))}
+
+            {/* Main Radar Polygon */}
+            {points.length ? <polygon points={points.join(" ")} className="radar-polygon" /> : null}
+          </svg>
+        </div>
         <div className="radar-legend">
-          {blockLabels.map((label, index) => (
-            <span key={label}>{label}: <strong>{formatValue(values[index])}</strong></span>
-          ))}
+          {blockLabels.map((label, index) => {
+            const val = values[index];
+            const formatted = formatPercentValue(val);
+            return (
+              <div className="radar-legend-item" key={label}>
+                <div className="radar-legend-label-group">
+                  <span className="radar-legend-bullet" />
+                  <span className="radar-legend-label" title={label}>{label}</span>
+                </div>
+                <strong className="radar-legend-value">{formatted}</strong>
+              </div>
+            );
+          })}
         </div>
       </div>
     </ChartShell>

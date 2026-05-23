@@ -97,16 +97,14 @@ describe("OKR dashboard components", () => {
     expect(html).toContain("Chỉ có trạng thái");
   });
 
-  it("hides import and export dashboard actions for FI coordinator", () => {
+  it("renders simplified toolbar actions including snapshot and reset", () => {
     const adminHtml = renderToStaticMarkup(<OKRWorkspace role="Admin" />);
     const fiHtml = renderToStaticMarkup(<OKRWorkspace role="FI_Coordinator" />);
 
-    expect(adminHtml).toContain("Import snapshot lịch sử");
-    expect(adminHtml).toContain("Xuất PNG toàn dashboard");
-    expect(adminHtml).toContain("Xuất Excel");
-    expect(fiHtml).not.toContain("Import snapshot lịch sử");
-    expect(fiHtml).toContain("Xuất PNG toàn dashboard");
-    expect(fiHtml).not.toContain("Xuất Excel");
+    expect(adminHtml).toContain("Tải PNG snapshot");
+    expect(adminHtml).toContain("Reset dữ liệu");
+    expect(fiHtml).toContain("Tải PNG snapshot");
+    expect(fiHtml).toContain("Reset dữ liệu");
   });
 
   it("renders objective sections in backend order and keeps fallback fields visible", () => {
@@ -188,6 +186,37 @@ describe("OKR dashboard components", () => {
     const noPlan = renderToStaticMarkup(
       <VisualBlockRenderer block={{ id: "empty", kind: "bar_chart", title: "Empty", data_state: "no_plan", empty_message: "Không có KH trong tháng" }} />,
     );
+    const competency = renderToStaticMarkup(
+      <VisualBlockRenderer
+        block={{
+          id: "o5_competency",
+          kind: "radar_chart",
+          title: "ET/Khung năng lực",
+          data_state: "ready",
+          payload: {
+            labels: ["KNL KTV BDSC TBHTĐK", "KNL KTV BDSC TBCH"],
+            datasets: [{ label: "Tỷ lệ hoàn thành", data: [1, 0.5] }],
+          },
+        }}
+      />,
+    );
+    const training = renderToStaticMarkup(
+      <VisualBlockRenderer
+        block={{
+          id: "o5_training",
+          kind: "training_bar_chart",
+          title: "Đào tạo nội bộ",
+          data_state: "ready",
+          payload: {
+            labels: ["T1", "T2"],
+            datasets: [
+              { label: "Kế hoạch", data: [24, 47] },
+              { label: "Thực hiện", data: [24, 0] },
+            ],
+          },
+        }}
+      />,
+    );
 
     expect(barLine).toContain("bar-line-chart");
     expect(barLine).toContain("Kết quả");
@@ -196,6 +225,12 @@ describe("OKR dashboard components", () => {
     expect(barLine).toContain("Tỷ lệ (%)");
     expect(barLine).toContain("50.0%");
     expect(noPlan).toContain("Không có KH trong tháng");
+    expect(competency).toContain("KR1. Xây dựng khung năng lực");
+    expect(competency).toContain("vị trí chức danh");
+    expect(competency).toContain("Chuẩn hóa KNL và bậc");
+    expect(training).toContain("Tiến độ đào tạo theo tháng");
+    expect(training).toContain("tháng đạt KH");
+    expect(training).toContain("Đạt kế hoạch");
   });
 
   it("renders compact metric tables with imported Excel notes", () => {

@@ -272,7 +272,7 @@ export function App() {
           )}
         </nav>
       </aside>
-      <section className="workspace">
+      <section className={`workspace ${tab === "fi" ? "fi-workspace-shell" : ""}`}>
         <header className="topbar">
           <div>
             <h1>{tabTitles[tab]}</h1>

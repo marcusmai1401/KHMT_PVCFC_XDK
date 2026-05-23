@@ -997,6 +997,9 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
               </div>
             </div>
           </div>
+          <div className="legacy-column-heading" aria-hidden="true">
+            <span>Kết luận của LĐX</span>
+          </div>
         </div>
         <div className="legacy-list">
           {groupedHistoryItems.map((group) => (
@@ -1030,10 +1033,7 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                     </button>
                     <div className="legacy-row-side">
                       <span className="legacy-period-pill">{registrationMonthLabel(item)}</span>
-                      <div className="legacy-status-stack">
-                        <span className="legacy-decision-label">Kết luận của LĐX</span>
-                        <span className={`legacy-status-pill ${statusTone(item.status)}`}>{displayHistoryStatus(item)}</span>
-                      </div>
+                      <span className={`legacy-status-pill ${statusTone(item.status)}`}>{displayHistoryStatus(item)}</span>
                       <div className="legacy-row-controls">
                         {actions.includes("approve") && (
                           <button

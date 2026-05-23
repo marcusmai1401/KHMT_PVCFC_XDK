@@ -452,6 +452,12 @@ nav button.active {
   box-shadow: var(--shadow-sm);
 }
 
+.fi-workspace-shell .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+
 h1,
 h2,
 p {
@@ -645,6 +651,16 @@ h2 {
   grid-column: 1 / -1;
   justify-content: flex-start;
   min-width: 0;
+}
+
+.fi-workspace-shell .fi-workspace-tabs {
+  background: var(--bg-main);
+  border-bottom: 1px solid transparent;
+  margin: -20px -28px 0;
+  padding: 20px 28px 12px;
+  position: sticky;
+  top: 73px;
+  z-index: 35;
 }
 
 .fi-workspace-tabs .segmented-control {
@@ -2428,8 +2444,28 @@ th {
   margin: -20px -20px 0;
   padding: 20px 20px 12px;
   position: sticky;
-  top: 0;
-  z-index: 5;
+  top: 137px;
+  z-index: 30;
+}
+
+.legacy-column-heading {
+  align-items: end;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, max-content);
+  min-height: 18px;
+}
+
+.legacy-column-heading span {
+  color: #b91c1c;
+  font-size: 14px;
+  font-weight: 800;
+  justify-self: end;
+  line-height: 1.2;
+  margin-right: 168px;
+  text-align: center;
+  white-space: nowrap;
+  width: 126px;
 }
 
 .legacy-team-picker {
@@ -2657,19 +2693,6 @@ th {
   min-width: 360px;
 }
 
-.legacy-status-stack {
-  display: grid;
-  gap: 4px;
-}
-
-.legacy-decision-label {
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.1;
-  text-align: center;
-}
-
 .legacy-status-pill {
   align-items: center;
   border: 1px solid #cbd5e1;
@@ -2830,6 +2853,16 @@ th {
 
   .legacy-row-controls {
     justify-content: flex-start;
+  }
+
+  .legacy-column-heading {
+    grid-template-columns: 1fr;
+  }
+
+  .legacy-column-heading span {
+    justify-self: start;
+    margin-right: 0;
+    text-align: left;
   }
 
   .legacy-period-pill {

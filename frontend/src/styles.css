@@ -2433,6 +2433,15 @@ th {
 }
 
 .legacy-sk-panel {
+  --legacy-action-col: 158px;
+  --legacy-period-col: 72px;
+  --legacy-row-padding-x: 16px;
+  --legacy-side-gap: 10px;
+  --legacy-status-col: 126px;
+  --legacy-side-width: calc(
+    var(--legacy-period-col) + var(--legacy-status-col) + var(--legacy-action-col) +
+      var(--legacy-side-gap) + var(--legacy-side-gap)
+  );
   gap: 12px;
 }
 
@@ -2452,7 +2461,7 @@ th {
   align-items: end;
   display: grid;
   gap: 18px;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, max-content);
+  grid-template-columns: minmax(0, 1fr) var(--legacy-side-width);
   min-height: 18px;
 }
 
@@ -2460,12 +2469,13 @@ th {
   color: #b91c1c;
   font-size: 14px;
   font-weight: 800;
+  grid-column: 2;
   justify-self: end;
   line-height: 1.2;
-  margin-right: 168px;
+  margin-right: calc(var(--legacy-row-padding-x) + var(--legacy-action-col) + var(--legacy-side-gap));
   text-align: center;
   white-space: nowrap;
-  width: 126px;
+  width: var(--legacy-status-col);
 }
 
 .legacy-team-picker {
@@ -2665,7 +2675,7 @@ th {
   margin-top: 0;
   padding: 0 8px;
   white-space: nowrap;
-  width: 72px;
+  width: var(--legacy-period-col);
 }
 
 .legacy-row-subtitle {
@@ -2687,10 +2697,10 @@ th {
 .legacy-row-side {
   align-items: center;
   display: grid;
-  gap: 10px;
-  grid-template-columns: 72px 126px minmax(86px, max-content);
+  gap: var(--legacy-side-gap);
+  grid-template-columns: var(--legacy-period-col) var(--legacy-status-col) var(--legacy-action-col);
   justify-items: stretch;
-  min-width: 360px;
+  min-width: var(--legacy-side-width);
 }
 
 .legacy-status-pill {
@@ -2707,7 +2717,7 @@ th {
   padding: 0 8px;
   text-align: center;
   white-space: nowrap;
-  width: 126px;
+  width: var(--legacy-status-col);
 }
 
 .legacy-status-pill.neutral {
@@ -2761,6 +2771,7 @@ th {
   display: flex;
   gap: 6px;
   justify-content: flex-end;
+  width: var(--legacy-action-col);
 }
 
 .legacy-icon-action {
@@ -2846,13 +2857,14 @@ th {
   }
 
   .legacy-row-side {
-    grid-template-columns: 72px 126px minmax(86px, auto);
+    grid-template-columns: var(--legacy-period-col) var(--legacy-status-col) minmax(86px, 1fr);
     justify-content: start;
     min-width: 0;
   }
 
   .legacy-row-controls {
     justify-content: flex-start;
+    width: auto;
   }
 
   .legacy-column-heading {
@@ -2860,9 +2872,11 @@ th {
   }
 
   .legacy-column-heading span {
+    grid-column: 1;
     justify-self: start;
     margin-right: 0;
     text-align: left;
+    width: auto;
   }
 
   .legacy-period-pill {

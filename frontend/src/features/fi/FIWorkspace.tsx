@@ -9,6 +9,7 @@ import {
   Flag,
   History,
   ImagePlus,
+  Pencil,
   RefreshCw,
   Send,
   Trash2,
@@ -138,6 +139,10 @@ function formatHistoryTime(value: string | null | undefined) {
 export function visibleActionsForSk(role: string, currentUserId: string, item: any): string[] {
   const actions: string[] = [];
   const reviewableStatuses = item.is_historical_import ? ["Submitted", "Deferred"] : REVIEWABLE_STATUSES;
+  const visibleToTeamAccount = item.author_user_id === currentUserId || (typeof item.status === "string" && item.status !== "Draft");
+  const canEdit =
+    REVIEWER_ROLES.includes(role) ||
+    (role === TEAM_ROLE && visibleToTeamAccount);
   const canSubmit =
     !item.is_historical_import &&
     (role === "Admin" || (role === TEAM_ROLE && item.author_user_id === currentUserId)) &&
@@ -149,6 +154,7 @@ export function visibleActionsForSk(role: string, currentUserId: string, item: a
     !item.is_historical_import &&
     (role === "Admin" ||
       (role === TEAM_ROLE && item.author_user_id === currentUserId && item.status === "Draft"));
+  if (canEdit) actions.push("edit");
   if (canSubmit) actions.push("submit");
   if (canApprove) actions.push("approve");
   if (canReject) actions.push("reject");
@@ -351,6 +357,9 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
   const [error, setError] = useState("");
   const [actionTarget, setActionTarget] = useState<{ id: string; action: "approve" | "reject" } | null>(null);
   const [actionNote, setActionNote] = useState("");
+  const [editTarget, setEditTarget] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ content_description: "", completion_plan: "" });
+  const [savingEdit, setSavingEdit] = useState(false);
   const draftFileInputRef = useRef<HTMLInputElement>(null);
   const detailFileInputRef = useRef<HTMLInputElement>(null);
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
@@ -435,6 +444,7 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
   const selectTab = (tab: FITab) => {
     setActiveTab(tab);
     setActionTarget(null);
+    setEditTarget(null);
     setSelectedItem(null);
   };
 
@@ -458,6 +468,38 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
     setError("");
   };
 
+  const openEdit = (item: any) => {
+    setActionTarget(null);
+    setEditTarget(item);
+    setEditForm({
+      content_description: item.content_description || "",
+      completion_plan: item.completion_plan || "",
+    });
+    setError("");
+    setNotice("");
+  };
+
+  const handleEditSave = async () => {
+    if (!editTarget || savingEdit) return;
+    setSavingEdit(true);
+    setError("");
+    setNotice("");
+    try {
+      const updated = await api.updateSk(editTarget.id, {
+        content_description: editForm.content_description,
+        completion_plan: editForm.completion_plan,
+      });
+      setNotice("Đã cập nhật nội dung và kế hoạch thực hiện.");
+      setEditTarget(null);
+      setSelectedItem((current: any) => current?.id === updated.id ? { ...current, ...updated } : current);
+      reload();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const handleAction = () => {
     if (!actionTarget) return;
     if (actionTarget.action === "reject" && !actionNote.trim()) {
@@ -466,6 +508,7 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
     }
     transition(actionTarget.id, actionTarget.action, actionNote.trim() ? { note: actionNote } : {});
     setActionTarget(null);
+    setEditTarget(null);
     setActionNote("");
   };
 
@@ -625,6 +668,37 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
         </section>
       )}
 
+      {editTarget && (
+        <section className="panel wide fi-action-panel">
+          <h2>Chỉnh sửa nội dung/kế hoạch thực hiện</h2>
+          <p className="muted">{editTarget.sk_code || editTarget.title} · {editTarget.team}</p>
+          <div className="form-stack">
+            <label>Nội dung đăng ký</label>
+            <textarea
+              value={editForm.content_description}
+              onChange={(e) => setEditForm({ ...editForm, content_description: e.target.value })}
+              rows={4}
+            />
+            <label>Kế hoạch thực hiện</label>
+            <input
+              value={editForm.completion_plan}
+              onChange={(e) => setEditForm({ ...editForm, completion_plan: e.target.value })}
+            />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={handleEditSave} disabled={savingEdit} type="button">
+                <ClipboardCheck size={17} />
+                {savingEdit ? "Đang lưu..." : "Lưu cập nhật"}
+              </button>
+              <button onClick={() => setEditTarget(null)} type="button">
+                Hủy
+              </button>
+            </div>
+          </div>
+          {error && <p className="error">{error}</p>}
+          {notice && <p className="success">{notice}</p>}
+        </section>
+      )}
+
       {activeTab === "register" && (
         <>
       <div className={`fi-register-layout ${showForm ? "" : "single"}`}>
@@ -722,6 +796,11 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                   </small>
                 </button>
                 <div className="toolbar">
+                  {actions.includes("edit") && (
+                    <button title="Chỉnh sửa nội dung/kế hoạch" onClick={() => openEdit(item)}>
+                      <Pencil size={16} />
+                    </button>
+                  )}
                   {actions.includes("submit") && (
                     <button title="Gửi duyệt" onClick={() => transition(item.id, "submit")}>
                       <Send size={16} />
@@ -769,6 +848,17 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
               <p>{selectedItem.team}</p>
             </div>
             <div className="fi-detail-actions">
+            {visibleActionsForSk(role, currentUserId, selectedItem).includes("edit") && (
+              <button
+                className="fi-detail-action"
+                title="Chỉnh sửa nội dung/kế hoạch"
+                type="button"
+                onClick={() => openEdit(selectedItem)}
+              >
+                <Pencil size={17} />
+                Chỉnh sửa
+              </button>
+            )}
             {canUploadForSelected && (
               <button
                 className="fi-detail-action"
@@ -1035,6 +1125,16 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                       <span className="legacy-period-pill">{registrationMonthLabel(item)}</span>
                       <span className={`legacy-status-pill ${statusTone(item.status)}`}>{displayHistoryStatus(item)}</span>
                       <div className="legacy-row-controls">
+                        {actions.includes("edit") && (
+                          <button
+                            className="legacy-icon-action"
+                            title="Chỉnh sửa nội dung/kế hoạch"
+                            onClick={() => openEdit(item)}
+                            type="button"
+                          >
+                            <Pencil size={15} />
+                          </button>
+                        )}
                         {actions.includes("approve") && (
                           <button
                             className="legacy-icon-action"

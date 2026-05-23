@@ -19,6 +19,7 @@ REVIEWABLE_STATUSES = {
     SKStatus.DEFERRED.value,
 }
 HISTORICAL_REVIEW_ACTIONS = {FIAction.APPROVE.value, FIAction.REJECT.value}
+SHARED_CONTENT_EDIT_FIELDS = {"content_description", "completion_plan"}
 
 
 def _utc_now() -> datetime:
@@ -118,10 +119,16 @@ def update_sk_ctkt(
     record = db.get(SKCTKTModel, record_id)
     if record is None:
         raise KeyError("SK-CTKT not found")
-    if role != Role.ADMIN.value and record.author_user_id != actor:
-        raise PermissionError("Only owner or Admin can edit")
-    if role != Role.ADMIN.value and record.status not in {SKStatus.DRAFT.value, SKStatus.NEED_MORE_INFO.value}:
-        raise PermissionError("Only Draft or NeedMoreInfo entries are editable by owner")
+    requested_fields = set(payload)
+    shared_content_edit = bool(requested_fields) and requested_fields <= SHARED_CONTENT_EDIT_FIELDS
+    if role != Role.ADMIN.value:
+        if shared_content_edit:
+            require_visible(record, {"user_id": actor, "role": role})
+        else:
+            if record.author_user_id != actor:
+                raise PermissionError("Only owner or Admin can edit")
+            if record.status not in {SKStatus.DRAFT.value, SKStatus.NEED_MORE_INFO.value}:
+                raise PermissionError("Only Draft or NeedMoreInfo entries are editable by owner")
     before = model_to_dict(record)
     if role != Role.ADMIN.value and "team" in payload and payload["team"] != record.team:
         raise PermissionError("Tài khoản đội/tổ không được đổi đội/tổ của SK")

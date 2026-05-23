@@ -185,7 +185,7 @@ def get_sk(
 def update(
     record_id: str,
     payload: SKUpdate,
-    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.ADMIN)),
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
     try:

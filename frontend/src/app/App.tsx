@@ -26,7 +26,7 @@ const tabTitles: Record<Tab, string> = {
   admin: "Quản trị hệ thống",
 };
 
-const testAccount = { userId: "test", password: "12345678" };
+const testAccount = { userId: "test", password: "PVCFC-KHMT-Test-2026!r7Qp" };
 
 const sandboxIdentities = [
   { label: "Quản trị", userId: "admin", role: "Admin" },

@@ -278,6 +278,22 @@ def test_legacy_sk_is_history_and_can_be_reviewed_from_history(client, admin_hea
     current_public = client.get("/api/v1/fi/sk-ctkt/public?historical=false&team=TBCH", headers=team_headers)
     assert "sk-legacy" not in {item["id"] for item in current_public.json()}
 
+    content_update = client.put(
+        "/api/v1/fi/sk-ctkt/sk-legacy",
+        headers=team_headers,
+        json={"content_description": "Nội dung đã cập nhật", "completion_plan": "Dự kiến 07/2026"},
+    )
+    assert content_update.status_code == 200, content_update.text
+    assert content_update.json()["content_description"] == "Nội dung đã cập nhật"
+    assert content_update.json()["completion_plan"] == "Dự kiến 07/2026"
+
+    protected_update = client.put(
+        "/api/v1/fi/sk-ctkt/sk-legacy",
+        headers=team_headers,
+        json={"title": "Không được đổi tên"},
+    )
+    assert protected_update.status_code == 403
+
     transition = client.post("/api/v1/fi/sk-ctkt/sk-legacy/approve", headers=fi_headers, json={})
     assert transition.status_code == 200
     assert transition.json()["status"] == "Approved"

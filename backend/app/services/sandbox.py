@@ -16,7 +16,7 @@ from app.services.cache import cache_delete_prefix
 
 
 SANDBOX_LOGIN_ID = "test"
-SANDBOX_PASSWORD = "12345678"
+SANDBOX_PASSWORD = "PVCFC-KHMT-Test-2026!r7Qp"
 SANDBOX_INITIALIZED_KEY = "sandbox_initialized_from_production"
 
 

@@ -168,6 +168,11 @@ export const api = {
     request<any>("/fi/sk-ctkt", { method: "POST", body: JSON.stringify(payload) }),
   listSk: (filters: QueryParams = {}) => request<any[]>(`/fi/sk-ctkt${toQuery(filters)}`),
   getSk: (id: string) => request<any>(`/fi/sk-ctkt/${id}`),
+  updateSk: (id: string, payload: any) =>
+    request<any>(`/fi/sk-ctkt/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
   deleteSk: (id: string) => request<any>(`/fi/sk-ctkt/${id}`, { method: "DELETE" }),
   publicSk: (filters: QueryParams = {}) => request<any[]>(`/fi/sk-ctkt/public${toQuery(filters)}`),
   notifications: () => request<any[]>("/notifications"),

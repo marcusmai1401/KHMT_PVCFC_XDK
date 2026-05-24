@@ -16,36 +16,37 @@ describe("FI action visibility", () => {
     expect(visibleActionsForSk("Team_Account", "u1", ownSubmitted)).toEqual(["edit"]);
   });
 
-  it("shows approve and reject for FI_Coordinator on Submitted items", () => {
-    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Submitted" })).toEqual(["edit", "approve", "reject"]);
+  it("shows one review decision action for FI_Coordinator on Submitted items", () => {
+    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Submitted" })).toEqual(["edit", "reviewDecision"]);
   });
 
-  it("shows approve and reject for FI_Coordinator on Reviewed items", () => {
-    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Reviewed" })).toEqual(["edit", "approve", "reject"]);
+  it("shows one review decision action for FI_Coordinator on Reviewed items", () => {
+    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Reviewed" })).toEqual(["edit", "reviewDecision"]);
   });
 
-  it("shows approve and reject for reviewer roles on pending items", () => {
-    expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Submitted" })).toEqual(["edit", "approve", "reject"]);
-    expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Deferred" })).toEqual(["edit", "approve", "reject"]);
-    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Deferred" })).toEqual(["edit", "approve", "reject"]);
-    expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Approved" })).toEqual(["edit"]);
+  it("shows review decision for reviewer roles on editable decision statuses", () => {
+    expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Submitted" })).toEqual(["edit", "reviewDecision"]);
+    expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Deferred" })).toEqual(["edit", "reviewDecision"]);
+    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Deferred" })).toEqual(["edit", "reviewDecision"]);
+    expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Approved" })).toEqual(["edit", "reviewDecision"]);
+    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Rejected" })).toEqual(["edit", "reviewDecision"]);
   });
 
   it("allows historical pending items to be reviewed but not deleted", () => {
-    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Submitted", is_historical_import: true })).toEqual(["edit", "approve", "reject"]);
-    expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Deferred", is_historical_import: true })).toEqual(["edit", "approve", "reject"]);
-    expect(visibleActionsForSk("Admin", "admin", { status: "Approved", is_historical_import: true })).toEqual(["edit"]);
+    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Submitted", is_historical_import: true })).toEqual(["edit", "reviewDecision"]);
+    expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Deferred", is_historical_import: true })).toEqual(["edit", "reviewDecision"]);
+    expect(visibleActionsForSk("Admin", "admin", { status: "Approved", is_historical_import: true })).toEqual(["edit", "reviewDecision"]);
   });
 
   it("keeps KHMT assignment admin-only", () => {
     const approved = { status: "Approved", author_user_id: "u1" };
 
-    expect(visibleActionsForSk("Admin", "admin", approved)).toEqual(["edit", "assignKhmt", "delete"]);
-    expect(visibleActionsForSk("Workshop_Leader", "leader", approved)).toEqual(["edit"]);
+    expect(visibleActionsForSk("Admin", "admin", approved)).toEqual(["edit", "reviewDecision", "assignKhmt", "delete"]);
+    expect(visibleActionsForSk("Workshop_Leader", "leader", approved)).toEqual(["edit", "reviewDecision"]);
   });
 
   it("does not allow FI_Coordinator to delete approved items", () => {
-    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Approved" })).toEqual(["edit"]);
+    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Approved" })).toEqual(["edit", "reviewDecision"]);
   });
 });
 

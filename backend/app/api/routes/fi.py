@@ -277,7 +277,12 @@ def reject(
 
 
 @router.post("/sk-ctkt/{record_id}/defer")
-def defer(record_id: str, payload: TransitionRequest, principal: dict = Depends(require_role(Role.ADMIN)), db: Session = Depends(get_db)):
+def defer(
+    record_id: str,
+    payload: TransitionRequest,
+    principal: dict = Depends(require_role(Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
+    db: Session = Depends(get_db),
+):
     return _transition(record_id, "defer", payload, principal, db)
 
 

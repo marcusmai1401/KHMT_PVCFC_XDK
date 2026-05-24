@@ -679,6 +679,65 @@ h2 {
   z-index: 12;
 }
 
+.fi-inline-review-panel {
+  background: #f8fbff;
+  border: 1px solid #cfe0f3;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 14px;
+  width: 100%;
+}
+
+.fi-inline-review-head {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.fi-inline-review-head h3,
+.fi-inline-review-head p {
+  margin: 0;
+}
+
+.fi-inline-review-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 0.28fr) minmax(0, 1fr);
+}
+
+.fi-inline-review-grid label {
+  color: #334155;
+  display: grid;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 7px;
+}
+
+.fi-inline-review-grid select,
+.fi-inline-review-grid textarea {
+  font-weight: 500;
+}
+
+.fi-inline-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fi-review-helper {
+  color: #607087;
+  font-size: 13px;
+  margin: 0;
+}
+
+.required-mark {
+  color: #dc2626;
+  font-weight: 800;
+}
+
 .okr-module-shell {
   min-width: 0;
 }
@@ -763,6 +822,10 @@ h2 {
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) auto;
   padding: 12px;
+}
+
+.fi-processing-panel .fi-inline-review-panel {
+  grid-column: 1 / -1;
 }
 
 .fi-processing-panel .workflow-main {
@@ -2524,6 +2587,23 @@ th {
   gap: 2px;
 }
 
+.fi-dashboard-table.compact {
+  min-width: 680px;
+}
+
+.fi-dashboard-table .metric-pair {
+  align-items: baseline;
+  display: inline-flex;
+  gap: 5px;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+.fi-dashboard-table .metric-pair small {
+  display: inline;
+  margin: 0;
+}
+
 .fi-dashboard-table-wrap {
   overflow: auto;
 }
@@ -3029,8 +3109,15 @@ th {
   border: 1px solid #e1e8ef;
   border-radius: 8px;
   display: grid;
-  gap: 8px;
+  gap: 12px;
+  grid-template-columns: minmax(360px, 0.55fr) minmax(520px, 1fr);
   padding: 10px;
+}
+
+.legacy-filter-controls {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
 }
 
 .legacy-filter-line {
@@ -3038,6 +3125,15 @@ th {
   display: grid;
   gap: 10px;
   grid-template-columns: 58px minmax(0, 1fr);
+}
+
+.legacy-team-summary {
+  min-width: 0;
+  overflow: auto;
+}
+
+.legacy-team-summary .fi-dashboard-table {
+  background: #ffffff;
 }
 
 .filter-label {
@@ -3423,6 +3519,11 @@ th {
   .legacy-team-picker {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .legacy-filter-tier,
+  .fi-inline-review-grid {
+    grid-template-columns: 1fr;
   }
 
   .legacy-filter-line,

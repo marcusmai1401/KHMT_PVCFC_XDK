@@ -17,8 +17,11 @@ REVIEWABLE_STATUSES = {
     SKStatus.SUBMITTED.value,
     SKStatus.REVIEWED.value,
     SKStatus.DEFERRED.value,
+    SKStatus.APPROVED.value,
+    SKStatus.REJECTED.value,
 }
-HISTORICAL_REVIEW_ACTIONS = {FIAction.APPROVE.value, FIAction.REJECT.value}
+REVIEW_DECISION_ACTIONS = {FIAction.APPROVE.value, FIAction.DEFER.value, FIAction.REJECT.value}
+HISTORICAL_REVIEW_ACTIONS = REVIEW_DECISION_ACTIONS
 SHARED_CONTENT_EDIT_FIELDS = {"content_description", "completion_plan"}
 
 
@@ -158,8 +161,8 @@ def _validate_actor_for_transition(record: SKCTKTModel, action: str, actor: str,
         }:
             raise PermissionError("Chỉ hủy được SK ở trạng thái Nháp hoặc Cần bổ sung")
     if role in {Role.FI_COORDINATOR.value, Role.WORKSHOP_LEADER.value}:
-        if action in {FIAction.APPROVE.value, FIAction.REJECT.value} and record.status not in REVIEWABLE_STATUSES:
-            raise PermissionError("Chỉ duyệt/từ chối được SK ở trạng thái Chờ xét duyệt, Đã xem xét hoặc Xem xét sau")
+        if action in REVIEW_DECISION_ACTIONS and record.status not in REVIEWABLE_STATUSES:
+            raise PermissionError("Chỉ đánh giá được SK ở trạng thái Chờ xét duyệt, Đã xem xét, Xem xét sau, Đồng ý hoặc Không đồng ý")
 
 
 def transition_sk_ctkt(
@@ -175,11 +178,8 @@ def transition_sk_ctkt(
     if record is None:
         raise KeyError("SK-CTKT not found")
     if record.is_historical_import:
-        if action not in HISTORICAL_REVIEW_ACTIONS or record.status not in {
-            SKStatus.SUBMITTED.value,
-            SKStatus.DEFERRED.value,
-        }:
-            raise PermissionError("FI legacy chỉ cho xét duyệt các mục Chờ xét duyệt hoặc Xem xét sau")
+        if action not in HISTORICAL_REVIEW_ACTIONS or record.status not in REVIEWABLE_STATUSES:
+            raise PermissionError("FI legacy chỉ cho đánh giá các mục Chờ xét duyệt, Xem xét sau, Đồng ý hoặc Không đồng ý")
     _validate_actor_for_transition(record, action, actor, role)
     result = next_status(record.status, action, role, note)
     before = record.status
@@ -188,7 +188,9 @@ def transition_sk_ctkt(
     record.is_public = is_public_status(record.status)
     if comments and action == FIAction.REVIEW.value:
         record.fi_coordinator_comments = comments
-    if note:
+    if action in REVIEW_DECISION_ACTIONS:
+        record.decision_note = note.strip() if note and note.strip() else None
+    elif note:
         record.decision_note = note
     if record.is_historical_import:
         record.consider_for_khmt = (
@@ -205,6 +207,8 @@ def transition_sk_ctkt(
         record.approved_at = now
     elif record.status == SKStatus.COMPLETED.value:
         record.completed_at = now
+    if before == SKStatus.APPROVED.value and record.status not in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}:
+        record.approved_at = None
     history = {
         "from_status": before,
         "to_status": record.status,

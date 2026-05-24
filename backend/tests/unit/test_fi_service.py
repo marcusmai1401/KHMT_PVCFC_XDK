@@ -213,6 +213,52 @@ def test_fi_dashboard_mixes_historical_and_current_records(db_session):
     assert team["khmt_not_considered"] == 1
 
 
+def test_fi_coordinator_can_set_deferred_from_submitted(db_session):
+    record = create_sk_ctkt(
+        db_session,
+        {
+            "author_name": "A",
+            "team": "TBCH",
+            "title": "Title",
+            "content_description": "Content",
+            "completion_plan": "T6/2026",
+            "year": 2026,
+        },
+        "u1",
+    )
+    transition_sk_ctkt(db_session, record.id, "submit", "u1", "Team_Account")
+
+    updated = transition_sk_ctkt(db_session, record.id, "defer", "fi1", "FI_Coordinator", note="Cần xem xét sau")
+
+    assert updated.status == "Deferred"
+    assert updated.decision_note == "Cần xem xét sau"
+
+
+def test_fi_coordinator_can_revise_approved_decision(db_session):
+    record = create_sk_ctkt(
+        db_session,
+        {
+            "author_name": "A",
+            "team": "TBCH",
+            "title": "Title",
+            "content_description": "Content",
+            "completion_plan": "T6/2026",
+            "year": 2026,
+        },
+        "u1",
+    )
+    transition_sk_ctkt(db_session, record.id, "submit", "u1", "Team_Account")
+    approved = transition_sk_ctkt(db_session, record.id, "approve", "fi1", "FI_Coordinator")
+    assert approved.status == "Approved"
+    assert approved.approved_at is not None
+
+    updated = transition_sk_ctkt(db_session, record.id, "defer", "fi1", "FI_Coordinator", note="Cần bổ sung đánh giá")
+
+    assert updated.status == "Deferred"
+    assert updated.approved_at is None
+    assert updated.decision_note == "Cần bổ sung đánh giá"
+
+
 def test_historical_deferred_can_be_approved_by_workshop_leader(db_session):
     record = SKCTKTModel(
         id="sk-legacy-deferred",
@@ -239,3 +285,33 @@ def test_historical_deferred_can_be_approved_by_workshop_leader(db_session):
     assert updated.status == "Approved"
     assert updated.is_historical_import is True
     assert updated.is_counted_for_okr is True
+
+
+def test_historical_approved_can_be_revised_by_fi_coordinator(db_session):
+    record = SKCTKTModel(
+        id="sk-legacy-approved-review",
+        sk_code="HIST-TBCH-TBCH-11",
+        title="Legacy approved",
+        author_name="A",
+        author_user_id="historical-import",
+        team="TBCH",
+        content_description="Content",
+        completion_plan="T6/2026",
+        status="Approved",
+        status_history=[],
+        consider_for_khmt=True,
+        is_public=True,
+        is_counted_for_okr=True,
+        is_historical_import=True,
+        khmt_month=1,
+        khmt_year=2026,
+    )
+    db_session.add(record)
+    db_session.commit()
+
+    updated = transition_sk_ctkt(db_session, record.id, "reject", "fi1", "FI_Coordinator", note="Không phù hợp")
+
+    assert updated.status == "Rejected"
+    assert updated.is_public is False
+    assert updated.consider_for_khmt is False
+    assert updated.is_counted_for_okr is False

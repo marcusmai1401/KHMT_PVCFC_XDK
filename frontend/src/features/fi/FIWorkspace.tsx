@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   CalendarDays,
-  Check,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -27,14 +26,13 @@ import {
   Users2,
   UserRound,
   X,
-  XCircle,
 } from "lucide-react";
 import { api } from "../../api/client";
 
 const TEAM_ROLE = "Team_Account";
 const FI_TEAMS = ["TBCH", "TBĐL", "TBHTĐK", "TCĐK"];
 const REVIEWER_ROLES = ["Admin", "FI_Coordinator", "Workshop_Leader"];
-const REVIEWABLE_STATUSES = ["Submitted", "Reviewed", "Deferred"];
+const REVIEW_DECISION_STATUSES = ["Submitted", "Reviewed", "Deferred", "Approved", "Rejected"];
 
 const statusLabels: Record<string, string> = {
   Draft: "Chưa gửi duyệt",
@@ -58,6 +56,13 @@ const importedStatusLabels: Record<string, string> = {
 
 type FITab = "register" | "history" | "dashboard";
 type HistoryMonthGroup = { key: string; month: number | null; year: number; items: any[] };
+type ReviewDecision = "approve" | "defer" | "reject";
+
+const reviewDecisionOptions: Array<{ value: ReviewDecision; label: string; helper: string }> = [
+  { value: "approve", label: "Đồng ý", helper: "Ghi nhận SK đạt yêu cầu xét duyệt." },
+  { value: "defer", label: "Xem xét sau", helper: "Giữ lại để đánh giá tiếp hoặc cần thêm cơ sở." },
+  { value: "reject", label: "Không đồng ý", helper: "Không đưa SK vào luồng thực hiện." },
+];
 
 function displayStatus(value: string) {
   return statusLabels[value] ?? value;
@@ -69,6 +74,20 @@ function displayImportedStatus(value: string) {
 
 function displayHistoryStatus(item: any) {
   return item.is_historical_import ? displayImportedStatus(item.status) : displayStatus(item.status);
+}
+
+function reviewDecisionFromStatus(status: string): ReviewDecision {
+  if (status === "Deferred") return "defer";
+  if (status === "Rejected") return "reject";
+  return "approve";
+}
+
+function reviewDecisionLabel(value: ReviewDecision) {
+  return reviewDecisionOptions.find((option) => option.value === value)?.label ?? value;
+}
+
+function reviewDecisionRequiresNote(value: ReviewDecision) {
+  return value === "defer" || value === "reject";
 }
 
 function registrationInfo(item: any) {
@@ -174,7 +193,7 @@ function percent(value: number | undefined, total: number | undefined) {
 
 export function visibleActionsForSk(role: string, currentUserId: string, item: any): string[] {
   const actions: string[] = [];
-  const reviewableStatuses = item.is_historical_import ? ["Submitted", "Deferred"] : REVIEWABLE_STATUSES;
+  const reviewableStatuses = REVIEW_DECISION_STATUSES;
   const visibleToTeamAccount = item.author_user_id === currentUserId || (typeof item.status === "string" && item.status !== "Draft");
   const canEdit =
     REVIEWER_ROLES.includes(role) ||
@@ -183,8 +202,7 @@ export function visibleActionsForSk(role: string, currentUserId: string, item: a
     !item.is_historical_import &&
     (role === "Admin" || (role === TEAM_ROLE && item.author_user_id === currentUserId)) &&
     ["Draft", "NeedMoreInfo"].includes(item.status);
-  const canApprove = REVIEWER_ROLES.includes(role) && reviewableStatuses.includes(item.status);
-  const canReject = REVIEWER_ROLES.includes(role) && reviewableStatuses.includes(item.status);
+  const canReviewDecision = REVIEWER_ROLES.includes(role) && reviewableStatuses.includes(item.status);
   const canAssign = !item.is_historical_import && role === "Admin" && ["Approved", "Completed"].includes(item.status);
   const canDelete =
     !item.is_historical_import &&
@@ -192,8 +210,7 @@ export function visibleActionsForSk(role: string, currentUserId: string, item: a
       (role === TEAM_ROLE && item.author_user_id === currentUserId && item.status === "Draft"));
   if (canEdit) actions.push("edit");
   if (canSubmit) actions.push("submit");
-  if (canApprove) actions.push("approve");
-  if (canReject) actions.push("reject");
+  if (canReviewDecision) actions.push("reviewDecision");
   if (canAssign) actions.push("assignKhmt");
   if (canDelete) actions.push("delete");
   return actions;
@@ -693,7 +710,7 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
     };
   });
   const [error, setError] = useState("");
-  const [actionTarget, setActionTarget] = useState<{ id: string; action: "approve" | "reject" } | null>(null);
+  const [actionTarget, setActionTarget] = useState<{ id: string; label: string; decision: ReviewDecision } | null>(null);
   const [actionNote, setActionNote] = useState("");
   const [editTarget, setEditTarget] = useState<any>(null);
   const [editForm, setEditForm] = useState({ content_description: "", completion_plan: "" });
@@ -853,6 +870,19 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
     setNotice("");
   };
 
+  const openReviewDecision = (item: any) => {
+    setEditTarget(null);
+    setKhmtTarget(null);
+    setActionTarget({
+      id: item.id,
+      label: item.sk_code || item.title,
+      decision: reviewDecisionFromStatus(item.status),
+    });
+    setActionNote(item.decision_note || "");
+    setError("");
+    setNotice("");
+  };
+
   const openKhmtAssign = (item: any) => {
     const today = new Date();
     const registration = registrationInfo(item);
@@ -891,15 +921,23 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
 
   const handleAction = () => {
     if (!actionTarget) return;
-    if (actionTarget.action === "reject" && !actionNote.trim()) {
-      setError("Cần nhập lý do từ chối");
+    if (reviewDecisionRequiresNote(actionTarget.decision) && !actionNote.trim()) {
+      setError(`Cần nhập ghi chú khi chọn "${reviewDecisionLabel(actionTarget.decision)}".`);
       return;
     }
-    transition(actionTarget.id, actionTarget.action, actionNote.trim() ? { note: actionNote } : {});
-    setActionTarget(null);
-    setEditTarget(null);
-    setKhmtTarget(null);
-    setActionNote("");
+    const target = actionTarget;
+    api.transitionSk(target.id, target.decision, actionNote.trim() ? { note: actionNote.trim() } : {})
+      .then((updated) => {
+        setNotice(`Đã cập nhật đánh giá: ${reviewDecisionLabel(target.decision)}.`);
+        setActionTarget(null);
+        setEditTarget(null);
+        setKhmtTarget(null);
+        setActionNote("");
+        reload();
+        setSelectedItem((current: any) => current?.id === updated.id ? { ...current, ...updated } : current);
+        if (selectedItem?.id === target.id) reloadDetail(target.id);
+      })
+      .catch((err) => setError(err.message));
   };
 
   const handleAssignKhmt = async () => {
@@ -1025,6 +1063,76 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
   const khmtRate = dashboardTotalCount
     ? Math.round((dashboardKhmtCount / dashboardTotalCount) * 100)
     : 0;
+  const historyTeamSummary = dashboardTeams.find((team: any) => team.team === historyTeam);
+
+  const renderMetricPair = (
+    primary: number | undefined,
+    secondaryText: string,
+    className = ""
+  ) => (
+    <span className={`metric-pair ${className}`}>
+      <strong>{formatCount(primary)}</strong>
+      <small>{secondaryText}</small>
+    </span>
+  );
+
+  const renderReviewDecisionPanel = (item: any) => {
+    if (!actionTarget || actionTarget.id !== item.id) return null;
+    const currentOption = reviewDecisionOptions.find((option) => option.value === actionTarget.decision);
+    const requiresNote = reviewDecisionRequiresNote(actionTarget.decision);
+    return (
+      <section className="fi-inline-review-panel">
+        <div className="fi-inline-review-head">
+          <div>
+            <h3>Đánh giá SK-CTKT</h3>
+            <p className="muted">{actionTarget.label}</p>
+          </div>
+          <span className={`legacy-status-pill ${statusTone(item.status)}`}>{displayHistoryStatus(item)}</span>
+        </div>
+        <div className="fi-inline-review-grid">
+          <label>
+            Kết luận đánh giá
+            <select
+              value={actionTarget.decision}
+              onChange={(e) =>
+                setActionTarget({ ...actionTarget, decision: e.target.value as ReviewDecision })
+              }
+            >
+              {reviewDecisionOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Ghi chú {requiresNote && <span className="required-mark">*</span>}
+            <textarea
+              value={actionNote}
+              onChange={(e) => setActionNote(e.target.value)}
+              placeholder={
+                requiresNote
+                  ? `Nhập lý do "${reviewDecisionLabel(actionTarget.decision)}"...`
+                  : "Nhập ghi chú đánh giá (nếu có)..."
+              }
+              rows={3}
+            />
+          </label>
+        </div>
+        {currentOption && <p className="fi-review-helper">{currentOption.helper}</p>}
+        <div className="fi-inline-review-actions">
+          <button onClick={handleAction} type="button">
+            <ClipboardCheck size={17} />
+            Lưu đánh giá
+          </button>
+          <button onClick={() => { setActionTarget(null); setActionNote(""); }} type="button">
+            Hủy
+          </button>
+        </div>
+        {error && <p className="error">{error}</p>}
+      </section>
+    );
+  };
 
   return (
     <div className="content-grid">
@@ -1079,33 +1187,6 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
           </button>
         </div>
       </div>
-
-      {actionTarget && (
-        <section className="panel wide fi-action-panel">
-          <h2>{actionTarget.action === "approve" ? "Phê duyệt SK-CTKT" : "Từ chối SK-CTKT"}</h2>
-          <div className="form-stack">
-            <label>
-              Ghi chú {actionTarget.action === "reject" && <span style={{ color: "red" }}>*</span>}
-              {actionTarget.action === "approve" && <span className="muted"> (tùy chọn)</span>}
-            </label>
-            <textarea
-              value={actionNote}
-              onChange={(e) => setActionNote(e.target.value)}
-              placeholder={actionTarget.action === "approve" ? "Nhập ghi chú (nếu có)..." : "Nhập lý do từ chối..."}
-              rows={3}
-            />
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={handleAction}>
-                {actionTarget.action === "approve" ? <Check size={17} /> : <XCircle size={17} />}
-                {actionTarget.action === "approve" ? "Xác nhận phê duyệt" : "Xác nhận từ chối"}
-              </button>
-              <button onClick={() => { setActionTarget(null); setActionNote(""); }}>
-                Hủy
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
 
       {editTarget && (
         <section className="panel wide fi-action-panel">
@@ -1315,14 +1396,9 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                       <Send size={16} />
                     </button>
                   )}
-                  {actions.includes("approve") && (
-                    <button title="Phê duyệt" onClick={() => { setActionTarget({ id: item.id, action: "approve" }); setActionNote(""); }}>
-                      <Check size={16} />
-                    </button>
-                  )}
-                  {actions.includes("reject") && (
-                    <button title="Từ chối" onClick={() => { setActionTarget({ id: item.id, action: "reject" }); setActionNote(""); }}>
-                      <XCircle size={16} />
+                  {actions.includes("reviewDecision") && (
+                    <button title="Đánh giá" onClick={() => openReviewDecision(item)} type="button">
+                      <ClipboardCheck size={16} />
                     </button>
                   )}
                   {actions.includes("assignKhmt") && (
@@ -1336,6 +1412,7 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                     </button>
                   )}
                 </div>
+                {renderReviewDecisionPanel(item)}
               </div>
             );
           })}
@@ -1643,18 +1720,15 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                         </td>
                         <td>{formatCount(team.total)}</td>
                         <td>
-                          <strong className="cell-approved">{formatCount(team.approved)}</strong>
-                          <small>{teamApprovalRate}%</small>
+                          {renderMetricPair(team.approved, `(${teamApprovalRate}%)`, "cell-approved")}
                         </td>
                         <td>{formatCount(team.deferred)}</td>
                         <td>{formatCount(team.pending)}</td>
                         <td>
-                          <strong className="cell-khmt">{formatCount(team.khmt_considered)}</strong>
-                          <small>{formatCount(team.khmt_not_considered)} chưa vào</small>
+                          {renderMetricPair(team.khmt_considered, `/ ${formatCount(team.khmt_not_considered)} chưa vào`, "cell-khmt")}
                         </td>
                         <td>
-                          <strong>{formatCount(team.completed_count ?? team.completed)}</strong>
-                          <small>{formatCount(team.not_completed)} chưa xong</small>
+                          {renderMetricPair(team.completed_count ?? team.completed, `/ ${formatCount(team.not_completed)} chưa xong`)}
                         </td>
                       </tr>
                     );
@@ -1740,42 +1814,75 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
             </div>
           </div>
           <div className="legacy-filter-tier" aria-label="Lọc lịch sử FI">
-            <div className="legacy-filter-line">
-              <span className="filter-label">Đội/tổ</span>
-              <strong>{historyTeam}</strong>
-            </div>
-            <div className="legacy-filter-line">
-              <span className="filter-label">Tháng</span>
-              <div className="legacy-month-ticks">
-                <button
-                  className={historyMonths.length === 0 ? "active" : ""}
-                  onClick={() => {
-                    setHistoryMonths([]);
-                    setSelectedItem(null);
-                  }}
-                  type="button"
-                >
-                  <span className="tick-box" aria-hidden="true">{historyMonths.length === 0 ? "✓" : ""}</span>
-                  Tất cả
-                  <small>{historyItems.length}</small>
-                </button>
-                {historyMonthOptions.map(([month, count]) => {
-                  const active = historyMonths.includes(month);
-                  return (
-                    <button
-                      className={active ? "active" : ""}
-                      key={month}
-                      onClick={() => toggleHistoryMonth(month)}
-                      type="button"
-                    >
-                      <span className="tick-box" aria-hidden="true">{active ? "✓" : ""}</span>
-                      T{month}
-                      <small>{count}</small>
-                    </button>
-                  );
-                })}
+            <div className="legacy-filter-controls">
+              <div className="legacy-filter-line">
+                <span className="filter-label">Đội/tổ</span>
+                <strong>{historyTeam}</strong>
+              </div>
+              <div className="legacy-filter-line">
+                <span className="filter-label">Tháng</span>
+                <div className="legacy-month-ticks">
+                  <button
+                    className={historyMonths.length === 0 ? "active" : ""}
+                    onClick={() => {
+                      setHistoryMonths([]);
+                      setSelectedItem(null);
+                    }}
+                    type="button"
+                  >
+                    <span className="tick-box" aria-hidden="true">{historyMonths.length === 0 ? "✓" : ""}</span>
+                    Tất cả
+                    <small>{historyItems.length}</small>
+                  </button>
+                  {historyMonthOptions.map(([month, count]) => {
+                    const active = historyMonths.includes(month);
+                    return (
+                      <button
+                        className={active ? "active" : ""}
+                        key={month}
+                        onClick={() => toggleHistoryMonth(month)}
+                        type="button"
+                      >
+                        <span className="tick-box" aria-hidden="true">{active ? "✓" : ""}</span>
+                        T{month}
+                        <small>{count}</small>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
+            {historyTeamSummary && (
+              <div className="legacy-team-summary">
+                <table className="fi-dashboard-table compact">
+                  <thead>
+                    <tr>
+                      <th>Đội/tổ</th>
+                      <th>Tổng</th>
+                      <th>Đã duyệt</th>
+                      <th>Xem xét sau</th>
+                      <th>Chưa duyệt</th>
+                      <th>KHMT</th>
+                      <th>Hoàn thành</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>
+                        <strong>{historyTeamSummary.team}</strong>
+                        <small>{formatCount(historyTeamSummary.current)} hiện hành · {formatCount(historyTeamSummary.historical)} lịch sử</small>
+                      </td>
+                      <td>{formatCount(historyTeamSummary.total)}</td>
+                      <td>{renderMetricPair(historyTeamSummary.approved, `(${percent(historyTeamSummary.approved, historyTeamSummary.total)}%)`, "cell-approved")}</td>
+                      <td>{formatCount(historyTeamSummary.deferred)}</td>
+                      <td>{formatCount(historyTeamSummary.pending)}</td>
+                      <td>{renderMetricPair(historyTeamSummary.khmt_considered, `/ ${formatCount(historyTeamSummary.khmt_not_considered)} chưa vào`, "cell-khmt")}</td>
+                      <td>{renderMetricPair(historyTeamSummary.completed_count ?? historyTeamSummary.completed, `/ ${formatCount(historyTeamSummary.not_completed)} chưa xong`)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
           <div className="legacy-column-heading" aria-hidden="true">
             <span>Kết luận</span>
@@ -1832,24 +1939,14 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                             <Pencil size={15} />
                           </button>
                         )}
-                        {actions.includes("approve") && (
+                        {actions.includes("reviewDecision") && (
                           <button
                             className="legacy-icon-action"
-                            title="Phê duyệt"
-                            onClick={() => { setActionTarget({ id: item.id, action: "approve" }); setActionNote(""); }}
+                            title="Đánh giá"
+                            onClick={() => openReviewDecision(item)}
                             type="button"
                           >
-                            <Check size={15} />
-                          </button>
-                        )}
-                        {actions.includes("reject") && (
-                          <button
-                            className="legacy-icon-action"
-                            title="Từ chối"
-                            onClick={() => { setActionTarget({ id: item.id, action: "reject" }); setActionNote(""); }}
-                            type="button"
-                          >
-                            <XCircle size={15} />
+                            <ClipboardCheck size={15} />
                           </button>
                         )}
                         <button className="legacy-row-action" onClick={() => openHistoryItem(item)} type="button">
@@ -1858,6 +1955,7 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                       </div>
                     </div>
                   </div>
+                  {renderReviewDecisionPanel(item)}
                   {isOpen && (
                     <div className="legacy-inline-detail">
                       <div className="detail-grid">

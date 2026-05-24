@@ -1,4 +1,5 @@
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
 import re
 from typing import Any
@@ -7,17 +8,9 @@ from openpyxl import load_workbook
 
 
 SHEET_TEAM = {"TBCH": "TBCH", "TBĐ": "TBĐL", "TBHTĐK": "TBHTĐK", "TC- ĐK": "TCĐK"}
-STATUS_MAP = {
-    "đồng ý": "Approved",
-    "dong y": "Approved",
-    "xem xét sau": "Deferred",
-    "xem xet sau": "Deferred",
-    "không đồng ý": "Rejected",
-    "khong dong y": "Rejected",
-    "không đạt": "Rejected",
-    "khong dat": "Rejected",
-    "cancel": "Cancelled",
-}
+SHEET_KHMT_COLUMN = {"TBĐ": 14}
+SHEET_LEADER_CONCLUSION_COLUMN: dict[str, int | None] = {"TBĐ": None}
+APPROVED_STATUSES = {"Approved", "Completed"}
 
 
 @dataclass
@@ -30,11 +23,14 @@ class BM01PreviewRow:
     content_description: str
     completion_plan: str
     raw_conclusion: str
+    workshop_leader_conclusion: str
+    khmt_raw: str
     status: str
     registration_month: int | None
     registration_year: int | None
     khmt_month: int | None
     khmt_year: int | None
+    consider_for_khmt: bool
     warnings: list[str]
 
     def to_dict(self) -> dict[str, Any]:
@@ -45,56 +41,108 @@ def _clean(value: Any) -> str:
     return str(value or "").strip()
 
 
-def _strip(value: str) -> str:
-    return re.sub(r"\s+", " ", value.lower().strip())
-
-
-def _header_indices(sheet) -> dict[str, int]:
-    aliases = {
-        "month": ["tháng", "month"],
-        "author_name": ["họ và tên", "người đăng ký", "tác giả", "author"],
-        "title": ["tên sáng kiến", "tên đề tài", "title"],
-        "content_description": ["nội dung", "mô tả", "description"],
-        "completion_plan": ["kế hoạch", "completion"],
-        "raw_conclusion": ["kết luận", "đánh giá", "conclusion"],
-    }
-    result: dict[str, int] = {}
-    for col in range(1, sheet.max_column + 1):
-        header = _strip(_clean(sheet.cell(1, col).value))
-        for field, names in aliases.items():
-            if field not in result and any(name in header for name in names):
-                result[field] = col - 1
-    return result
-
-
-def _value(values: list[str], headers: dict[str, int], field: str, fallback: int) -> str:
-    index = headers.get(field, fallback)
-    return values[index] if index < len(values) else ""
-
-
 def _parse_month_year(value: str) -> tuple[int | None, int | None]:
-    text = value.strip()
+    text = _clean(value).lower()
     if not text:
         return None, None
-    match = re.search(r"(?:tháng\s*)?(1[0-2]|0?[1-9])\s*[/-]\s*(20\d{2})", text, re.IGNORECASE)
+    match = re.search(
+        r"(?:tháng|thang|t)?\s*(1[0-2]|0?[1-9])\s*[./-]\s*(20\d{2})",
+        text,
+        re.IGNORECASE,
+    )
     if match:
         return int(match.group(1)), int(match.group(2))
-    match = re.search(r"(?:tháng|t)\s*(1[0-2]|0?[1-9])", text, re.IGNORECASE)
+    match = re.search(r"(?:tháng|thang|t)\s*(1[0-2]|0?[1-9])\b", text, re.IGNORECASE)
     if match:
         return int(match.group(1)), None
+    if re.fullmatch(r"1[0-2]|0?[1-9]", text):
+        return int(text), None
     return None, None
 
 
-def _status_from_conclusion(value: str) -> tuple[str, str | None]:
+def _status_from_review(value: str) -> tuple[str, str | None]:
     lowered = value.lower().strip()
-    for key, status in STATUS_MAP.items():
-        if key in lowered:
-            return status, None
-    return "Deferred", "Unclear approval status"
+    if not lowered:
+        return "Submitted", "Missing approval status"
+    rejected_markers = [
+        "không đồng ý",
+        "khong dong y",
+        "khồng đồng ý",
+        "khong dong ý",
+        "không đạt",
+        "khong dat",
+        "không dat",
+    ]
+    if any(marker in lowered for marker in rejected_markers):
+        return "Rejected", None
+    if "xem xét sau" in lowered or "xem xet sau" in lowered:
+        return "Deferred", None
+    if "đồng ý" in lowered or "dong y" in lowered:
+        return "Approved", None
+    return "Submitted", "Unclear approval status"
+
+
+def _has_data(sheet, row: int) -> bool:
+    author = _clean(sheet.cell(row, 4).value)
+    title = _clean(sheet.cell(row, 5).value)
+    content = _clean(sheet.cell(row, 6).value)
+    if author.lower() in {"họ và tên tác giả chính", "họ và tên tác giả"}:
+        return False
+    return bool(author and title and content)
+
+
+def _cell(sheet, row: int, column: int | None) -> str:
+    if column is None:
+        return ""
+    return _clean(sheet.cell(row, column).value)
+
+
+def build_bm01_status_history(
+    row: dict[str, Any],
+    *,
+    imported_by: str,
+    imported_at: datetime,
+) -> list[dict[str, Any]]:
+    comments: dict[str, Any] = {
+        "registration_month": row["registration_month"],
+        "registration_year": row["registration_year"],
+        "month_raw": row.get("month_raw"),
+        "khmt_raw": row.get("khmt_raw"),
+        "khmt_month": row.get("khmt_month"),
+        "khmt_year": row.get("khmt_year"),
+        "consider_for_khmt": row.get("consider_for_khmt", False),
+    }
+    history = [
+        {
+            "from_status": "Legacy",
+            "to_status": row["status"],
+            "changed_by": imported_by,
+            "changed_at": imported_at.isoformat(),
+            "reason": row["raw_conclusion"] or "Legacy BM01 chưa có dữ liệu xét duyệt",
+            "comments": comments,
+        }
+    ]
+    if row.get("consider_for_khmt"):
+        history.append(
+            {
+                "from_status": row["status"],
+                "to_status": row["status"],
+                "changed_by": imported_by,
+                "changed_at": imported_at.isoformat(),
+                "reason": "khmt_legacy_note",
+                "comments": {
+                    "khmt_month": row.get("khmt_month"),
+                    "khmt_year": row.get("khmt_year"),
+                    "khmt_raw": row.get("khmt_raw"),
+                    "source": "BM01",
+                },
+            }
+        )
+    return history
 
 
 def preview_bm01(path: Path) -> dict[str, Any]:
-    workbook = load_workbook(path, read_only=False, data_only=True)
+    workbook = load_workbook(path, read_only=False, data_only=True, keep_links=False)
     rows: list[BM01PreviewRow] = []
     workbook_warnings: list[str] = []
     for sheet_name, team in SHEET_TEAM.items():
@@ -102,30 +150,30 @@ def preview_bm01(path: Path) -> dict[str, Any]:
             workbook_warnings.append(f"Missing sheet {sheet_name}")
             continue
         sheet = workbook[sheet_name]
-        headers = _header_indices(sheet)
-        if not headers:
-            workbook_warnings.append(f"Using fallback column indices for {sheet_name}")
-        for row in range(2, sheet.max_row + 1):
-            values = [_clean(sheet.cell(row, col).value) for col in range(1, sheet.max_column + 1)]
-            if not any(values):
+        current_registration_month: int | None = None
+        khmt_column = SHEET_KHMT_COLUMN.get(sheet_name, 15)
+        leader_column = SHEET_LEADER_CONCLUSION_COLUMN.get(sheet_name, 14)
+        for row in range(1, sheet.max_row + 1):
+            month_raw = _cell(sheet, row, 1)
+            candidate_month, _ = _parse_month_year(month_raw)
+            if candidate_month is not None:
+                current_registration_month = candidate_month
+            if not _has_data(sheet, row):
                 continue
-            title = _value(values, headers, "title", 3)
-            author = _value(values, headers, "author_name", 2)
-            if not title and not author:
-                continue
-            registration_month, registration_year = _parse_month_year(_value(values, headers, "month", 0))
-            conclusion_index = headers.get("raw_conclusion")
-            conclusion_candidates = [values[conclusion_index]] if conclusion_index is not None and conclusion_index < len(values) else []
-            conclusion_candidates.extend(values[i] for i in [13, 12, 14, 15] if i < len(values))
-            raw_conclusion = next((candidate for candidate in conclusion_candidates if candidate), "")
-            status, status_warning = _status_from_conclusion(raw_conclusion)
-            khmt_text = " ".join(values[13:16])
-            khmt_month, khmt_year = _parse_month_year(khmt_text)
+            raw_conclusion = _cell(sheet, row, 13)
+            status, status_warning = _status_from_review(raw_conclusion)
+            khmt_raw = _cell(sheet, row, khmt_column)
+            khmt_month, khmt_year = _parse_month_year(khmt_raw)
+            note_month, _ = _parse_month_year(_cell(sheet, row, 12))
+            registration_month = candidate_month or khmt_month or note_month or current_registration_month
+            if registration_month is not None:
+                current_registration_month = registration_month
+            registration_year = 2026
+            khmt_year = khmt_year or (registration_year if khmt_month else None)
+            consider_for_khmt = status in APPROVED_STATUSES and khmt_month is not None
             warnings = []
             if registration_month is None:
                 warnings.append("Missing or ambiguous registration month")
-            if not title:
-                warnings.append("Missing title")
             if status_warning:
                 warnings.append(status_warning)
             if sheet.row_dimensions[row].hidden:
@@ -135,19 +183,23 @@ def preview_bm01(path: Path) -> dict[str, Any]:
                     source_sheet=sheet_name,
                     source_row=row,
                     team=team,
-                    author_name=author,
-                    title=title,
-                    content_description=_value(values, headers, "content_description", 4),
-                    completion_plan=_value(values, headers, "completion_plan", 5),
+                    author_name=_cell(sheet, row, 4),
+                    title=_cell(sheet, row, 5),
+                    content_description=_cell(sheet, row, 6),
+                    completion_plan=_cell(sheet, row, 11),
                     raw_conclusion=raw_conclusion,
+                    workshop_leader_conclusion=_cell(sheet, row, leader_column),
+                    khmt_raw=khmt_raw,
                     status=status,
                     registration_month=registration_month,
                     registration_year=registration_year,
                     khmt_month=khmt_month,
                     khmt_year=khmt_year,
+                    consider_for_khmt=consider_for_khmt,
                     warnings=warnings,
                 )
             )
+    workbook.close()
     return {
         "source_file": str(path),
         "rows": [row.to_dict() for row in rows],

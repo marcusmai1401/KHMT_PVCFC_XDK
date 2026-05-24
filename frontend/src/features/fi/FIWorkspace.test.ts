@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { visibleActionsForSk } from "./FIWorkspace";
+import { isKhmtConsidered, khmtLabel, visibleActionsForSk } from "./FIWorkspace";
 
 describe("FI action visibility", () => {
   it("allows a team account to submit its own draft but not another team's draft", () => {
@@ -46,5 +46,20 @@ describe("FI action visibility", () => {
 
   it("does not allow FI_Coordinator to delete approved items", () => {
     expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Approved" })).toEqual(["edit"]);
+  });
+});
+
+describe("FI KHMT display", () => {
+  it("shows KHMT only when the SK is considered for KHMT", () => {
+    const approved = { status: "Approved", consider_for_khmt: true, khmt_month: 4, khmt_year: 2026 };
+    const staleApproved = { status: "Approved", consider_for_khmt: false, khmt_month: 4, khmt_year: 2026 };
+    const deferred = { status: "Deferred", consider_for_khmt: false, khmt_month: 4, khmt_year: 2026 };
+
+    expect(isKhmtConsidered(approved)).toBe(true);
+    expect(khmtLabel(approved)).toBe("KHMT T4/2026");
+    expect(isKhmtConsidered(staleApproved)).toBe(false);
+    expect(khmtLabel(staleApproved)).toBe("Chưa vào KHMT");
+    expect(isKhmtConsidered(deferred)).toBe(false);
+    expect(khmtLabel(deferred)).toBe("Chưa vào KHMT");
   });
 });

@@ -1,6 +1,5 @@
 .env
 .env.production
-deploy_prod.py
 .agent/
 .codex/
 .venv/
@@ -18,6 +17,8 @@ coverage/
 htmlcov/
 *.log
 *.tsbuildinfo
+BM 01 Dang ky - Danh gia SK.xlsx
+frontend/vite.config.ts.timestamp-*.mjs
 ~$*
 npm-debug.log*
 yarn-debug.log*

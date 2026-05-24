@@ -191,11 +191,12 @@ def transition_sk_ctkt(
     if note:
         record.decision_note = note
     if record.is_historical_import:
-        record.is_counted_for_okr = (
+        record.consider_for_khmt = (
             record.status in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}
             and record.khmt_month is not None
             and record.khmt_year is not None
         )
+        record.is_counted_for_okr = record.consider_for_khmt
     if record.status == SKStatus.SUBMITTED.value:
         record.submitted_at = now
     elif record.status == SKStatus.REVIEWED.value:
@@ -249,10 +250,127 @@ def assign_khmt(db: Session, record_id: str, month: int, year: int, actor: str) 
     record.khmt_year = year
     record.consider_for_khmt = True
     record.is_counted_for_okr = True
+    now = _utc_now()
+    history = {
+        "from_status": record.status,
+        "to_status": record.status,
+        "changed_by": actor,
+        "changed_at": now.isoformat(),
+        "reason": "khmt_assignment",
+        "comments": {
+            "khmt_month": month,
+            "khmt_year": year,
+            "source": "workflow",
+        },
+    }
+    record.status_history = [*record.status_history, history]
+    record.updated_at = now
     audit(db, actor, "SK_CTKT", record_id, "assign_khmt", {"month": month, "year": year})
     db.commit()
     db.refresh(record)
     return record
+
+
+FI_DASHBOARD_TEAMS = ["TBCH", "TBĐL", "TBHTĐK", "TCĐK"]
+FI_DASHBOARD_STATUSES = [
+    SKStatus.DRAFT.value,
+    SKStatus.SUBMITTED.value,
+    SKStatus.NEED_MORE_INFO.value,
+    SKStatus.REVIEWED.value,
+    SKStatus.APPROVED.value,
+    SKStatus.REJECTED.value,
+    SKStatus.DEFERRED.value,
+    SKStatus.CANCELLED.value,
+    SKStatus.COMPLETED.value,
+]
+PENDING_STATUSES = {
+    SKStatus.SUBMITTED.value,
+    SKStatus.NEED_MORE_INFO.value,
+    SKStatus.REVIEWED.value,
+}
+
+
+def _empty_fi_dashboard_bucket(team: str | None = None) -> dict[str, Any]:
+    data: dict[str, Any] = {
+        "total": 0,
+        "approved": 0,
+        "completed": 0,
+        "deferred": 0,
+        "pending": 0,
+        "rejected": 0,
+        "cancelled": 0,
+        "draft": 0,
+        "khmt_considered": 0,
+        "khmt_not_considered": 0,
+        "completed_count": 0,
+        "not_completed": 0,
+        "historical": 0,
+        "current": 0,
+        "status_counts": {status: 0 for status in FI_DASHBOARD_STATUSES},
+    }
+    if team is not None:
+        data["team"] = team
+    return data
+
+
+def _is_khmt_considered(record: SKCTKTModel) -> bool:
+    return bool(record.consider_for_khmt)
+
+
+def _add_record_to_bucket(bucket: dict[str, Any], record: SKCTKTModel) -> None:
+    status = record.status
+    bucket["total"] += 1
+    bucket["status_counts"][status] = bucket["status_counts"].get(status, 0) + 1
+    if status in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}:
+        bucket["approved"] += 1
+    if status == SKStatus.COMPLETED.value:
+        bucket["completed"] += 1
+        bucket["completed_count"] += 1
+    else:
+        bucket["not_completed"] += 1
+    if status == SKStatus.DEFERRED.value:
+        bucket["deferred"] += 1
+    if status in PENDING_STATUSES:
+        bucket["pending"] += 1
+    if status == SKStatus.REJECTED.value:
+        bucket["rejected"] += 1
+    if status == SKStatus.CANCELLED.value:
+        bucket["cancelled"] += 1
+    if status == SKStatus.DRAFT.value:
+        bucket["draft"] += 1
+    if _is_khmt_considered(record):
+        bucket["khmt_considered"] += 1
+    else:
+        bucket["khmt_not_considered"] += 1
+    if record.is_historical_import:
+        bucket["historical"] += 1
+    else:
+        bucket["current"] += 1
+
+
+def fi_dashboard(db: Session, principal: dict[str, str]) -> dict[str, Any]:
+    records = db.execute(select(SKCTKTModel)).scalars().all()
+    visible_records = [record for record in records if can_view_sk(record, principal)]
+    by_team = {team: _empty_fi_dashboard_bucket(team) for team in FI_DASHBOARD_TEAMS}
+    totals = _empty_fi_dashboard_bucket()
+    khmt_by_month: dict[tuple[int, int], int] = {}
+    for record in visible_records:
+        team_bucket = by_team.setdefault(record.team, _empty_fi_dashboard_bucket(record.team))
+        _add_record_to_bucket(team_bucket, record)
+        _add_record_to_bucket(totals, record)
+        if _is_khmt_considered(record) and record.khmt_month is not None and record.khmt_year is not None:
+            key = (record.khmt_year, record.khmt_month)
+            khmt_by_month[key] = khmt_by_month.get(key, 0) + 1
+    return {
+        "generated_at": _utc_now().isoformat(),
+        "teams": list(by_team.values()),
+        "totals": totals,
+        "khmt_by_month": [
+            {"year": year, "month": month, "count": count}
+            for (year, month), count in sorted(khmt_by_month.items())
+        ],
+        "status_order": FI_DASHBOARD_STATUSES,
+    }
 
 
 def count_for_okr(db: Session, month: int, year: int) -> dict[str, int]:
@@ -262,6 +380,7 @@ def count_for_okr(db: Session, month: int, year: int) -> dict[str, int]:
             SKCTKTModel.khmt_month == month,
             SKCTKTModel.khmt_year == year,
             SKCTKTModel.status.in_([SKStatus.APPROVED.value, SKStatus.COMPLETED.value]),
+            SKCTKTModel.consider_for_khmt.is_(True),
             SKCTKTModel.is_counted_for_okr.is_(True),
         )
     ).scalars()

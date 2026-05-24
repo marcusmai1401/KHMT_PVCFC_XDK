@@ -3,122 +3,42 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 import argparse
-import re
 
-from openpyxl import load_workbook
 from sqlalchemy import and_, or_, select
 
 from app.db.session import create_session
 from app.models.domain import SKCTKTModel
 from app.services.fi.workflow import SKStatus
+from app.services.integration.bm01_import import SHEET_TEAM, build_bm01_status_history, preview_bm01
 from app.services.repositories import make_id
 
 
-SHEET_TEAM = {
-    "TBCH": "TBCH",
-    "TBĐ": "TBĐL",
-    "TBHTĐK": "TBHTĐK",
-    "TC- ĐK": "TCĐK",
-}
-SHEET_KHMT_COLUMN = {
-    "TBĐ": 14,
-}
-SHEET_LEADER_CONCLUSION_COLUMN: dict[str, int | None] = {
-    "TBĐ": None,
-}
-
-
-def clean(value) -> str:
-    return str(value or "").strip()
-
-
-def parse_month(value: str) -> int | None:
-    text = clean(value).lower()
-    if not text:
-        return None
-    match = re.search(r"(?:tháng|thang|t)?\s*(1[0-2]|0?[1-9])\s*[./-]\s*20\d{2}", text)
-    if match:
-        return int(match.group(1))
-    match = re.search(r"(?:tháng|thang|t)\s*(1[0-2]|0?[1-9])\b", text)
-    if match:
-        return int(match.group(1))
-    if re.fullmatch(r"1[0-2]|0?[1-9]", text):
-        return int(text)
-    return None
-
-
-def status_from_review(review: str) -> str:
-    text = clean(review).lower()
-    if not text:
-        return SKStatus.SUBMITTED.value
-    # Negative checks must run before the positive "đồng ý" check.
-    rejected_markers = [
-        "không đồng ý",
-        "khong dong y",
-        "khồng đồng ý",
-        "khong dong ý",
-        "không đạt",
-        "khong dat",
-        "không dat",
-    ]
-    if any(marker in text for marker in rejected_markers):
-        return SKStatus.REJECTED.value
-    if "xem xét sau" in text or "xem xet sau" in text:
-        return SKStatus.DEFERRED.value
-    if "đồng ý" in text or "dong y" in text:
-        return SKStatus.APPROVED.value
-    return SKStatus.SUBMITTED.value
-
-
-def has_data(sheet, row: int) -> bool:
-    author = clean(sheet.cell(row, 4).value)
-    title = clean(sheet.cell(row, 5).value)
-    content = clean(sheet.cell(row, 6).value)
-    if author.lower() in {"họ và tên tác giả chính", "họ và tên tác giả"}:
-        return False
-    return bool(author and title and content)
-
-
 def parse_sheet(workbook_path: Path, sheet_name: str, year: int) -> list[dict]:
-    workbook = load_workbook(workbook_path, read_only=False, data_only=True, keep_links=False)
-    sheet = workbook[sheet_name]
-    rows: list[dict] = []
-    current_registration_month: int | None = None
-    khmt_column = SHEET_KHMT_COLUMN.get(sheet_name, 15)
-    leader_column = SHEET_LEADER_CONCLUSION_COLUMN.get(sheet_name, 14)
-    for row in range(1, sheet.max_row + 1):
-        candidate_month = parse_month(clean(sheet.cell(row, 1).value))
-        if candidate_month is not None:
-            current_registration_month = candidate_month
-        if not has_data(sheet, row):
-            continue
-        month_raw = clean(sheet.cell(row, 1).value)
-        review = clean(sheet.cell(row, 13).value)
-        note_raw = clean(sheet.cell(row, 12).value)
-        khmt_raw = clean(sheet.cell(row, khmt_column).value)
-        completion_plan = clean(sheet.cell(row, 11).value)
-        khmt_month = parse_month(khmt_raw)
-        registration_month = parse_month(month_raw) or khmt_month or parse_month(note_raw) or current_registration_month
-        if registration_month is not None:
-            current_registration_month = registration_month
-        rows.append(
-            {
-                "source_row": row,
-                "month_raw": month_raw,
-                "registration_month": registration_month,
-                "registration_year": year,
-                "author_name": clean(sheet.cell(row, 4).value),
-                "title": clean(sheet.cell(row, 5).value),
-                "content_description": clean(sheet.cell(row, 6).value),
-                "completion_plan": completion_plan,
-                "review": review,
-                "leader_conclusion": clean(sheet.cell(row, leader_column).value) if leader_column else "",
-                "khmt_raw": khmt_raw,
-                "khmt_month": khmt_month,
-                "status": status_from_review(review),
-            }
-        )
-    return rows
+    preview_rows = [
+        row
+        for row in preview_bm01(workbook_path)["rows"]
+        if row["source_sheet"] == sheet_name
+    ]
+    return [
+        {
+            "source_row": row["source_row"],
+            "month_raw": None,
+            "registration_month": row["registration_month"],
+            "registration_year": year,
+            "author_name": row["author_name"],
+            "title": row["title"],
+            "content_description": row["content_description"],
+            "completion_plan": row["completion_plan"],
+            "review": row["raw_conclusion"],
+            "leader_conclusion": row["workshop_leader_conclusion"],
+            "khmt_raw": row["khmt_raw"],
+            "khmt_month": row["khmt_month"],
+            "khmt_year": year if row["consider_for_khmt"] and row["khmt_month"] else None,
+            "consider_for_khmt": row["consider_for_khmt"],
+            "status": row["status"],
+        }
+        for row in preview_rows
+    ]
 
 
 def import_rows(
@@ -150,21 +70,18 @@ def import_rows(
             created_at = datetime(year, item["registration_month"], 1, tzinfo=timezone.utc)
             now = datetime.now(timezone.utc)
             is_approved = item["status"] in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}
-            history = [
+            consider_for_khmt = bool(item["consider_for_khmt"])
+            khmt_year = item["khmt_year"] if consider_for_khmt else None
+            history = build_bm01_status_history(
                 {
-                    "from_status": "Legacy",
-                    "to_status": item["status"],
-                    "changed_by": imported_by,
-                    "changed_at": now.isoformat(),
-                    "reason": item["review"] or "Legacy BM01 chưa có dữ liệu xét duyệt",
-                    "comments": {
-                        "registration_month": item["registration_month"],
-                        "registration_year": year,
-                        "month_raw": item["month_raw"],
-                        "khmt_raw": item["khmt_raw"],
-                    },
-                }
-            ]
+                    **item,
+                    "raw_conclusion": item["review"],
+                    "consider_for_khmt": consider_for_khmt,
+                    "khmt_year": khmt_year,
+                },
+                imported_by=imported_by,
+                imported_at=now,
+            )
             values = {
                 "sk_code": sk_code,
                 "title": item["title"],
@@ -178,11 +95,11 @@ def import_rows(
                 "fi_coordinator_comments": item["review"] or None,
                 "workshop_leader_conclusion": item["leader_conclusion"] or None,
                 "decision_note": None,
-                "consider_for_khmt": bool(is_approved and item["khmt_month"]),
-                "khmt_month": item["khmt_month"] if is_approved else None,
-                "khmt_year": year if is_approved and item["khmt_month"] else None,
+                "consider_for_khmt": consider_for_khmt,
+                "khmt_month": item["khmt_month"] if consider_for_khmt else None,
+                "khmt_year": khmt_year,
                 "is_public": is_approved,
-                "is_counted_for_okr": bool(is_approved and item["khmt_month"]),
+                "is_counted_for_okr": consider_for_khmt,
                 "is_historical_import": True,
                 "bm01_source_file": source_label,
                 "bm01_source_sheet": sheet_name,

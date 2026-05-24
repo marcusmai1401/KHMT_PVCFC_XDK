@@ -175,6 +175,7 @@ export const api = {
     }),
   deleteSk: (id: string) => request<any>(`/fi/sk-ctkt/${id}`, { method: "DELETE" }),
   publicSk: (filters: QueryParams = {}) => request<any[]>(`/fi/sk-ctkt/public${toQuery(filters)}`),
+  fiDashboard: () => request<any>("/fi/dashboard"),
   notifications: () => request<any[]>("/notifications"),
   markNotificationRead: (id: string) => request<any>(`/notifications/${id}/read`, { method: "PUT" }),
   transitionSk: (id: string, action: string, payload: any = {}) =>

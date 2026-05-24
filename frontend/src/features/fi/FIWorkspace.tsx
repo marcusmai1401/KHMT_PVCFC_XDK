@@ -1,18 +1,30 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  BarChart3,
   CalendarDays,
   Check,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
   ClipboardCheck,
+  ClipboardList,
+  Clock3,
   Flag,
   History,
+  Image as ImageIcon,
   ImagePlus,
+  Info,
+  ListChecks,
+  PauseCircle,
   Pencil,
+  PieChart,
   RefreshCw,
   Send,
+  Sparkles,
   Trash2,
+  TrendingUp,
+  Users2,
   UserRound,
   X,
   XCircle,
@@ -44,7 +56,7 @@ const importedStatusLabels: Record<string, string> = {
   Completed: "Hoàn tất",
 };
 
-type FITab = "register" | "history";
+type FITab = "register" | "history" | "dashboard";
 type HistoryMonthGroup = { key: string; month: number | null; year: number; items: any[] };
 
 function displayStatus(value: string) {
@@ -110,8 +122,14 @@ function actorLabel(actor: string | null | undefined) {
 function historyDetail(history: any) {
   const reason = typeof history.reason === "string" ? history.reason.trim() : "";
   const comments = typeof history.comments === "string" ? history.comments.trim() : "";
+  const structuredComments = typeof history.comments === "object" && history.comments !== null ? history.comments : null;
   if (reason === "web_registration") {
     return { label: "Nguồn ghi nhận", text: "Đăng ký trên hệ thống" };
+  }
+  if (reason === "khmt_assignment" || reason === "khmt_legacy_note") {
+    const month = structuredComments?.khmt_month;
+    const year = structuredComments?.khmt_year;
+    return { label: "KHMT", text: month && year ? `Đã xem xét vào KHMT T${month}/${year}` : "Đã xem xét vào KHMT" };
   }
   if (comments) {
     return { label: "Nhận xét", text: comments };
@@ -134,6 +152,24 @@ function formatHistoryTime(value: string | null | undefined) {
     month: "2-digit",
     year: "numeric",
   });
+}
+
+export function isKhmtConsidered(item: any) {
+  return Boolean(item?.consider_for_khmt);
+}
+
+export function khmtLabel(item: any) {
+  if (isKhmtConsidered(item)) return `KHMT T${item.khmt_month}/${item.khmt_year}`;
+  return "Chưa vào KHMT";
+}
+
+function formatCount(value: number | undefined) {
+  return new Intl.NumberFormat("vi-VN").format(value ?? 0);
+}
+
+function percent(value: number | undefined, total: number | undefined) {
+  if (!total) return 0;
+  return Math.round(((value ?? 0) / total) * 100);
 }
 
 export function visibleActionsForSk(role: string, currentUserId: string, item: any): string[] {
@@ -335,9 +371,311 @@ function SkImageViewer({
   );
 }
 
+type StatusSlice = { key: string; label: string; value: number; color: string; tone: string };
+type TeamProgress = {
+  team: string;
+  total: number;
+  approved: number;
+  deferred: number;
+  pending: number;
+  rejected: number;
+  khmt: number;
+  khmtRate: number;
+};
+type MonthlyTrend = { key: string; label: string; count: number; year: number; month: number };
+
+function buildStatusSlices(totals: Record<string, any>): StatusSlice[] {
+  const approved = Number(totals.approved ?? 0);
+  const completed = Number(totals.completed_count ?? totals.completed ?? 0);
+  const pureApproved = Math.max(0, approved - completed);
+  const deferred = Number(totals.deferred ?? 0);
+  const pending = Number(totals.pending ?? 0);
+  const rejected = Number(totals.rejected ?? 0) + Number(totals.cancelled ?? 0);
+  return [
+    { key: "completed", label: "Hoàn tất", value: completed, color: "#16a34a", tone: "success" },
+    { key: "approved", label: "Đã duyệt", value: pureApproved, color: "#22c55e", tone: "approved" },
+    { key: "pending", label: "Chờ xét duyệt", value: pending, color: "#2563eb", tone: "info" },
+    { key: "deferred", label: "Xem xét sau", value: deferred, color: "#f59e0b", tone: "warning" },
+    { key: "rejected", label: "Từ chối/Hủy", value: rejected, color: "#ef4444", tone: "danger" },
+  ].filter((slice) => slice.value > 0);
+}
+
+function buildTeamProgress(teams: any[]): TeamProgress[] {
+  return teams.map((team) => {
+    const total = Number(team.total ?? 0);
+    const approved =
+      Number(team.approved ?? 0); // includes completed per backend bucket
+    const deferred = Number(team.deferred ?? 0);
+    const pending = Number(team.pending ?? 0);
+    const rejected = Number(team.rejected ?? 0) + Number(team.cancelled ?? 0);
+    const khmt = Number(team.khmt_considered ?? 0);
+    const khmtRate = total ? Math.round((khmt / total) * 100) : 0;
+    return { team: team.team, total, approved, deferred, pending, rejected, khmt, khmtRate };
+  });
+}
+
+function buildMonthlyTrend(months: any[]): MonthlyTrend[] {
+  return months
+    .map((m) => ({
+      key: `${m.year}-${m.month}`,
+      label: `T${m.month}/${m.year}`,
+      count: Number(m.count ?? 0),
+      year: Number(m.year),
+      month: Number(m.month),
+    }))
+    .sort((a, b) => a.year - b.year || a.month - b.month);
+}
+
+function polarToCartesian(cx: number, cy: number, r: number, angle: number) {
+  const rad = ((angle - 90) * Math.PI) / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
+function describeArc(cx: number, cy: number, r: number, startAngle: number, endAngle: number, innerR: number) {
+  const start = polarToCartesian(cx, cy, r, endAngle);
+  const end = polarToCartesian(cx, cy, r, startAngle);
+  const innerStart = polarToCartesian(cx, cy, innerR, endAngle);
+  const innerEnd = polarToCartesian(cx, cy, innerR, startAngle);
+  const largeArc = endAngle - startAngle <= 180 ? 0 : 1;
+  return [
+    `M ${start.x} ${start.y}`,
+    `A ${r} ${r} 0 ${largeArc} 0 ${end.x} ${end.y}`,
+    `L ${innerEnd.x} ${innerEnd.y}`,
+    `A ${innerR} ${innerR} 0 ${largeArc} 1 ${innerStart.x} ${innerStart.y}`,
+    "Z",
+  ].join(" ");
+}
+
+function StatusDonutChart({ slices, total }: { slices: StatusSlice[]; total: number }) {
+  const safeTotal = slices.reduce((sum, slice) => sum + slice.value, 0);
+  let cumulative = 0;
+  const size = 180;
+  const cx = size / 2;
+  const cy = size / 2;
+  const radius = 78;
+  const innerRadius = 50;
+  if (safeTotal === 0) {
+    return (
+      <div className="fi-chart-empty">
+        <PieChart size={28} />
+        <span>Chưa có dữ liệu trạng thái</span>
+      </div>
+    );
+  }
+  return (
+    <div className="fi-donut">
+      <svg viewBox={`0 0 ${size} ${size}`} width="100%" height={size} role="img" aria-label="Phân bố trạng thái">
+        {slices.length === 1 ? (
+          <>
+            <circle cx={cx} cy={cy} r={radius} fill={slices[0].color} />
+            <circle cx={cx} cy={cy} r={innerRadius} fill="#ffffff" />
+          </>
+        ) : (
+          slices.map((slice) => {
+            const startAngle = (cumulative / safeTotal) * 360;
+            cumulative += slice.value;
+            const endAngle = (cumulative / safeTotal) * 360;
+            return (
+              <path
+                key={slice.key}
+                d={describeArc(cx, cy, radius, startAngle, endAngle, innerRadius)}
+                fill={slice.color}
+              >
+                <title>{`${slice.label}: ${slice.value} (${Math.round((slice.value / safeTotal) * 100)}%)`}</title>
+              </path>
+            );
+          })
+        )}
+        <text x={cx} y={cy - 4} textAnchor="middle" className="fi-donut-total">{total}</text>
+        <text x={cx} y={cy + 14} textAnchor="middle" className="fi-donut-label">SK-CTKT</text>
+      </svg>
+      <ul className="fi-donut-legend">
+        {slices.map((slice) => (
+          <li key={slice.key}>
+            <span className="fi-donut-swatch" style={{ background: slice.color }} aria-hidden="true" />
+            <span className="fi-donut-name">{slice.label}</span>
+            <strong>{slice.value}</strong>
+            <small>{safeTotal ? Math.round((slice.value / safeTotal) * 100) : 0}%</small>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function TeamProgressBars({ teams }: { teams: TeamProgress[] }) {
+  if (teams.length === 0) {
+    return (
+      <div className="fi-chart-empty">
+        <Users2 size={28} />
+        <span>Chưa có dữ liệu đội/tổ</span>
+      </div>
+    );
+  }
+  const maxTotal = Math.max(1, ...teams.map((team) => team.total));
+  return (
+    <div className="fi-team-bars">
+      {teams.map((team) => {
+        const widthPct = (team.total / maxTotal) * 100;
+        const approvedPct = team.total ? (team.approved / team.total) * 100 : 0;
+        const deferredPct = team.total ? (team.deferred / team.total) * 100 : 0;
+        const pendingPct = team.total ? (team.pending / team.total) * 100 : 0;
+        const rejectedPct = team.total ? (team.rejected / team.total) * 100 : 0;
+        return (
+          <div className="fi-team-row" key={team.team}>
+            <div className="fi-team-meta">
+              <strong>{team.team}</strong>
+              <small>{team.total} SK · KHMT {team.khmt} ({team.khmtRate}%)</small>
+            </div>
+            <div className="fi-team-track" title={`Tổng ${team.total} SK`}>
+              <div className="fi-team-fill" style={{ width: `${widthPct}%` }}>
+                {team.approved > 0 && (
+                  <span
+                    className="fi-team-seg approved"
+                    style={{ width: `${approvedPct}%` }}
+                    title={`Đã duyệt: ${team.approved}`}
+                  />
+                )}
+                {team.deferred > 0 && (
+                  <span
+                    className="fi-team-seg deferred"
+                    style={{ width: `${deferredPct}%` }}
+                    title={`Xem xét sau: ${team.deferred}`}
+                  />
+                )}
+                {team.pending > 0 && (
+                  <span
+                    className="fi-team-seg pending"
+                    style={{ width: `${pendingPct}%` }}
+                    title={`Chờ xét duyệt: ${team.pending}`}
+                  />
+                )}
+                {team.rejected > 0 && (
+                  <span
+                    className="fi-team-seg rejected"
+                    style={{ width: `${rejectedPct}%` }}
+                    title={`Từ chối/Hủy: ${team.rejected}`}
+                  />
+                )}
+              </div>
+            </div>
+            <div className="fi-team-numbers">
+              <span className="fi-team-num approved">{team.approved}</span>
+              <span className="fi-team-num deferred">{team.deferred}</span>
+              <span className="fi-team-num pending">{team.pending}</span>
+              <span className="fi-team-num rejected">{team.rejected}</span>
+            </div>
+          </div>
+        );
+      })}
+      <div className="fi-team-legend" aria-hidden="true">
+        <span><i className="fi-swatch approved" /> Đã duyệt</span>
+        <span><i className="fi-swatch deferred" /> Xem xét sau</span>
+        <span><i className="fi-swatch pending" /> Chờ xét duyệt</span>
+        <span><i className="fi-swatch rejected" /> Từ chối/Hủy</span>
+      </div>
+    </div>
+  );
+}
+
+function MonthlyTrendChart({ months }: { months: MonthlyTrend[] }) {
+  if (months.length === 0) {
+    return (
+      <div className="fi-chart-empty">
+        <TrendingUp size={28} />
+        <span>Chưa có SK nào được xét vào KHMT</span>
+      </div>
+    );
+  }
+  const maxCount = Math.max(1, ...months.map((m) => m.count));
+  const width = Math.max(360, months.length * 80);
+  const height = 220;
+  const padding = { top: 24, right: 16, bottom: 36, left: 32 };
+  const innerW = width - padding.left - padding.right;
+  const innerH = height - padding.top - padding.bottom;
+  const barGap = 14;
+  const barWidth = Math.max(28, (innerW - barGap * (months.length - 1)) / months.length);
+  const total = months.reduce((sum, m) => sum + m.count, 0);
+  return (
+    <div className="fi-trend">
+      <div className="fi-trend-meta">
+        <span>Tổng KHMT</span>
+        <strong>{total}</strong>
+        <small>trên {months.length} tháng</small>
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} role="img" aria-label="KHMT theo tháng">
+        {[0.25, 0.5, 0.75, 1].map((ratio) => {
+          const y = padding.top + innerH * (1 - ratio);
+          return (
+            <g key={ratio}>
+              <line
+                x1={padding.left}
+                x2={width - padding.right}
+                y1={y}
+                y2={y}
+                stroke="#e2e8f0"
+                strokeDasharray="3 3"
+              />
+              <text x={padding.left - 6} y={y + 4} fontSize="10" fill="#64748b" textAnchor="end">
+                {Math.round(maxCount * ratio)}
+              </text>
+            </g>
+          );
+        })}
+        {months.map((month, index) => {
+          const barH = (month.count / maxCount) * innerH;
+          const x = padding.left + index * (barWidth + barGap);
+          const y = padding.top + (innerH - barH);
+          return (
+            <g key={month.key}>
+              <defs>
+                <linearGradient id={`grad-${month.key}`} x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor="#60a5fa" />
+                  <stop offset="100%" stopColor="#2563eb" />
+                </linearGradient>
+              </defs>
+              <rect
+                x={x}
+                y={y}
+                width={barWidth}
+                height={barH}
+                rx={6}
+                fill={`url(#grad-${month.key})`}
+              >
+                <title>{`${month.label}: ${month.count} SK vào KHMT`}</title>
+              </rect>
+              <text
+                x={x + barWidth / 2}
+                y={y - 6}
+                textAnchor="middle"
+                fontSize="12"
+                fontWeight="700"
+                fill="#0f172a"
+              >
+                {month.count}
+              </text>
+              <text
+                x={x + barWidth / 2}
+                y={height - 12}
+                textAnchor="middle"
+                fontSize="11"
+                fill="#475569"
+              >
+                {month.label}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 export function FIWorkspace({ role, currentUserId }: { role: string; currentUserId: string }) {
   const [items, setItems] = useState<any[]>([]);
   const [historyItems, setHistoryItems] = useState<any[]>([]);
+  const [dashboard, setDashboard] = useState<any>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [historyTeam, setHistoryTeam] = useState("TBCH");
   const [historyMonths, setHistoryMonths] = useState<number[]>([]);
@@ -345,11 +683,11 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
   const [form, setForm] = useState(() => {
     const today = new Date();
     return {
-      author_name: "Nguyễn Văn A",
+      author_name: "",
       team: "TBCH",
-      title: "Cải tiến quy trình kiểm tra thiết bị",
-      content_description: "Hiện trạng, giải pháp và hiệu quả dự kiến",
-      completion_plan: "T6/2026",
+      title: "",
+      content_description: "",
+      completion_plan: "",
       registration_month: today.getMonth() + 1,
       registration_year: today.getFullYear(),
     };
@@ -360,6 +698,8 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
   const [editTarget, setEditTarget] = useState<any>(null);
   const [editForm, setEditForm] = useState({ content_description: "", completion_plan: "" });
   const [savingEdit, setSavingEdit] = useState(false);
+  const [khmtTarget, setKhmtTarget] = useState<{ id: string; label: string; month: number; year: number } | null>(null);
+  const [assigningKhmt, setAssigningKhmt] = useState(false);
   const draftFileInputRef = useRef<HTMLInputElement>(null);
   const detailFileInputRef = useRef<HTMLInputElement>(null);
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
@@ -369,13 +709,16 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
   const [notice, setNotice] = useState("");
 
   const reload = () => {
-    Promise.all([api.listSk(), api.publicSk({ team: historyTeam })])
-      .then(([privateList, historyList]) => {
+    setDashboardLoading(true);
+    Promise.all([api.listSk(), api.publicSk({ team: historyTeam }), api.fiDashboard()])
+      .then(([privateList, historyList, dashboardData]) => {
         setItems(privateList.filter((item) => !item.is_historical_import));
         setHistoryItems(historyList.filter((item) => item.team === historyTeam));
+        setDashboard(dashboardData);
         setError("");
       })
-      .catch((err) => setError(err.message));
+      .catch((err) => setError(err.message))
+      .finally(() => setDashboardLoading(false));
   };
 
   useEffect(() => {
@@ -392,6 +735,16 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
 
   const create = async () => {
     if (creating) return;
+    // Client-side validation: prevent submitting empty registrations.
+    const missing: string[] = [];
+    if (!form.author_name.trim()) missing.push("Tác giả");
+    if (!form.title.trim()) missing.push("Tên SK-CTKT");
+    if (!form.content_description.trim()) missing.push("Nội dung đăng ký");
+    if (missing.length > 0) {
+      setError(`Vui lòng nhập: ${missing.join(", ")}.`);
+      setNotice("");
+      return;
+    }
     const payload = role === TEAM_ROLE ? { ...form, team: currentUserId } : form;
     const filesToUpload = [...evidenceFiles];
     setCreating(true);
@@ -410,6 +763,14 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
         setError(`Đã lưu đăng ký nhưng ${failedFiles.length}/${filesToUpload.length} ảnh chưa tải lên được. Có thể thử tải lại trong phần chi tiết hồ sơ.`);
       } else {
         setNotice(filesToUpload.length > 0 ? `Đã lưu đăng ký và tải lên ${filesToUpload.length} ảnh bằng chứng.` : "Đã lưu đăng ký.");
+        // Reset form for next entry after successful save
+        setForm((current) => ({
+          ...current,
+          author_name: "",
+          title: "",
+          content_description: "",
+          completion_plan: "",
+        }));
       }
     } catch (err: any) {
       setError(err.message);
@@ -445,6 +806,7 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
     setActiveTab(tab);
     setActionTarget(null);
     setEditTarget(null);
+    setKhmtTarget(null);
     setSelectedItem(null);
   };
 
@@ -464,16 +826,43 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
   };
 
   const openHistoryItem = (item: any) => {
-    setSelectedItem((current: any) => current?.id === item.id ? null : item);
+    if (selectedItem?.id === item.id) {
+      setSelectedItem(null);
+      setError("");
+      return;
+    }
+    // Optimistic: show row immediately, then refresh with full detail (incl. supporting_images)
+    setSelectedItem(item);
     setError("");
+    api.getSk(item.id)
+      .then((full) => setSelectedItem((current: any) => current?.id === full.id ? full : current))
+      .catch(() => {
+        // Keep optimistic row data if detail fetch fails (permission, etc.)
+      });
   };
 
   const openEdit = (item: any) => {
     setActionTarget(null);
+    setKhmtTarget(null);
     setEditTarget(item);
     setEditForm({
       content_description: item.content_description || "",
       completion_plan: item.completion_plan || "",
+    });
+    setError("");
+    setNotice("");
+  };
+
+  const openKhmtAssign = (item: any) => {
+    const today = new Date();
+    const registration = registrationInfo(item);
+    setActionTarget(null);
+    setEditTarget(null);
+    setKhmtTarget({
+      id: item.id,
+      label: item.sk_code || item.title,
+      month: Number(item.khmt_month || registration.month || today.getMonth() + 1),
+      year: Number(item.khmt_year || registration.year || today.getFullYear()),
     });
     setError("");
     setNotice("");
@@ -509,7 +898,26 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
     transition(actionTarget.id, actionTarget.action, actionNote.trim() ? { note: actionNote } : {});
     setActionTarget(null);
     setEditTarget(null);
+    setKhmtTarget(null);
     setActionNote("");
+  };
+
+  const handleAssignKhmt = async () => {
+    if (!khmtTarget || assigningKhmt) return;
+    setAssigningKhmt(true);
+    setError("");
+    setNotice("");
+    try {
+      const updated = await api.assignKhmt(khmtTarget.id, khmtTarget.month, khmtTarget.year);
+      setNotice(`Đã ghi nhận ${updated.sk_code || khmtTarget.label} vào KHMT T${khmtTarget.month}/${khmtTarget.year}.`);
+      setKhmtTarget(null);
+      reload();
+      if (selectedItem?.id === khmtTarget.id) reloadDetail(khmtTarget.id);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setAssigningKhmt(false);
+    }
   };
 
   const handleDraftImageSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -598,6 +1006,25 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
     }
     return groups;
   }, []);
+  const dashboardTotals = dashboard?.totals ?? {};
+  const dashboardTeams = Array.isArray(dashboard?.teams) ? dashboard.teams : [];
+  const dashboardKhmtMonths = Array.isArray(dashboard?.khmt_by_month) ? dashboard.khmt_by_month : [];
+  const dashboardTotalCount = Number(dashboardTotals.total ?? 0);
+  const dashboardApprovedCount = Number(dashboardTotals.approved ?? 0);
+  const dashboardKhmtCount = Number(dashboardTotals.khmt_considered ?? 0);
+  const dashboardCompletedCount = Number(dashboardTotals.completed_count ?? dashboardTotals.completed ?? 0);
+  const dashboardPendingCount = Number(dashboardTotals.pending ?? 0);
+  const dashboardDeferredCount = Number(dashboardTotals.deferred ?? 0);
+  const dashboardRejectedCount = Number(dashboardTotals.rejected ?? 0) + Number(dashboardTotals.cancelled ?? 0);
+  const statusSlices = useMemo(() => buildStatusSlices(dashboardTotals), [dashboardTotals]);
+  const teamProgress = useMemo(() => buildTeamProgress(dashboardTeams), [dashboardTeams]);
+  const monthlyTrend = useMemo(() => buildMonthlyTrend(dashboardKhmtMonths), [dashboardKhmtMonths]);
+  const approvalRate = dashboardTotalCount
+    ? Math.round((dashboardApprovedCount / dashboardTotalCount) * 100)
+    : 0;
+  const khmtRate = dashboardTotalCount
+    ? Math.round((dashboardKhmtCount / dashboardTotalCount) * 100)
+    : 0;
 
   return (
     <div className="content-grid">
@@ -627,7 +1054,18 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
             role="tab"
             type="button"
           >
+            <ClipboardCheck size={16} />
             Đăng ký SK-CTKT
+          </button>
+          <button
+            aria-selected={activeTab === "dashboard"}
+            className={activeTab === "dashboard" ? "active" : ""}
+            onClick={() => selectTab("dashboard")}
+            role="tab"
+            type="button"
+          >
+            <BarChart3 size={16} />
+            FI Dashboard
           </button>
           <button
             aria-selected={activeTab === "history"}
@@ -636,6 +1074,7 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
             role="tab"
             type="button"
           >
+            <History size={16} />
             Lịch sử FI
           </button>
         </div>
@@ -699,18 +1138,68 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
         </section>
       )}
 
+      {khmtTarget && (
+        <section className="panel wide fi-action-panel">
+          <h2>Ghi nhận vào KHMT</h2>
+          <p className="muted">{khmtTarget.label}</p>
+          <div className="form-stack">
+            <div className="period-selector fi-registration-period">
+              <label htmlFor="fi-khmt-month">Tháng KHMT</label>
+              <select
+                id="fi-khmt-month"
+                value={khmtTarget.month}
+                onChange={(e) => setKhmtTarget({ ...khmtTarget, month: Number(e.target.value) })}
+              >
+                {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
+                  <option key={month} value={month}>T{month}</option>
+                ))}
+              </select>
+              <input
+                aria-label="Năm KHMT"
+                max={2100}
+                min={2020}
+                type="number"
+                value={khmtTarget.year}
+                onChange={(e) => setKhmtTarget({ ...khmtTarget, year: Number(e.target.value) || new Date().getFullYear() })}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={handleAssignKhmt} disabled={assigningKhmt} type="button">
+                <CalendarDays size={17} />
+                {assigningKhmt ? "Đang ghi nhận..." : "Ghi nhận KHMT"}
+              </button>
+              <button onClick={() => setKhmtTarget(null)} type="button">
+                Hủy
+              </button>
+            </div>
+          </div>
+          {error && <p className="error">{error}</p>}
+          {notice && <p className="success">{notice}</p>}
+        </section>
+      )}
+
       {activeTab === "register" && (
         <>
       <div className={`fi-register-layout ${showForm ? "" : "single"}`}>
       {showForm && (
         <section className="panel fi-form-panel">
           <h2>Đăng ký SK-CTKT</h2>
+          <p className="muted" style={{ marginTop: -6, marginBottom: 8 }}>
+            Điền đầy đủ thông tin để gửi sáng kiến/cải tiến kỹ thuật vào quy trình xét duyệt.
+          </p>
           <div className="form-stack">
-            <input value={form.author_name} onChange={(e) => setForm({ ...form, author_name: e.target.value })} />
+            <label htmlFor="fi-author-name">Tác giả <span style={{ color: "#dc2626" }}>*</span></label>
+            <input
+              id="fi-author-name"
+              placeholder="Họ tên người đăng ký, ví dụ: Nguyễn Văn A"
+              value={form.author_name}
+              onChange={(e) => setForm({ ...form, author_name: e.target.value })}
+            />
+            <label htmlFor="fi-team-input">Đội/tổ</label>
             {role === TEAM_ROLE ? (
-              <input value={currentUserId} readOnly aria-label="Đội/tổ" />
+              <input id="fi-team-input" value={currentUserId} readOnly aria-label="Đội/tổ" />
             ) : (
-              <select value={form.team} onChange={(e) => setForm({ ...form, team: e.target.value })}>
+              <select id="fi-team-input" value={form.team} onChange={(e) => setForm({ ...form, team: e.target.value })}>
                 {FI_TEAMS.map((team) => (
                   <option key={team}>{team}</option>
                 ))}
@@ -736,11 +1225,30 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                 onChange={(e) => setForm({ ...form, registration_year: Number(e.target.value) || new Date().getFullYear() })}
               />
             </div>
-            <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-            <textarea value={form.content_description} onChange={(e) => setForm({ ...form, content_description: e.target.value })} />
-            <input value={form.completion_plan} onChange={(e) => setForm({ ...form, completion_plan: e.target.value })} />
+            <label htmlFor="fi-title">Tên SK-CTKT <span style={{ color: "#dc2626" }}>*</span></label>
+            <input
+              id="fi-title"
+              placeholder="Vd: Cải tiến quy trình kiểm tra thiết bị"
+              value={form.title}
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
+            />
+            <label htmlFor="fi-content">Nội dung đăng ký <span style={{ color: "#dc2626" }}>*</span></label>
+            <textarea
+              id="fi-content"
+              placeholder="Mô tả hiện trạng, giải pháp và hiệu quả dự kiến..."
+              rows={4}
+              value={form.content_description}
+              onChange={(e) => setForm({ ...form, content_description: e.target.value })}
+            />
+            <label htmlFor="fi-plan">Kế hoạch hoàn thành</label>
+            <input
+              id="fi-plan"
+              placeholder="Vd: T6/2026 hoặc Quý 3/2026"
+              value={form.completion_plan}
+              onChange={(e) => setForm({ ...form, completion_plan: e.target.value })}
+            />
             <label>
-              Ảnh bằng chứng FI <span className="muted">(tùy chọn)</span>
+              Ảnh bằng chứng FI <span className="muted">(tùy chọn — có thể thêm sau khi lưu)</span>
             </label>
             <button type="button" onClick={() => draftFileInputRef.current?.click()}>
               <ImagePlus size={16} />
@@ -793,6 +1301,7 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                   <small>
                     {displayStatus(item.status)}
                     {item.submitted_at && item.status === "Submitted" && ` · gửi ${new Date(item.submitted_at).toLocaleDateString("vi-VN")}`}
+                    {isKhmtConsidered(item) && ` · ${khmtLabel(item)}`}
                   </small>
                 </button>
                 <div className="toolbar">
@@ -817,8 +1326,8 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                     </button>
                   )}
                   {actions.includes("assignKhmt") && (
-                    <button title="Ghi nhận KHMT tháng 4/2026" onClick={() => api.assignKhmt(item.id, 4, 2026).then(reload)}>
-                      T4
+                    <button title="Ghi nhận vào KHMT" onClick={() => openKhmtAssign(item)} type="button">
+                      <CalendarDays size={16} />
                     </button>
                   )}
                   {actions.includes("delete") && (
@@ -902,7 +1411,7 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
             <div className="fi-meta-item">
               <ClipboardCheck size={17} />
               <span>KHMT</span>
-              <strong>{selectedItem.khmt_month ? `T${selectedItem.khmt_month}/${selectedItem.khmt_year}` : "Chưa ghi KHMT"}</strong>
+              <strong>{khmtLabel(selectedItem)}</strong>
             </div>
           </div>
 
@@ -1006,21 +1515,202 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
               </div>
             </div>
           )}
-          {imagePreviewIndex !== null && selectedImages[imagePreviewIndex] && (
-            <SkImageViewer
-              canDelete={canUploadForSelected}
-              images={selectedImages}
-              index={imagePreviewIndex}
-              onClose={() => setImagePreviewIndex(null)}
-              onDelete={(imageId) => handleDeleteImage(selectedItem.id, imageId)}
-              onIndexChange={setImagePreviewIndex}
-              skId={selectedItem.id}
-            />
-          )}
         </section>
       )}
 
         </>
+      )}
+
+      {activeTab === "dashboard" && (
+        <section className="wide fi-dashboard-shell">
+          <div className="fi-dashboard-hero">
+            <div className="fi-dashboard-hero-text">
+              <div className="fi-dashboard-hero-title">
+                <Sparkles size={20} />
+                <h2>FI Dashboard</h2>
+              </div>
+              <p>Bức tranh toàn cảnh về SK-CTKT của 4 đội/tổ — trạng thái xử lý, KHMT đã ghi nhận và xu hướng theo tháng.</p>
+              <div className="fi-dashboard-hero-stats">
+                <span>
+                  <CheckCircle2 size={14} /> {approvalRate}% được duyệt
+                </span>
+                <span>
+                  <CalendarDays size={14} /> {khmtRate}% đã vào KHMT
+                </span>
+                <span>
+                  <Clock3 size={14} /> Cập nhật {dashboard?.generated_at ? formatHistoryTime(dashboard.generated_at) : "—"}
+                </span>
+              </div>
+            </div>
+            <button className="fi-dashboard-refresh" onClick={reload} title="Tải lại FI Dashboard" type="button">
+              <RefreshCw size={17} />
+              Tải lại
+            </button>
+          </div>
+
+          {dashboardLoading && <p className="muted">Đang tải FI Dashboard...</p>}
+          {error && <p className="error">{error}</p>}
+
+          <div className="fi-dashboard-kpis">
+            <div className="fi-dashboard-kpi total">
+              <div className="fi-dashboard-kpi-icon"><ClipboardList size={20} /></div>
+              <span>Tổng SK</span>
+              <strong>{formatCount(dashboardTotalCount)}</strong>
+              <small>{formatCount(dashboardTotals.current)} hiện hành · {formatCount(dashboardTotals.historical)} lịch sử</small>
+            </div>
+            <div className="fi-dashboard-kpi success">
+              <div className="fi-dashboard-kpi-icon"><CheckCircle2 size={20} /></div>
+              <span>Đã duyệt</span>
+              <strong>{formatCount(dashboardApprovedCount)}</strong>
+              <small>{approvalRate}% tổng SK</small>
+              <div className="fi-kpi-bar"><div className="fi-kpi-bar-fill success" style={{ width: `${approvalRate}%` }} /></div>
+            </div>
+            <div className="fi-dashboard-kpi warning">
+              <div className="fi-dashboard-kpi-icon"><PauseCircle size={20} /></div>
+              <span>Xem xét sau</span>
+              <strong>{formatCount(dashboardDeferredCount)}</strong>
+              <small>{formatCount(dashboardPendingCount)} SK chưa duyệt</small>
+            </div>
+            <div className="fi-dashboard-kpi info">
+              <div className="fi-dashboard-kpi-icon"><CalendarDays size={20} /></div>
+              <span>Đã vào KHMT</span>
+              <strong>{formatCount(dashboardKhmtCount)}</strong>
+              <small>{formatCount(dashboardTotals.khmt_not_considered)} SK chưa vào KHMT</small>
+              <div className="fi-kpi-bar"><div className="fi-kpi-bar-fill info" style={{ width: `${khmtRate}%` }} /></div>
+            </div>
+            <div className="fi-dashboard-kpi neutral">
+              <div className="fi-dashboard-kpi-icon"><Flag size={20} /></div>
+              <span>Hoàn tất</span>
+              <strong>{formatCount(dashboardCompletedCount)}</strong>
+              <small>{formatCount(dashboardTotals.not_completed)} SK chưa xong</small>
+            </div>
+          </div>
+
+          <div className="fi-dashboard-chart-row">
+            <div className="fi-dashboard-card">
+              <div className="fi-dashboard-section-title">
+                <PieChart size={17} />
+                <h3>Phân bố trạng thái</h3>
+                <small className="muted">{dashboardTotalCount} SK</small>
+              </div>
+              <StatusDonutChart slices={statusSlices} total={dashboardTotalCount} />
+            </div>
+            <div className="fi-dashboard-card fi-team-card">
+              <div className="fi-dashboard-section-title">
+                <Users2 size={17} />
+                <h3>So sánh giữa các đội/tổ</h3>
+                <small className="muted">độ dài thanh tỉ lệ với tổng SK</small>
+              </div>
+              <TeamProgressBars teams={teamProgress} />
+            </div>
+          </div>
+
+          <div className="fi-dashboard-card">
+            <div className="fi-dashboard-section-title">
+              <TrendingUp size={17} />
+              <h3>Xu hướng KHMT theo tháng</h3>
+              <small className="muted">Số SK đã được ghi nhận vào KHMT</small>
+            </div>
+            <MonthlyTrendChart months={monthlyTrend} />
+          </div>
+
+          <div className="fi-dashboard-main">
+            <div className="fi-dashboard-table-wrap">
+              <div className="fi-dashboard-section-title">
+                <ListChecks size={17} />
+                <h3>Chi tiết theo đội/tổ</h3>
+              </div>
+              <table className="fi-dashboard-table">
+                <thead>
+                  <tr>
+                    <th>Đội/tổ</th>
+                    <th>Tổng</th>
+                    <th>Đã duyệt</th>
+                    <th>Xem xét sau</th>
+                    <th>Chưa duyệt</th>
+                    <th>KHMT</th>
+                    <th>Hoàn thành</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dashboardTeams.map((team: any) => {
+                    const teamApprovalRate = team.total ? Math.round(((team.approved ?? 0) / team.total) * 100) : 0;
+                    return (
+                      <tr key={team.team}>
+                        <td>
+                          <strong>{team.team}</strong>
+                          <small>{formatCount(team.current)} hiện hành · {formatCount(team.historical)} lịch sử</small>
+                        </td>
+                        <td>{formatCount(team.total)}</td>
+                        <td>
+                          <strong className="cell-approved">{formatCount(team.approved)}</strong>
+                          <small>{teamApprovalRate}%</small>
+                        </td>
+                        <td>{formatCount(team.deferred)}</td>
+                        <td>{formatCount(team.pending)}</td>
+                        <td>
+                          <strong className="cell-khmt">{formatCount(team.khmt_considered)}</strong>
+                          <small>{formatCount(team.khmt_not_considered)} chưa vào</small>
+                        </td>
+                        <td>
+                          <strong>{formatCount(team.completed_count ?? team.completed)}</strong>
+                          <small>{formatCount(team.not_completed)} chưa xong</small>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {dashboardTeams.length === 0 && (
+                    <tr>
+                      <td colSpan={7}>Chưa có dữ liệu FI.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="fi-dashboard-side">
+              <div className="fi-dashboard-block">
+                <div className="fi-dashboard-section-title">
+                  <CalendarDays size={17} />
+                  <h3>KHMT theo tháng</h3>
+                </div>
+                <div className="fi-khmt-month-grid">
+                  {dashboardKhmtMonths.map((month: any) => (
+                    <div className="fi-khmt-month" key={`${month.year}-${month.month}`}>
+                      <span>T{month.month}/{month.year}</span>
+                      <strong>{formatCount(month.count)}</strong>
+                    </div>
+                  ))}
+                  {dashboardKhmtMonths.length === 0 && <p className="muted">Chưa có SK nào được xét vào KHMT.</p>}
+                </div>
+              </div>
+              <div className="fi-dashboard-block">
+                <div className="fi-dashboard-section-title">
+                  <Clock3 size={17} />
+                  <h3>Tóm tắt trạng thái</h3>
+                </div>
+                <div className="fi-dashboard-status-list">
+                  <div>
+                    <span><i className="fi-swatch approved" /> Đã duyệt</span>
+                    <strong>{formatCount(dashboardApprovedCount)}</strong>
+                  </div>
+                  <div>
+                    <span><i className="fi-swatch deferred" /> Xem xét sau</span>
+                    <strong>{formatCount(dashboardDeferredCount)}</strong>
+                  </div>
+                  <div>
+                    <span><i className="fi-swatch pending" /> Chưa duyệt</span>
+                    <strong>{formatCount(dashboardPendingCount)}</strong>
+                  </div>
+                  <div>
+                    <span><i className="fi-swatch rejected" /> Từ chối/Hủy</span>
+                    <strong>{formatCount(dashboardRejectedCount)}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       )}
 
       {activeTab === "history" && (
@@ -1088,7 +1778,8 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
             </div>
           </div>
           <div className="legacy-column-heading" aria-hidden="true">
-            <span>Kết luận của LĐX</span>
+            <span>Kết luận</span>
+            <span>KHMT</span>
           </div>
         </div>
         <div className="legacy-list">
@@ -1101,6 +1792,9 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
               {group.items.map((item) => {
                 const isOpen = selectedItem?.id === item.id;
                 const actions = visibleActionsForSk(role, currentUserId, item);
+                const detail: any = isOpen ? (selectedItem ?? item) : item;
+                const detailImages = Array.isArray(detail.supporting_images) ? detail.supporting_images : [];
+                const isHistorical = Boolean(detail.is_historical_import);
                 return (
                 <div className="legacy-record" key={item.id}>
                   <div className={`legacy-row ${isOpen ? "active-row" : ""}`}>
@@ -1118,12 +1812,15 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                       </div>
                       <div className="legacy-row-meta">
                         <small>Kế hoạch: {item.completion_plan || "Chưa ghi"}</small>
-                        {item.khmt_month && <small>KHMT T{item.khmt_month}/{item.khmt_year}</small>}
+                        {isKhmtConsidered(item) && <small>{khmtLabel(item)}</small>}
                       </div>
                     </button>
                     <div className="legacy-row-side">
                       <span className="legacy-period-pill">{registrationMonthLabel(item)}</span>
                       <span className={`legacy-status-pill ${statusTone(item.status)}`}>{displayHistoryStatus(item)}</span>
+                      <span className={`legacy-khmt-pill ${isKhmtConsidered(item) ? "success" : "empty"}`}>
+                        {khmtLabel(item)}
+                      </span>
                       <div className="legacy-row-controls">
                         {actions.includes("edit") && (
                           <button
@@ -1166,37 +1863,89 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                       <div className="detail-grid">
                         <div>
                           <span>Tác giả</span>
-                          <strong>{item.author_name}</strong>
+                          <strong>{detail.author_name}</strong>
                         </div>
                         <div>
                           <span>Kế hoạch hoàn thành</span>
-                          <strong>{item.completion_plan || "Chưa ghi"}</strong>
+                          <strong>{detail.completion_plan || "Chưa ghi"}</strong>
                         </div>
                         <div>
                           <span>Trạng thái</span>
-                          <strong>{displayHistoryStatus(item)}</strong>
+                          <strong>{displayHistoryStatus(detail)}</strong>
                         </div>
                         <div>
                           <span>Tháng đăng ký</span>
-                          <strong>{registrationMonthLabel(item)}</strong>
+                          <strong>{registrationMonthLabel(detail)}</strong>
+                        </div>
+                        <div>
+                          <span>Xét vào KHMT</span>
+                          <strong>{khmtLabel(detail)}</strong>
                         </div>
                       </div>
                       <div className="legacy-expanded-content">
                         <section>
                           <span>Nội dung đăng ký</span>
-                          <p>{item.content_description || "Chưa có mô tả nội dung."}</p>
+                          <p>{detail.content_description || "Chưa có mô tả nội dung."}</p>
                         </section>
-                        {(item.fi_coordinator_comments || item.bm01_raw_conclusion) && (
+                        {(detail.fi_coordinator_comments || detail.bm01_raw_conclusion) && (
                           <section className="legacy-review-note">
                             <span>Xét duyệt</span>
-                            <p>{item.fi_coordinator_comments || item.bm01_raw_conclusion}</p>
+                            <p>{detail.fi_coordinator_comments || detail.bm01_raw_conclusion}</p>
                           </section>
                         )}
-                        {item.workshop_leader_conclusion && (
+                        {detail.workshop_leader_conclusion && (
                           <section>
                             <span>Kết luận LĐX</span>
-                            <p>{item.workshop_leader_conclusion}</p>
+                            <p>{detail.workshop_leader_conclusion}</p>
                           </section>
+                        )}
+                        <section className={isKhmtConsidered(detail) ? "legacy-khmt-note" : ""}>
+                          <span>Đã xem xét vào KHMT</span>
+                          <p>{khmtLabel(detail)}</p>
+                        </section>
+                      </div>
+                      <div className="legacy-evidence">
+                        <div className="legacy-evidence-head">
+                          <span className="legacy-evidence-title">
+                            <ImageIcon size={15} />
+                            Ảnh bằng chứng
+                            {detailImages.length > 0 && <em>({detailImages.length})</em>}
+                          </span>
+                          {isHistorical && detailImages.length === 0 && (
+                            <small className="muted"><Info size={13} /> Dữ liệu nhập từ Excel — không có ảnh minh chứng.</small>
+                          )}
+                        </div>
+                        {detailImages.length > 0 ? (
+                          <div className="legacy-evidence-grid">
+                            {detailImages.map((img: any, idx: number) => (
+                              <button
+                                key={img.id}
+                                className="legacy-evidence-thumb"
+                                type="button"
+                                onClick={() => {
+                                  setSelectedItem(detail);
+                                  setImagePreviewIndex(idx);
+                                }}
+                                title={img.file_name}
+                              >
+                                <AuthenticatedSkImage
+                                  skId={detail.id}
+                                  image={img}
+                                  onOpen={() => {
+                                    setSelectedItem(detail);
+                                    setImagePreviewIndex(idx);
+                                  }}
+                                />
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          !isHistorical && (
+                            <div className="legacy-evidence-empty">
+                              <ImageIcon size={20} />
+                              <span>Chưa có ảnh bằng chứng cho SK này.</span>
+                            </div>
+                          )
                         )}
                       </div>
                     </div>
@@ -1214,6 +1963,18 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
       </section>
       )}
 
+      {/* Global image viewer — works from both Register and History tabs */}
+      {imagePreviewIndex !== null && selectedItem && selectedImages[imagePreviewIndex] && (
+        <SkImageViewer
+          canDelete={canUploadForSelected}
+          images={selectedImages}
+          index={imagePreviewIndex}
+          onClose={() => setImagePreviewIndex(null)}
+          onDelete={(imageId) => handleDeleteImage(selectedItem.id, imageId)}
+          onIndexChange={setImagePreviewIndex}
+          skId={selectedItem.id}
+        />
+      )}
     </div>
   );
 }

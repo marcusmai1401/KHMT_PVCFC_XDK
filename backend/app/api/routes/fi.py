@@ -1,4 +1,5 @@
 import mimetypes
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -18,12 +19,13 @@ from app.services.fi.service import (
     count_for_okr,
     create_sk_ctkt,
     delete_sk_ctkt,
+    fi_dashboard,
     require_visible,
     transition_sk_ctkt,
     update_sk_ctkt,
 )
 from app.services.fi.workflow import SKStatus
-from app.services.integration.bm01_import import preview_bm01
+from app.services.integration.bm01_import import build_bm01_status_history, preview_bm01
 from app.services.repositories import audit, make_id, model_to_dict, sk_image_to_dict
 
 router = APIRouter(prefix="/fi", tags=["fi"])
@@ -380,6 +382,14 @@ def okr_counts(month: int, year: int, _: dict = Depends(require_role(Role.ADMIN,
     return count_for_okr(db, month, year)
 
 
+@router.get("/dashboard")
+def dashboard(
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    return fi_dashboard(db, principal)
+
+
 @router.get("/reports")
 def reports(
     team: str | None = None,
@@ -408,43 +418,77 @@ def bm01_preview(_: dict = Depends(require_role(Role.ADMIN))):
     return preview_bm01(settings.source_bm01_workbook)
 
 
+def _legacy_created_at(row: dict, fallback: datetime) -> datetime:
+    month = row.get("registration_month")
+    year = row.get("registration_year") or row.get("khmt_year")
+    if isinstance(month, int) and isinstance(year, int):
+        return datetime(year, month, 1, tzinfo=timezone.utc)
+    return fallback
+
+
 @router.post("/import/bm01/commit")
 def bm01_commit(principal: dict = Depends(require_role(Role.ADMIN)), db: Session = Depends(get_db)):
     preview = preview_bm01(settings.source_bm01_workbook)
     imported = []
+    updated = []
+    imported_at = datetime.now(timezone.utc)
+    existing_records = list(db.execute(select(SKCTKTModel).where(SKCTKTModel.is_historical_import.is_(True))).scalars())
     existing_sources = {
-        (record.bm01_source_file, record.bm01_source_sheet, record.bm01_source_row)
-        for record in db.execute(select(SKCTKTModel).where(SKCTKTModel.is_historical_import.is_(True))).scalars()
+        (record.bm01_source_file, record.bm01_source_sheet, record.bm01_source_row): record
+        for record in existing_records
     }
+    existing_codes = {record.sk_code: record for record in existing_records}
     for row in preview["rows"]:
         source_key = (preview["source_file"], row["source_sheet"], row["source_row"])
-        if source_key in existing_sources:
-            continue
-        record = SKCTKTModel(
-            id=make_id("sk"),
-            sk_code=f"HIST-{row['team']}-{row['source_sheet']}-{row['source_row']}",
-            title=row["title"] or "(Missing title)",
-            author_name=row["author_name"] or "Unknown",
-            author_user_id="historical-import",
-            team=row["team"],
-            content_description=row["content_description"],
-            completion_plan=row["completion_plan"],
-            status=row["status"],
-            status_history=[],
-            is_public=row["status"] in {"Approved", "Completed"},
-            khmt_month=row["khmt_month"],
-            khmt_year=row["khmt_year"],
-            is_counted_for_okr=row["status"] in {"Approved", "Completed"} and row["khmt_month"] is not None and row["khmt_year"] is not None,
-            is_historical_import=True,
-            bm01_source_file=preview["source_file"],
-            bm01_source_sheet=row["source_sheet"],
-            bm01_source_row=row["source_row"],
-            bm01_raw_conclusion=row["raw_conclusion"],
-        )
-        db.add(record)
-        imported.append(record)
-    audit(db, principal["user_id"], "BM01", "import", "commit", {"count": len(imported)})
+        created_at = _legacy_created_at(row, imported_at)
+        values = {
+            "sk_code": f"HIST-{row['team']}-{row['source_sheet']}-{row['source_row']}",
+            "title": row["title"] or "(Missing title)",
+            "author_name": row["author_name"] or "Unknown",
+            "author_user_id": "historical-import",
+            "team": row["team"],
+            "content_description": row["content_description"],
+            "completion_plan": row["completion_plan"],
+            "status": row["status"],
+            "status_history": build_bm01_status_history(
+                row,
+                imported_by=principal["user_id"],
+                imported_at=imported_at,
+            ),
+            "fi_coordinator_comments": row["raw_conclusion"] or None,
+            "workshop_leader_conclusion": row.get("workshop_leader_conclusion") or None,
+            "is_public": row["status"] in {"Approved", "Completed"},
+            "consider_for_khmt": row["consider_for_khmt"],
+            "khmt_month": row["khmt_month"] if row["consider_for_khmt"] else None,
+            "khmt_year": row["khmt_year"] if row["consider_for_khmt"] else None,
+            "is_counted_for_okr": row["consider_for_khmt"],
+            "is_historical_import": True,
+            "bm01_source_file": preview["source_file"],
+            "bm01_source_sheet": row["source_sheet"],
+            "bm01_source_row": row["source_row"],
+            "bm01_raw_conclusion": row["raw_conclusion"],
+            "created_at": created_at,
+            "updated_at": imported_at,
+            "submitted_at": created_at,
+            "reviewed_at": imported_at if row["status"] in {"Approved", "Rejected", "Deferred"} else None,
+            "approved_at": imported_at if row["status"] == "Approved" else None,
+        }
+        record = existing_sources.get(source_key) or existing_codes.get(values["sk_code"])
+        if record is None:
+            record = SKCTKTModel(id=make_id("sk"), **values)
+            db.add(record)
+            imported.append(record)
+        else:
+            for key, value in values.items():
+                setattr(record, key, value)
+            updated.append(record)
+    audit(db, principal["user_id"], "BM01", "import", "commit", {"inserted": len(imported), "updated": len(updated)})
     db.commit()
     cache_delete_prefix("fi:public_sk")
     cache_delete_prefix("okr:dashboard")
-    return {"imported_count": len(imported), "records": [model_to_dict(record) for record in imported], "warnings": preview["warnings"]}
+    return {
+        "imported_count": len(imported),
+        "updated_count": len(updated),
+        "records": [model_to_dict(record) for record in [*imported, *updated]],
+        "warnings": preview["warnings"],
+    }

@@ -174,6 +174,8 @@ if [ -d storage ]; then
   echo "Backing up storage to /backup/okr/storage_${{stamp}}.tar.gz"
   tar -czf "/backup/okr/storage_${{stamp}}.tar.gz" storage
 fi
+echo "Cleaning old source files"
+find . -mindepth 1 -maxdepth 1 ! -name '.env.production' ! -name 'storage' -exec rm -rf -- {{}} +
 echo "Extracting source archive"
 tar -xzf {shlex.quote(remote_archive)} -C {shlex.quote(remote_dir)}
 rm -f {shlex.quote(remote_archive)}

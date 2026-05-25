@@ -1276,6 +1276,13 @@ export function FIWorkspace({
     </span>
   );
 
+  const renderKhmtMetric = (considered: number | undefined, missing: number | undefined) => (
+    <span className="metric-pair cell-khmt">
+      <strong>Đã vào {formatCount(considered)}</strong>
+      <small>{formatCount(missing)} chưa vào</small>
+    </span>
+  );
+
   const renderKhmtControl = (item: any) => {
     const canSelect = canSelectKhmtMonth(role, currentUserId, item, currentTeam);
     const considered = isKhmtConsidered(item);
@@ -1633,7 +1640,7 @@ export function FIWorkspace({
 	                </select>
 	              </>
 	            )}
-            <div className="period-selector fi-registration-period">
+            <div className="period-selector fi-registration-period with-label">
               <label htmlFor="fi-registration-month">Tháng đăng ký</label>
               <select
                 id="fi-registration-month"
@@ -1838,21 +1845,32 @@ export function FIWorkspace({
             {reviewQueue.map((item) => {
               const actions = visibleActionsForSk(role, currentUserId, item);
               const alreadyReviewed = REVIEWED_STATUSES.includes(item.status);
+              const isReviewOpen = actionTarget?.id === item.id;
               return (
-                <div className={`workflow-item ${selectedItem?.id === item.id ? "active-row" : ""}`} key={item.id}>
-                  <button className="workflow-main" onClick={() => openItem(item.id)} type="button">
-                    <strong>{item.sk_code}</strong>
-                    <span>{item.title}</span>
-                    <small>{item.author_name} · {item.team}</small>
-                    <small>
-                      <span className={`fi-status-pill ${statusTone(item.status)}`} style={{ marginRight: 6 }}>
+                <div
+                  className={`workflow-item fi-review-item ${selectedItem?.id === item.id ? "active-row" : ""} ${isReviewOpen ? "review-open" : ""}`}
+                  key={item.id}
+                >
+                  <button className="workflow-main fi-review-main" onClick={() => openItem(item.id)} type="button">
+                    <span className="fi-review-code">{item.sk_code}</span>
+                    <strong className="fi-review-title">{item.title}</strong>
+                    <span className="fi-review-meta">
+                      <UserRound size={14} />
+                      {item.author_name} · {item.team}
+                    </span>
+                    <span className="fi-review-state-line">
+                      <span className={`fi-status-pill ${statusTone(item.status)}`}>
                         {displayStatus(item.status)}
                       </span>
-                      {item.submitted_at && ` gửi ${new Date(item.submitted_at).toLocaleDateString("vi-VN")}`}
-                      {isKhmtConsidered(item) && ` · ${khmtLabel(item)}`}
-                    </small>
+                      {item.submitted_at && (
+                        <span className="fi-review-submitted">
+                          gửi {new Date(item.submitted_at).toLocaleDateString("vi-VN")}
+                        </span>
+                      )}
+                      {isKhmtConsidered(item) && <span className="fi-review-khmt">{khmtLabel(item)}</span>}
+                    </span>
                   </button>
-                  <div className="toolbar">
+                  <div className="toolbar fi-review-toolbar">
                     {actions.includes("reviewDecision") && (
                       <button
                         className="fi-review-command"
@@ -2197,9 +2215,7 @@ export function FIWorkspace({
                         <td>{formatCount(teamFailed)}</td>
                         <td>{formatCount(team.deferred)}</td>
                         <td>{formatCount(team.pending)}</td>
-                        <td>
-                          {renderMetricPair(team.khmt_considered, `/ ${formatCount(teamPassed)} đạt · ${formatCount(teamKhmtMissing)} chưa vào`, "cell-khmt")}
-                        </td>
+                        <td>{renderKhmtMetric(team.khmt_considered, teamKhmtMissing)}</td>
                         <td>
                           {renderMetricPair(team.completed_count ?? team.completed, `/ ${formatCount(team.not_completed)} chưa xong`)}
                         </td>
@@ -2348,17 +2364,17 @@ export function FIWorkspace({
 	                        const khmtMissing = khmtMissingCount(historyTeamSummary);
 	                        return (
 	                          <>
-	                      <td>
-	                        <strong>{historyTeamSummary.team}</strong>
-	                        <small>{formatCount(historyTeamSummary.current)} hiện hành · {formatCount(historyTeamSummary.historical)} lịch sử</small>
-	                      </td>
-	                      <td>{formatCount(historyTeamSummary.total)}</td>
-	                      <td>{renderMetricPair(passed, `(${percent(passed, historyTeamSummary.total)}%)`, "cell-approved")}</td>
-	                      <td>{formatCount(failed)}</td>
-	                      <td>{formatCount(historyTeamSummary.deferred)}</td>
-	                      <td>{formatCount(historyTeamSummary.pending)}</td>
-	                      <td>{renderMetricPair(historyTeamSummary.khmt_considered, `/ ${formatCount(passed)} đạt · ${formatCount(khmtMissing)} chưa vào`, "cell-khmt")}</td>
-	                      <td>{renderMetricPair(historyTeamSummary.completed_count ?? historyTeamSummary.completed, `/ ${formatCount(historyTeamSummary.not_completed)} chưa xong`)}</td>
+		                      <td>
+		                        <strong>{historyTeamSummary.team}</strong>
+		                        <small>{formatCount(historyTeamSummary.current)} hiện hành · {formatCount(historyTeamSummary.historical)} lịch sử</small>
+		                      </td>
+		                      <td>{formatCount(historyTeamSummary.total)}</td>
+		                      <td>{renderMetricPair(passed, `(${percent(passed, historyTeamSummary.total)}%)`, "cell-approved")}</td>
+		                      <td>{formatCount(failed)}</td>
+		                      <td>{formatCount(historyTeamSummary.deferred)}</td>
+		                      <td>{formatCount(historyTeamSummary.pending)}</td>
+		                      <td>{renderKhmtMetric(historyTeamSummary.khmt_considered, khmtMissing)}</td>
+		                      <td>{renderMetricPair(historyTeamSummary.completed_count ?? historyTeamSummary.completed, `/ ${formatCount(historyTeamSummary.not_completed)} chưa xong`)}</td>
 	                          </>
 	                        );
 	                      })()}

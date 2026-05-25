@@ -17,6 +17,7 @@ class Role(StrEnum):
     TEAM_ACCOUNT = "Team_Account"
     FI_COORDINATOR = "FI_Coordinator"
     WORKSHOP_LEADER = "Workshop_Leader"
+    STAFF = "Staff"
     ADMIN = "Admin"
 
 
@@ -34,9 +35,17 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def create_access_token(subject: str, role: Role, *, sandbox: bool = False) -> str:
+def create_access_token(
+    subject: str,
+    role: Role,
+    *,
+    team: str | None = None,
+    sandbox: bool = False,
+) -> str:
     expires = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_minutes)
     payload: dict[str, Any] = {"sub": subject, "role": role.value, "exp": expires}
+    if team:
+        payload["team"] = team
     if sandbox:
         payload["sandbox"] = True
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
@@ -64,7 +73,16 @@ def current_principal(
     user = db.get(User, user_id)
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Phiên đăng nhập không hợp lệ")
-    return {"user_id": user.id, "role": user.role, "sandbox": bool(payload.get("sandbox"))}
+    team = getattr(user, "team", None) or payload.get("team")
+    return {
+        "user_id": user.id,
+        "role": user.role,
+        "team": team,
+        "display_name": user.display_name,
+        "full_name": getattr(user, "full_name", None),
+        "must_change_password": bool(getattr(user, "must_change_password", False)),
+        "sandbox": bool(payload.get("sandbox")),
+    }
 
 
 def require_role(*roles: Role):

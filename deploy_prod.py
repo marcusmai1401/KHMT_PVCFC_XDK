@@ -128,7 +128,13 @@ def run(ssh: paramiko.SSHClient, command: str) -> None:
         raise RuntimeError(f"Remote command failed with exit code {status}")
 
 
-def remote_deploy_command(remote_dir: str, remote_archive: str, skip_import_bm01: bool) -> str:
+def remote_deploy_command(
+    remote_dir: str,
+    remote_archive: str,
+    skip_import_bm01: bool,
+    seed_users: bool,
+    reset_user_passwords: bool,
+) -> str:
     compose = "docker compose --env-file .env.production -f docker-compose.prod.yml"
     import_commands = []
     if not skip_import_bm01:
@@ -141,6 +147,12 @@ def remote_deploy_command(remote_dir: str, remote_archive: str, skip_import_bm01
                 f"--source-label {shlex.quote(source_label)} --imported-by deploy-import"
             )
     import_block = "\n".join(import_commands) if import_commands else "true"
+
+    if seed_users:
+        reset_flag = " --reset-passwords" if reset_user_passwords else ""
+        seed_block = f"echo \"Seeding 56 user accounts for Xưởng Điều khiển\"\n{compose} exec -T backend python scripts/seed_users_xuong_dk.py{reset_flag}"
+    else:
+        seed_block = "true"
     return f"""
 set -euo pipefail
 mkdir -p {shlex.quote(remote_dir)} /backup/okr
@@ -170,6 +182,8 @@ echo "Rebuilding containers"
 {compose} up -d --build
 echo "Running migrations"
 {compose} exec -T backend alembic upgrade head
+echo "Seeding user accounts"
+{seed_block}
 echo "Importing BM01 legacy rows"
 {import_block}
 echo "Checking services"
@@ -187,6 +201,16 @@ def main() -> int:
     parser.add_argument("--user", default=os.getenv("VPS_USER", DEFAULT_USER))
     parser.add_argument("--remote-dir", default=os.getenv("VPS_REMOTE_DIR", DEFAULT_REMOTE_DIR))
     parser.add_argument("--skip-import-bm01", action="store_true")
+    parser.add_argument(
+        "--skip-user-seed",
+        action="store_true",
+        help="Bỏ qua bước chạy scripts/seed_users_xuong_dk.py.",
+    )
+    parser.add_argument(
+        "--no-reset-user-passwords",
+        action="store_true",
+        help="Khi seed user, KHÔNG reset password mặc định cho user đã tồn tại.",
+    )
     parser.add_argument(
         "--accept-new-host-key",
         action="store_true",
@@ -211,7 +235,16 @@ def main() -> int:
             print(f"Uploading archive to {remote_archive}...")
             upload(ssh, archive_path, remote_archive)
             print("Running remote deploy...")
-            run(ssh, remote_deploy_command(args.remote_dir, remote_archive, args.skip_import_bm01))
+            run(
+                ssh,
+                remote_deploy_command(
+                    args.remote_dir,
+                    remote_archive,
+                    args.skip_import_bm01,
+                    seed_users=not args.skip_user_seed,
+                    reset_user_passwords=not args.no_reset_user_passwords,
+                ),
+            )
         finally:
             ssh.close()
     return 0

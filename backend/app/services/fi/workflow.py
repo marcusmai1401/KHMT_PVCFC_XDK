@@ -53,7 +53,12 @@ TRANSITIONS = {
 
 ROLE_ACTIONS = {
     "Team_Account": {FIAction.SUBMIT, FIAction.CANCEL},
+    "Staff": {FIAction.SUBMIT, FIAction.CANCEL},
+    # FI_Coordinator vừa là tác giả của TBHTĐK (đăng ký SK cho team mình)
+    # vừa là người xét duyệt FI toàn xưởng.
     "FI_Coordinator": {
+        FIAction.SUBMIT,
+        FIAction.CANCEL,
         FIAction.REQUEST_INFO,
         FIAction.REVIEW,
         FIAction.APPROVE,
@@ -61,11 +66,7 @@ ROLE_ACTIONS = {
         FIAction.REJECT,
         FIAction.COMPLETE,
     },
-    "Workshop_Leader": {
-        FIAction.APPROVE,
-        FIAction.DEFER,
-        FIAction.REJECT,
-    },
+    "Workshop_Leader": set(),
     "Admin": set(FIAction),
 }
 

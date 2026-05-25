@@ -45,10 +45,11 @@ def assert_team_access(principal: dict[str, str], team: str, *, write: bool) -> 
     if role == Role.ADMIN.value:
         return
     if role == Role.TEAM_ACCOUNT.value:
-        if principal["user_id"] != team:
+        principal_team = principal.get("team") or principal["user_id"]
+        if principal_team != team:
             raise _error(403, "TEAM_MISMATCH", "Tài khoản đội/tổ chỉ được thao tác dữ liệu của đội mình")
         return
-    if not write and role in {Role.WORKSHOP_LEADER.value, Role.FI_COORDINATOR.value}:
+    if not write and role in {Role.WORKSHOP_LEADER.value, Role.FI_COORDINATOR.value, Role.STAFF.value}:
         return
     raise _error(403, "FORBIDDEN", "Tài khoản không có quyền thực hiện thao tác này")
 
@@ -413,7 +414,11 @@ def unlock_report(db: Session, team: str, month: int, year: int, reason: str, pr
 
 
 def statuses_for_period(db: Session, month: int, year: int, principal: dict[str, str]) -> list[dict[str, Any]]:
-    teams = [principal["user_id"]] if principal["role"] == Role.TEAM_ACCOUNT.value else list(TEAMS)
+    if principal["role"] == Role.TEAM_ACCOUNT.value:
+        principal_team = principal.get("team") or principal["user_id"]
+        teams = [principal_team]
+    else:
+        teams = list(TEAMS)
     result = []
     for team in teams:
         report = get_current_input_report(db, team, month, year)

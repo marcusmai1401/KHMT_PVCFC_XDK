@@ -27,7 +27,7 @@ from app.services.repositories import audit, current_report_for, make_id, model_
 
 router = APIRouter(prefix="/okr", tags=["okr"])
 
-REFERENCE_VIEW_ROLES = (Role.ADMIN, Role.WORKSHOP_LEADER, Role.FI_COORDINATOR, Role.TEAM_ACCOUNT)
+REFERENCE_VIEW_ROLES = (Role.ADMIN, Role.WORKSHOP_LEADER, Role.FI_COORDINATOR, Role.TEAM_ACCOUNT, Role.STAFF)
 
 
 def _safe_filename(filename: str | None) -> str:

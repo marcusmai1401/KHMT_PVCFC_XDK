@@ -22,7 +22,19 @@ REVIEWABLE_STATUSES = {
 }
 REVIEW_DECISION_ACTIONS = {FIAction.APPROVE.value, FIAction.DEFER.value, FIAction.REJECT.value}
 HISTORICAL_REVIEW_ACTIONS = REVIEW_DECISION_ACTIONS
-SHARED_CONTENT_EDIT_FIELDS = {"content_description", "completion_plan"}
+SHARED_CONTENT_EDIT_FIELDS = {"content_description", "completion_plan", "title"}
+# Người dùng được phép đứng tên đăng ký SK-CTKT.
+AUTHOR_ROLES = {Role.TEAM_ACCOUNT.value, Role.STAFF.value, Role.FI_COORDINATOR.value}
+# Sau khi đã gửi duyệt, tác giả vẫn được sửa nội dung nhưng phải gửi noti
+# cho người xét duyệt biết để xem lại.
+EDITABLE_AFTER_SUBMIT_STATUSES = {
+    SKStatus.SUBMITTED.value,
+    SKStatus.NEED_MORE_INFO.value,
+    SKStatus.REVIEWED.value,
+    SKStatus.APPROVED.value,
+    SKStatus.REJECTED.value,
+    SKStatus.DEFERRED.value,
+}
 
 
 def _utc_now() -> datetime:
@@ -95,16 +107,25 @@ def create_sk_ctkt(db: Session, payload: dict[str, Any], actor: str) -> SKCTKTMo
 
 
 def can_view_sk(record: SKCTKTModel, principal: dict[str, str]) -> bool:
+    """Quyền xem SK trong danh sách private /fi/sk-ctkt.
+
+    Mọi role trong module FI được xem toàn bộ SK đã gửi/legacy để tra cứu liên đội.
+    Bản nháp vẫn chỉ hiện cho chính tác giả, vì đó chưa phải thông tin FI đã công bố.
+    """
     role = principal["role"]
     user_id = principal["user_id"]
-    if record.status in NON_DRAFT_STATUSES:
-        return role in {
-            Role.TEAM_ACCOUNT.value,
-            Role.ADMIN.value,
-            Role.FI_COORDINATOR.value,
-            Role.WORKSHOP_LEADER.value,
-        }
-    return record.author_user_id == user_id
+    allowed_roles = {
+        Role.ADMIN.value,
+        Role.FI_COORDINATOR.value,
+        Role.WORKSHOP_LEADER.value,
+        Role.TEAM_ACCOUNT.value,
+        Role.STAFF.value,
+    }
+    if role not in allowed_roles:
+        return False
+    if record.status == SKStatus.DRAFT.value:
+        return record.author_user_id == user_id
+    return True
 
 
 def require_visible(record: SKCTKTModel, principal: dict[str, str]) -> None:
@@ -124,30 +145,46 @@ def update_sk_ctkt(
         raise KeyError("SK-CTKT not found")
     requested_fields = set(payload)
     shared_content_edit = bool(requested_fields) and requested_fields <= SHARED_CONTENT_EDIT_FIELDS
-    if role != Role.ADMIN.value:
-        if shared_content_edit:
-            require_visible(record, {"user_id": actor, "role": role})
-        else:
-            if record.author_user_id != actor:
-                raise PermissionError("Only owner or Admin can edit")
-            if record.status not in {SKStatus.DRAFT.value, SKStatus.NEED_MORE_INFO.value}:
-                raise PermissionError("Only Draft or NeedMoreInfo entries are editable by owner")
+    if record.is_historical_import:
+        raise PermissionError("FI legacy chỉ dùng để tra cứu lịch sử, không chỉnh sửa nội dung")
+    if record.author_user_id != actor:
+        raise PermissionError("Chỉ tác giả của SK mới được chỉnh sửa")
+    if record.status in {SKStatus.CANCELLED.value, SKStatus.COMPLETED.value}:
+        raise PermissionError("SK đã hoàn tất hoặc đã hủy, không chỉnh sửa được nội dung")
+    if not shared_content_edit:
+        raise PermissionError("Tác giả chỉ được cập nhật tiêu đề, nội dung đăng ký và kế hoạch thực hiện")
     before = model_to_dict(record)
-    if role != Role.ADMIN.value and "team" in payload and payload["team"] != record.team:
-        raise PermissionError("Tài khoản đội/tổ không được đổi đội/tổ của SK")
-    for field in ["title", "content_description", "completion_plan", "author_name"]:
+    if "team" in payload and payload["team"] != record.team:
+        raise PermissionError("Tài khoản không được đổi đội/tổ của SK")
+    previous_status = record.status
+    for field in ["title", "content_description", "completion_plan"]:
         if field in payload:
             setattr(record, field, payload[field])
-    if role == Role.ADMIN.value and "team" in payload:
-        record.team = payload["team"]
+    record.updated_at = _utc_now()
     audit(db, actor, "SK_CTKT", record_id, "update", {"before": before, "after": model_to_dict(record)})
+    # Nếu tác giả chỉnh sửa SK đã gửi duyệt thì gửi noti cho FI_Coordinator +
+    # Admin để xét duyệt lại.
+    if previous_status in EDITABLE_AFTER_SUBMIT_STATUSES:
+        _notify_content_edit(db, record, actor)
     db.commit()
     db.refresh(record)
     return record
 
 
+def _notify_content_edit(db: Session, record: SKCTKTModel, actor: str) -> None:
+    payload = {
+        "id": record.id,
+        "sk_code": record.sk_code,
+        "status": record.status,
+        "team": record.team,
+        "edited_by": actor,
+    }
+    notify(db, "SK_CONTENT_EDITED", payload, recipient_role=Role.FI_COORDINATOR.value)
+    notify(db, "SK_CONTENT_EDITED", payload, recipient_role=Role.ADMIN.value)
+
+
 def _validate_actor_for_transition(record: SKCTKTModel, action: str, actor: str, role: str) -> None:
-    if role == Role.TEAM_ACCOUNT.value:
+    if action in {FIAction.SUBMIT.value, FIAction.CANCEL.value} and role in AUTHOR_ROLES:
         if record.author_user_id != actor:
             raise PermissionError("Chỉ tài khoản tạo SK mới được thực hiện thao tác này")
         if action == FIAction.SUBMIT.value and record.status not in {
@@ -160,9 +197,17 @@ def _validate_actor_for_transition(record: SKCTKTModel, action: str, actor: str,
             SKStatus.NEED_MORE_INFO.value,
         }:
             raise PermissionError("Chỉ hủy được SK ở trạng thái Nháp hoặc Cần bổ sung")
-    if role in {Role.FI_COORDINATOR.value, Role.WORKSHOP_LEADER.value}:
-        if action in REVIEW_DECISION_ACTIONS and record.status not in REVIEWABLE_STATUSES:
-            raise PermissionError("Chỉ đánh giá được SK ở trạng thái Chờ xét duyệt, Đã xem xét, Xem xét sau, Đồng ý hoặc Không đồng ý")
+    if role == Role.FI_COORDINATOR.value and action in REVIEW_DECISION_ACTIONS:
+        if record.status not in REVIEWABLE_STATUSES:
+            raise PermissionError(
+                "Chỉ đánh giá được SK ở trạng thái Chờ xét duyệt, Đã xem xét, Xem xét sau, Đồng ý hoặc Không đồng ý"
+            )
+        # Tránh xung đột lợi ích: Đầu mối FI không được xét duyệt SK do chính mình đăng ký.
+        # Admin sẽ là người xét duyệt cho các SK của FI_Coordinator.
+        if record.author_user_id == actor:
+            raise PermissionError(
+                "Đầu mối FI không được xét duyệt SK do chính mình đăng ký — vui lòng để Admin xét duyệt"
+            )
 
 
 def transition_sk_ctkt(
@@ -242,12 +287,28 @@ def _notify_transition(db: Session, record: SKCTKTModel, record_id: str) -> None
         notify(db, "SK_STATUS_CHANGED", payload, recipient_user_id=record.author_user_id)
 
 
-def assign_khmt(db: Session, record_id: str, month: int, year: int, actor: str) -> SKCTKTModel:
+def assign_khmt(
+    db: Session,
+    record_id: str,
+    month: int,
+    year: int,
+    actor: str,
+    role: str = Role.ADMIN.value,
+    principal_team: str | None = None,
+) -> SKCTKTModel:
     record = db.get(SKCTKTModel, record_id)
     if record is None:
         raise KeyError("SK-CTKT not found")
-    if record.is_historical_import:
-        raise ValueError("FI legacy chỉ dùng để tra cứu lịch sử, không gán KHMT từ workflow")
+    if month < 1 or month > 12:
+        raise ValueError("Tháng KHMT phải nằm trong khoảng 1-12")
+    if year < 2020 or year > 2100:
+        raise ValueError("Năm KHMT không hợp lệ")
+    if role not in {Role.ADMIN.value, Role.TEAM_ACCOUNT.value, Role.FI_COORDINATOR.value}:
+        raise PermissionError("Tài khoản không có quyền ghi nhận KHMT")
+    if role in {Role.TEAM_ACCOUNT.value, Role.FI_COORDINATOR.value}:
+        team_code = principal_team or actor
+        if record.team != team_code:
+            raise PermissionError("Tài khoản đội/tổ chỉ được ghi nhận KHMT cho đội/tổ của mình")
     if record.status not in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}:
         raise ValueError("Only Approved or Completed SK-CTKT can be assigned to KHMT")
     record.khmt_month = month
@@ -301,6 +362,8 @@ def _empty_fi_dashboard_bucket(team: str | None = None) -> dict[str, Any]:
         "completed": 0,
         "deferred": 0,
         "pending": 0,
+        "review_passed": 0,
+        "review_failed": 0,
         "rejected": 0,
         "cancelled": 0,
         "draft": 0,
@@ -327,6 +390,7 @@ def _add_record_to_bucket(bucket: dict[str, Any], record: SKCTKTModel) -> None:
     bucket["status_counts"][status] = bucket["status_counts"].get(status, 0) + 1
     if status in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}:
         bucket["approved"] += 1
+        bucket["review_passed"] += 1
     if status == SKStatus.COMPLETED.value:
         bucket["completed"] += 1
         bucket["completed_count"] += 1
@@ -338,13 +402,14 @@ def _add_record_to_bucket(bucket: dict[str, Any], record: SKCTKTModel) -> None:
         bucket["pending"] += 1
     if status == SKStatus.REJECTED.value:
         bucket["rejected"] += 1
+        bucket["review_failed"] += 1
     if status == SKStatus.CANCELLED.value:
         bucket["cancelled"] += 1
     if status == SKStatus.DRAFT.value:
         bucket["draft"] += 1
     if _is_khmt_considered(record):
         bucket["khmt_considered"] += 1
-    else:
+    elif status in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}:
         bucket["khmt_not_considered"] += 1
     if record.is_historical_import:
         bucket["historical"] += 1
@@ -353,8 +418,11 @@ def _add_record_to_bucket(bucket: dict[str, Any], record: SKCTKTModel) -> None:
 
 
 def fi_dashboard(db: Session, principal: dict[str, str]) -> dict[str, Any]:
-    records = db.execute(select(SKCTKTModel)).scalars().all()
-    visible_records = [record for record in records if can_view_sk(record, principal)]
+    # Dashboard FI là cái nhìn toàn xưởng (tổng hợp theo team/tháng), không
+    # phụ thuộc người dùng nên không lọc theo can_view_sk. Mọi role có quyền
+    # vào dashboard đều thấy số liệu giống nhau.
+    _ = principal  # principal được giữ lại cho audit, không dùng để filter dữ liệu.
+    visible_records = db.execute(select(SKCTKTModel)).scalars().all()
     by_team = {team: _empty_fi_dashboard_bucket(team) for team in FI_DASHBOARD_TEAMS}
     totals = _empty_fi_dashboard_bucket()
     khmt_by_month: dict[tuple[int, int], int] = {}
@@ -399,7 +467,7 @@ def delete_sk_ctkt(db: Session, record_id: str, actor: str, role: str) -> None:
     if record is None:
         raise KeyError("SK-CTKT not found")
     can_delete = role == Role.ADMIN.value
-    if role == Role.TEAM_ACCOUNT.value:
+    if role in AUTHOR_ROLES:
         can_delete = record.author_user_id == actor and record.status in OWNER_DELETABLE_STATUSES
     if not can_delete:
         raise PermissionError("Chỉ người tạo được xóa bản nháp; Admin được xóa SK")

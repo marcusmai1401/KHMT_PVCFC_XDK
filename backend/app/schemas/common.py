@@ -6,11 +6,20 @@ from pydantic import BaseModel, ConfigDict, Field
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    must_change_password: bool = False
+    display_name: str | None = None
+    role: str | None = None
+    team: str | None = None
 
 
 class LoginRequest(BaseModel):
     user_id: str
     password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 class SKCreate(BaseModel):
@@ -20,8 +29,8 @@ class SKCreate(BaseModel):
         }
     )
 
-    author_name: str
-    team: str
+    author_name: str | None = None
+    team: str | None = None
     title: str
     content_description: str
     completion_plan: str
@@ -58,8 +67,11 @@ class WarningResolveRequest(BaseModel):
 class UserCreate(BaseModel):
     id: str
     display_name: str
+    full_name: str | None = None
     password: str
     role: str = "Team_Account"
+    team: str | None = None
+    must_change_password: bool = False
     is_active: bool = True
 
 

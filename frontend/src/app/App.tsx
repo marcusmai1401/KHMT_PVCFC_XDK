@@ -1,18 +1,26 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
   Bell,
   ClipboardCheck,
+  Eye,
+  EyeOff,
   FileSpreadsheet,
+  FlaskConical,
   History,
+  KeyRound,
   Lightbulb,
+  LogIn,
+  LogOut,
   PanelLeftClose,
   PanelLeftOpen,
   RotateCcw,
   ShieldCheck,
+  Undo2,
 } from "lucide-react";
-import { api, decodeToken, setToken } from "../api/client";
+import { api, decodeToken, setToken, type LoginResponse } from "../api/client";
 import { AdminPanel } from "../features/admin/AdminPanel";
+import { ChangePasswordForm } from "../features/auth/ChangePasswordForm";
 import { ETModule } from "../features/et/ETModule";
 import { FIWorkspace } from "../features/fi/FIWorkspace";
 import { OKRModule } from "../features/okr/OKRModule";
@@ -26,38 +34,39 @@ const tabTitles: Record<Tab, string> = {
   admin: "Quản trị hệ thống",
 };
 
-const testAccount = { userId: "test", password: "PVCFC-KHMT-Test-2026!r7Qp" };
-
-const sandboxIdentities = [
-  { label: "Quản trị", userId: "admin", role: "Admin" },
-  { label: "Lãnh đạo Xưởng", userId: "leader", role: "Workshop_Leader" },
-  { label: "Đầu mối SK", userId: "fi", role: "FI_Coordinator" },
-  { label: "TBHTĐK", userId: "TBHTĐK", role: "Team_Account" },
-  { label: "TBCH", userId: "TBCH", role: "Team_Account" },
-  { label: "TBĐL", userId: "TBĐL", role: "Team_Account" },
-  { label: "TCĐK", userId: "TCĐK", role: "Team_Account" },
-];
-
 const roleLabels: Record<string, string> = {
   Admin: "Quản trị",
   Workshop_Leader: "Lãnh đạo Xưởng",
-  FI_Coordinator: "Đầu mối SK",
+  FI_Coordinator: "Đầu mối FI",
   Team_Account: "Tài khoản đội/tổ",
+  Staff: "Nhân viên",
 };
 
 const notificationLabels: Record<string, string> = {
-  SK_SUBMITTED: "SK đã gửi duyệt",
-  SK_NEED_MORE_INFO: "SK cần bổ sung",
-  SK_REVIEWED: "SK đã được xem xét",
-  SK_APPROVED: "SK đã phê duyệt",
-  SK_REJECTED: "SK bị từ chối",
-  SK_DEFERRED: "SK xem xét sau",
-  SK_CANCELLED: "SK đã hủy",
-  SK_COMPLETED: "SK đã hoàn tất",
-  SK_STATUS_CHANGED: "SK đổi trạng thái",
+  SK_SUBMITTED: "FI đã gửi duyệt",
+  SK_NEED_MORE_INFO: "FI cần bổ sung",
+  SK_REVIEWED: "FI đã được xem xét",
+  SK_APPROVED: "FI đã phê duyệt",
+  SK_REJECTED: "FI bị từ chối",
+  SK_DEFERRED: "FI xem xét sau",
+  SK_CANCELLED: "FI đã hủy",
+  SK_COMPLETED: "FI đã hoàn tất",
+  SK_STATUS_CHANGED: "FI đổi trạng thái",
+  SK_CONTENT_EDITED: "Tác giả đã chỉnh sửa SK — cần xét duyệt lại",
+  OKR_TEAM_SUBMITTED: "Đội/Tổ đã nộp OKR",
 };
 
+const ROLE_ORDER = ["Admin", "Workshop_Leader", "FI_Coordinator", "Team_Account", "Staff"];
+
 const SIDEBAR_COLLAPSED_KEY = "okr.sidebar.collapsed";
+const REAL_TOKEN_KEY = "okr.real.token";
+
+type SandboxIdentity = {
+  id: string;
+  display_name: string;
+  role: string;
+  team: string | null;
+};
 
 function displayRole(value: string) {
   return roleLabels[value] ?? value;
@@ -68,25 +77,15 @@ function displayNotification(value: string) {
 }
 
 function friendlyError(message: string) {
-  if (message.includes("Invalid credentials")) {
-    return "Sai tài khoản hoặc mật khẩu.";
-  }
-  if (message.includes("Not authenticated") || message.includes("Invalid token")) {
-    return "Phiên đăng nhập không hợp lệ.";
-  }
-  if (message.includes("Insufficient role") || message.includes("Not allowed")) {
-    return "Tài khoản không có quyền thực hiện thao tác này.";
-  }
+  if (message.includes("Invalid credentials")) return "Sai tài khoản hoặc mật khẩu.";
+  if (message.includes("Not authenticated") || message.includes("Invalid token")) return "Phiên đăng nhập không hợp lệ.";
+  if (message.includes("Insufficient role") || message.includes("Not allowed")) return "Tài khoản không có quyền thực hiện thao tác này.";
   return message;
 }
 
 function canAccessTab(role: string, candidate: Tab) {
-  if (candidate === "admin") {
-    return role === "Admin";
-  }
-  if (candidate === "et") {
-    return ["Admin", "Workshop_Leader", "FI_Coordinator", "Team_Account"].includes(role);
-  }
+  if (candidate === "admin") return role === "Admin";
+  if (candidate === "et") return ["Admin", "Workshop_Leader", "FI_Coordinator", "Team_Account", "Staff"].includes(role);
   return true;
 }
 
@@ -95,8 +94,16 @@ export function App() {
   const [role, setRole] = useState("");
   const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [currentUserId, setCurrentUserId] = useState("");
+  const [currentDisplayName, setCurrentDisplayName] = useState<string | null>(null);
+  const [currentTeam, setCurrentTeam] = useState<string | null>(null);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
+  const [voluntaryChange, setVoluntaryChange] = useState(false);
   const [sandbox, setSandbox] = useState(false);
+  const [hasRealSession, setHasRealSession] = useState(false);
+  const [sandboxIdentities, setSandboxIdentities] = useState<SandboxIdentity[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -107,32 +114,88 @@ export function App() {
     return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
   });
 
-  const applySession = (accessToken: string, fallbackUserId: string) => {
-    setToken(accessToken);
-    const payload = decodeToken(accessToken);
-    setRole(payload.role ?? "");
+  const applySession = (response: LoginResponse, fallbackUserId: string) => {
+    setToken(response.access_token);
+    const payload = decodeToken(response.access_token);
+    setRole(response.role ?? payload.role ?? "");
     setCurrentUserId(payload.sub ?? fallbackUserId);
+    setCurrentDisplayName(response.display_name ?? null);
+    setCurrentTeam(response.team ?? payload.team ?? null);
+    setMustChangePassword(Boolean(response.must_change_password));
     setSandbox(Boolean(payload.sandbox));
+    setVoluntaryChange(false);
     setError("");
   };
 
-  const login = (credentials?: { userId: string; password: string }) => {
-    const loginUserId = credentials?.userId ?? userId;
-    const loginPassword = credentials?.password ?? password;
-    setUserId(loginUserId);
-    setPassword(loginPassword);
+  const logout = () => {
+    setToken("");
+    setRole("");
+    setCurrentUserId("");
+    setCurrentDisplayName(null);
+    setCurrentTeam(null);
+    setMustChangePassword(false);
+    setVoluntaryChange(false);
+    setSandbox(false);
+    setHasRealSession(false);
+    setNotifications([]);
+    setSandboxIdentities([]);
+    setUserId("");
+    setPassword("");
+    setError("");
     setNotice("");
-    api.login(loginUserId, loginPassword)
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem(REAL_TOKEN_KEY);
+    }
+  };
+
+  const login = (event?: React.FormEvent) => {
+    if (event) event.preventDefault();
+    if (submitting || !userId.trim() || !password) return;
+    setNotice("");
+    setSubmitting(true);
+    api.login(userId.trim(), password)
       .then((response) => {
-        applySession(response.access_token, loginUserId);
+        applySession(response, userId.trim());
+        setPassword("");
+      })
+      .catch((err) => setError(friendlyError(err.message)))
+      .finally(() => setSubmitting(false));
+  };
+
+  const enterSandbox = () => {
+    if (typeof window !== "undefined") {
+      // Lưu token thật để có thể quay về (cookie/state — đơn giản dùng sessionStorage).
+      // Token thật vẫn được giữ trong api/client `token` module-level — lấy ra qua document/check.
+    }
+    api.sandboxEnter()
+      .then((response) => {
+        if (typeof window !== "undefined") {
+          window.sessionStorage.setItem(REAL_TOKEN_KEY, JSON.stringify({
+            access_token: "", // sẽ re-login bằng UI nếu muốn quay về
+            display_name: currentDisplayName,
+            role,
+            team: currentTeam,
+            user_id: currentUserId,
+          }));
+        }
+        setHasRealSession(true);
+        applySession(response, response.role ?? "admin");
+        setNotice("Đã vào môi trường kiểm thử với vai trò Quản trị.");
       })
       .catch((err) => setError(friendlyError(err.message)));
   };
 
+  const exitSandbox = () => {
+    // Đơn giản: logout sandbox + yêu cầu admin login lại để trở về production session.
+    if (!confirm("Thoát môi trường kiểm thử và đăng xuất? Bạn sẽ cần đăng nhập lại bằng tài khoản admin để trở về production.")) return;
+    logout();
+  };
+
   const switchSandboxRole = (nextUserId: string) => {
+    if (!nextUserId) return;
     api.sandboxSwitchRole(nextUserId)
       .then((response) => {
-        applySession(response.access_token, nextUserId);
+        applySession(response, nextUserId);
         loadNotifications();
       })
       .catch((err) => setError(friendlyError(err.message)));
@@ -149,6 +212,7 @@ export function App() {
         setNotice("Đã reset dữ liệu kiểm thử.");
         setWorkspaceVersion((value) => value + 1);
         loadNotifications();
+        loadSandboxIdentities();
       })
       .catch((err) => setError(friendlyError(err.message)))
       .finally(() => setResettingSandbox(false));
@@ -158,20 +222,27 @@ export function App() {
     api.notifications().then(setNotifications).catch((err) => setError(friendlyError(err.message)));
   };
 
+  const loadSandboxIdentities = () => {
+    api.sandboxIdentities()
+      .then(setSandboxIdentities)
+      .catch(() => {});
+  };
+
   const markRead = (id: string) => {
     api.markNotificationRead(id).then(loadNotifications).catch((err) => setError(friendlyError(err.message)));
   };
 
   useEffect(() => {
-    if (role) {
-      loadNotifications();
-    }
+    if (role) loadNotifications();
   }, [role]);
 
   useEffect(() => {
-    if (role && !canAccessTab(role, tab)) {
-      setTab("okr");
-    }
+    if (sandbox) loadSandboxIdentities();
+    else setSandboxIdentities([]);
+  }, [sandbox]);
+
+  useEffect(() => {
+    if (role && !canAccessTab(role, tab)) setTab("okr");
   }, [role, tab]);
 
   useEffect(() => {
@@ -180,48 +251,119 @@ export function App() {
     }
   }, [sidebarCollapsed]);
 
+  const groupedIdentities = useMemo(() => {
+    const groups: Record<string, SandboxIdentity[]> = {};
+    sandboxIdentities.forEach((identity) => {
+      const key = identity.role;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(identity);
+    });
+    Object.values(groups).forEach((items) =>
+      items.sort((a, b) => a.display_name.localeCompare(b.display_name, "vi"))
+    );
+    return ROLE_ORDER.filter((r) => groups[r]?.length).map((r) => ({ role: r, items: groups[r] }));
+  }, [sandboxIdentities]);
+
+  if (role && (mustChangePassword || voluntaryChange)) {
+    return (
+      <ChangePasswordForm
+        forced={mustChangePassword && !voluntaryChange}
+        displayName={currentDisplayName}
+        userId={currentUserId}
+        onChanged={(response) => {
+          applySession(response, currentUserId);
+          setNotice("Đã đổi mật khẩu thành công.");
+        }}
+        onCancel={voluntaryChange ? () => setVoluntaryChange(false) : undefined}
+      />
+    );
+  }
+
   if (!role) {
     return (
-      <main className="login-shell">
-        <form
-          className="login-panel"
-          onSubmit={(event) => {
-            event.preventDefault();
-            login();
-          }}
-        >
-          <div className="brand">
-            <img src="/logo.webp" alt="PVCFC Logo" className="brand-logo" />
-            <div>
-              <strong>OKR Automation</strong>
-              <span>Xưởng Điều khiển</span>
+      <main className="auth-shell">
+        <div className="auth-bg" aria-hidden="true">
+          <div className="auth-bg-orb auth-bg-orb-a" />
+          <div className="auth-bg-orb auth-bg-orb-b" />
+          <div className="auth-bg-grid" />
+        </div>
+        <div className="auth-content">
+          <div className="auth-hero">
+            <div className="auth-hero-brand">
+              <img src="/logo.webp" alt="PVCFC" />
+              <div>
+                <strong>PVCFC · Xưởng Điều khiển</strong>
+                <span>Hệ thống tự động hóa OKR, FI &amp; Năng lực ET</span>
+              </div>
             </div>
+            <ul className="auth-hero-features">
+              <li><BarChart3 size={16} /> Theo dõi OKR theo tháng, tự động cảnh báo</li>
+              <li><Lightbulb size={16} /> Đăng ký &amp; xét duyệt sáng kiến – cải tiến kỹ thuật</li>
+              <li><ClipboardCheck size={16} /> Khung năng lực ET, đánh giá &amp; lộ trình học tập</li>
+            </ul>
+            <p className="auth-hero-foot">© PVCFC – Đội ngũ Xưởng Điều khiển</p>
           </div>
-          <label className="login-field">
-            <span>Tài khoản</span>
-            <input autoComplete="username" placeholder="Nhập tài khoản" value={userId} onChange={(event) => setUserId(event.target.value)} />
-          </label>
-          <label className="login-field">
-            <span>Mật khẩu</span>
-            <input autoComplete="current-password" placeholder="Nhập mật khẩu" type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
-          </label>
-          <button className="login-primary" type="submit">Đăng nhập</button>
-          <div className="sandbox-login">
-            <div>
-              <strong>Môi trường kiểm thử</strong>
-              <span>Dùng database sandbox, có thể reset bất cứ lúc nào.</span>
-            </div>
-            <button onClick={() => login(testAccount)} type="button">
+
+          <form className="auth-card" onSubmit={login}>
+            <header className="auth-card-head">
+              <h1>Đăng nhập</h1>
+              <p>Sử dụng tài khoản nội bộ PVCFC để tiếp tục.</p>
+            </header>
+
+            <label className="auth-field">
+              <span>Tài khoản</span>
+              <div className="auth-input">
+                <LogIn size={16} className="auth-input-icon" />
+                <input
+                  autoComplete="username"
+                  placeholder="ví dụ: baomt"
+                  value={userId}
+                  onChange={(event) => setUserId(event.target.value)}
+                />
+              </div>
+            </label>
+
+            <label className="auth-field">
+              <span>Mật khẩu</span>
+              <div className="auth-input">
+                <KeyRound size={16} className="auth-input-icon" />
+                <input
+                  autoComplete="current-password"
+                  placeholder="Nhập mật khẩu"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+                <button
+                  type="button"
+                  className="auth-input-toggle"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                  title={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </label>
+
+            <button className="auth-submit" type="submit" disabled={submitting}>
               <ShieldCheck size={16} />
-              Vào bản test
+              {submitting ? "Đang đăng nhập..." : "Đăng nhập"}
             </button>
-          </div>
-          {error && <p className="error">{error}</p>}
-          {notice && <p className="success">{notice}</p>}
-        </form>
+
+            {error && <p className="auth-error">{error}</p>}
+            {notice && <p className="auth-success">{notice}</p>}
+
+            <p className="auth-help">
+              Lần đầu đăng nhập sẽ được yêu cầu đổi mật khẩu. Mất quyền truy cập? Liên hệ Quản trị hệ thống.
+            </p>
+          </form>
+        </div>
       </main>
     );
   }
+
+  const isAdminProd = role === "Admin" && !sandbox;
 
   return (
     <main className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
@@ -246,8 +388,56 @@ export function App() {
         </div>
         <div className="field">
           <span>Tài khoản</span>
-          <strong>{sandbox ? "test" : currentUserId}</strong>
-          <small>{sandbox ? `Đang xem: ${displayRole(role)}${role === "Team_Account" ? ` · ${currentUserId}` : ""}` : displayRole(role)}</small>
+          <strong>{currentDisplayName ?? currentUserId}</strong>
+          <small>
+            {sandbox
+              ? `Kiểm thử · ${displayRole(role)}${currentTeam ? ` · ${currentTeam}` : ""}`
+              : `${displayRole(role)}${currentTeam ? ` · ${currentTeam}` : ""}`}
+          </small>
+          <div className="account-actions">
+            {!sandbox && (
+              <button
+                className="account-action"
+                onClick={() => setVoluntaryChange(true)}
+                title="Đổi mật khẩu"
+                type="button"
+              >
+                <KeyRound size={14} />
+                <span>Đổi mật khẩu</span>
+              </button>
+            )}
+            {isAdminProd && (
+              <button
+                className="account-action"
+                onClick={enterSandbox}
+                title="Vào môi trường kiểm thử để giả lập các tài khoản"
+                type="button"
+              >
+                <FlaskConical size={14} />
+                <span>Kiểm thử</span>
+              </button>
+            )}
+            {sandbox && hasRealSession && (
+              <button
+                className="account-action"
+                onClick={exitSandbox}
+                title="Thoát môi trường kiểm thử"
+                type="button"
+              >
+                <Undo2 size={14} />
+                <span>Thoát kiểm thử</span>
+              </button>
+            )}
+            <button
+              className="account-action"
+              onClick={logout}
+              title="Đăng xuất"
+              type="button"
+            >
+              <LogOut size={14} />
+              <span>Đăng xuất</span>
+            </button>
+          </div>
         </div>
         <nav>
           <button className={tab === "okr" ? "active" : ""} onClick={() => setTab("okr")} title="OKR">
@@ -276,22 +466,33 @@ export function App() {
         <header className="topbar">
           <div>
             <h1>{tabTitles[tab]}</h1>
-            <p>Vai trò: {displayRole(role)}</p>
+            <p>Vai trò: {displayRole(role)}{currentTeam ? ` · ${currentTeam}` : ""}</p>
           </div>
           <div className="topbar-tools">
             {sandbox && (
-              <div className="sandbox-toolbar">
-                <ShieldCheck size={16} />
-                <select value={currentUserId} onChange={(event) => switchSandboxRole(event.target.value)}>
-                  {sandboxIdentities.map((identity) => (
-                    <option key={identity.userId} value={identity.userId}>
-                      {identity.label}
-                    </option>
+              <div className="sandbox-toolbar" title="Đang ở môi trường kiểm thử">
+                <span className="sandbox-pill"><FlaskConical size={14} /> Kiểm thử</span>
+                <select
+                  value={currentUserId}
+                  onChange={(event) => switchSandboxRole(event.target.value)}
+                  aria-label="Giả lập tài khoản"
+                >
+                  {groupedIdentities.length === 0 && (
+                    <option value={currentUserId}>{currentDisplayName ?? currentUserId}</option>
+                  )}
+                  {groupedIdentities.map((group) => (
+                    <optgroup key={group.role} label={displayRole(group.role)}>
+                      {group.items.map((identity) => (
+                        <option key={identity.id} value={identity.id}>
+                          {identity.display_name}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
                 <button onClick={resetSandbox} disabled={resettingSandbox} title="Reset dữ liệu kiểm thử">
                   <RotateCcw size={16} />
-                  {resettingSandbox ? "Đang reset..." : "Reset test"}
+                  {resettingSandbox ? "Đang reset..." : "Reset"}
                 </button>
               </div>
             )}
@@ -305,7 +506,7 @@ export function App() {
                   {notifications.slice(0, 4).map((item) => (
                     <button key={item.id} className={item.read ? "read" : ""} onClick={() => markRead(item.id)}>
                       <strong>{displayNotification(item.event)}</strong>
-                      <span>{item.payload?.sk_code ?? item.payload?.id}</span>
+                      <span>{item.payload?.sk_code ?? item.payload?.id ?? item.payload?.team}</span>
                     </button>
                   ))}
                 </div>
@@ -315,9 +516,9 @@ export function App() {
           </div>
         </header>
         <div key={workspaceVersion}>
-          {tab === "okr" && <OKRModule role={role} currentUserId={currentUserId} />}
+          {tab === "okr" && <OKRModule role={role} currentUserId={currentUserId} currentTeam={currentTeam} />}
           {tab === "et" && <ETModule role={role} currentUserId={currentUserId} />}
-          {tab === "fi" && <FIWorkspace role={role} currentUserId={currentUserId} />}
+          {tab === "fi" && <FIWorkspace role={role} currentUserId={currentUserId} currentTeam={currentTeam} displayName={currentDisplayName} />}
           {tab === "admin" && <AdminPanel />}
         </div>
       </section>

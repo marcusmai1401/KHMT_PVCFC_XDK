@@ -32,36 +32,42 @@ DEMO_USERS = [
         "display_name": "Lãnh đạo Xưởng",
         "password": "leader-pass",
         "role": Role.WORKSHOP_LEADER,
+        "team": "Workshop_Staff",
     },
     {
         "id": "fi",
         "display_name": "Đầu mối SK",
         "password": "fi-pass",
         "role": Role.FI_COORDINATOR,
+        "team": "TBHTĐK",
     },
     {
         "id": "TBHTĐK",
         "display_name": "TBHTĐK",
         "password": "tbhtdk-pass",
         "role": Role.TEAM_ACCOUNT,
+        "team": "TBHTĐK",
     },
     {
         "id": "TBCH",
         "display_name": "TBCH",
         "password": "tbch-pass",
         "role": Role.TEAM_ACCOUNT,
+        "team": "TBCH",
     },
     {
         "id": "TBĐL",
         "display_name": "TBĐL",
         "password": "tbdl-pass",
         "role": Role.TEAM_ACCOUNT,
+        "team": "TBĐL",
     },
     {
         "id": "TCĐK",
         "display_name": "TCĐK",
         "password": "tcdk-pass",
         "role": Role.TEAM_ACCOUNT,
+        "team": "TCĐK",
     },
 ]
 
@@ -71,6 +77,7 @@ LEGACY_DEMO_USER_IDS = {"user"}
 def create_schema() -> None:
     Base.metadata.create_all(bind=engine)
     _ensure_sqlite_web_input_columns()
+    _ensure_user_extra_columns()
 
 
 def _ensure_sqlite_web_input_columns() -> None:
@@ -96,6 +103,24 @@ def _ensure_sqlite_web_input_columns() -> None:
                 connection.execute(text(statement))
         if "report_status" not in existing:
             connection.execute(text("UPDATE team_reports SET report_status = 'submitted' WHERE source_type = 'excel_upload'"))
+
+
+def _ensure_user_extra_columns() -> None:
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+    existing = {column["name"] for column in inspector.get_columns("users")}
+    dialect = engine.dialect.name
+    bool_default = "0" if dialect == "sqlite" else "false"
+    statements = {
+        "full_name": "ALTER TABLE users ADD COLUMN full_name VARCHAR",
+        "team": "ALTER TABLE users ADD COLUMN team VARCHAR",
+        "must_change_password": f"ALTER TABLE users ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT {bool_default}",
+    }
+    with engine.begin() as connection:
+        for column_name, statement in statements.items():
+            if column_name not in existing:
+                connection.execute(text(statement))
 
 
 def seed_baseline(db: Session) -> None:
@@ -144,16 +169,20 @@ def _seed_demo_users(db: Session) -> None:
                 User(
                     id=str(item["id"]),
                     display_name=str(item["display_name"]),
+                    full_name=str(item["display_name"]),
                     password_hash=password_hash,
                     role=role,
+                    team=item.get("team"),
                     is_active=True,
                 )
             )
             audit(db, "system", "Account", str(item["id"]), "seed_demo_user", {"role": role})
             continue
         user.display_name = str(item["display_name"])
+        user.full_name = str(item["display_name"])
         user.password_hash = password_hash
         user.role = role
+        user.team = item.get("team")
         user.is_active = True
 
 

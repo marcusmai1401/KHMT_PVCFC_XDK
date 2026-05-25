@@ -30,9 +30,29 @@ import {
 import { api } from "../../api/client";
 
 const TEAM_ROLE = "Team_Account";
+const STAFF_ROLE = "Staff";
+const FI_COORDINATOR_ROLE = "FI_Coordinator";
+const ADMIN_ROLE = "Admin";
+// FI_Coordinator (Phạm Thanh Quyền) cũng là tác giả cho team TBHTĐK,
+// không chỉ là người xét duyệt.
+const AUTHOR_ROLES = [TEAM_ROLE, STAFF_ROLE, FI_COORDINATOR_ROLE];
 const FI_TEAMS = ["TBCH", "TBĐL", "TBHTĐK", "TCĐK"];
-const REVIEWER_ROLES = ["Admin", "FI_Coordinator", "Workshop_Leader"];
+const REVIEWER_ROLES = [ADMIN_ROLE, FI_COORDINATOR_ROLE];
 const REVIEW_DECISION_STATUSES = ["Submitted", "Reviewed", "Deferred", "Approved", "Rejected"];
+const REVIEWED_STATUSES = ["Approved", "Rejected", "Deferred", "Reviewed"];
+// Sau khi đã được gửi duyệt, tác giả vẫn được sửa nội dung (trừ Completed/Cancelled).
+// Edit này sẽ kích hoạt noti SK_CONTENT_EDITED để FI/Admin xét duyệt lại.
+const AUTHOR_EDITABLE_STATUSES = [
+  "Draft",
+  "NeedMoreInfo",
+  "Submitted",
+  "Reviewed",
+  "Approved",
+  "Rejected",
+  "Deferred",
+];
+const KHMT_MONTHS = Array.from({ length: 12 }, (_, index) => index + 1);
+const KHMT_ASSIGNABLE_STATUSES = ["Approved", "Completed"];
 
 const statusLabels: Record<string, string> = {
   Draft: "Chưa gửi duyệt",
@@ -54,7 +74,8 @@ const importedStatusLabels: Record<string, string> = {
   Completed: "Hoàn tất",
 };
 
-type FITab = "register" | "history" | "dashboard";
+type FITab = "register" | "review" | "history" | "dashboard";
+type ReviewQueueFilter = "pending" | "reviewed" | "all";
 type HistoryMonthGroup = { key: string; month: number | null; year: number; items: any[] };
 type ReviewDecision = "approve" | "defer" | "reject";
 
@@ -88,6 +109,25 @@ function reviewDecisionLabel(value: ReviewDecision) {
 
 function reviewDecisionRequiresNote(value: ReviewDecision) {
   return value === "defer" || value === "reject";
+}
+
+function parseCompletionPlan(value: string | null | undefined): { month: number; year: number } | null {
+  if (!value) return null;
+  const trimmed = String(value).trim();
+  // Hỗ trợ các dạng: "T6/2026", "06/2026", "6-2026", "T6 / 2026"
+  const match = trimmed.match(/^T?\s*(\d{1,2})\s*[/-]\s*(\d{4})$/i);
+  if (match) {
+    const month = Number(match[1]);
+    const year = Number(match[2]);
+    if (month >= 1 && month <= 12 && year >= 2020 && year <= 2100) {
+      return { month, year };
+    }
+  }
+  return null;
+}
+
+function formatCompletionPlan(month: number, year: number): string {
+  return `T${month}/${year}`;
 }
 
 function registrationInfo(item: any) {
@@ -182,6 +222,19 @@ export function khmtLabel(item: any) {
   return "Chưa vào KHMT";
 }
 
+function khmtAssignmentYear(item: any) {
+  const registration = registrationInfo(item);
+  return Number(item?.khmt_year || registration.year || new Date().getFullYear());
+}
+
+export function canSelectKhmtMonth(role: string, currentUserId: string, item: any, currentTeam?: string | null) {
+  if (!KHMT_ASSIGNABLE_STATUSES.includes(item?.status)) return false;
+  if (role === "Admin") return true;
+  if (role !== TEAM_ROLE) return false;
+  const ownerTeam = currentTeam ?? currentUserId;
+  return FI_TEAMS.includes(ownerTeam) && item?.team === ownerTeam;
+}
+
 function formatCount(value: number | undefined) {
   return new Intl.NumberFormat("vi-VN").format(value ?? 0);
 }
@@ -191,23 +244,46 @@ function percent(value: number | undefined, total: number | undefined) {
   return Math.round(((value ?? 0) / total) * 100);
 }
 
+function reviewPassedCount(row: any) {
+  return Number(row?.review_passed ?? row?.approved ?? 0);
+}
+
+function reviewFailedCount(row: any) {
+  return Number(row?.review_failed ?? row?.rejected ?? 0);
+}
+
+function khmtMissingCount(row: any) {
+  if (row?.khmt_not_considered !== undefined && row?.khmt_not_considered !== null) {
+    return Number(row.khmt_not_considered ?? 0);
+  }
+  return Math.max(0, reviewPassedCount(row) - Number(row?.khmt_considered ?? 0));
+}
+
 export function visibleActionsForSk(role: string, currentUserId: string, item: any): string[] {
   const actions: string[] = [];
   const reviewableStatuses = REVIEW_DECISION_STATUSES;
-  const visibleToTeamAccount = item.author_user_id === currentUserId || (typeof item.status === "string" && item.status !== "Draft");
-  const canEdit =
-    REVIEWER_ROLES.includes(role) ||
-    (role === TEAM_ROLE && visibleToTeamAccount);
+  const isAuthor = AUTHOR_ROLES.includes(role);
+  const isOwnAuthor = item.author_user_id === currentUserId;
+  // Tác giả được sửa nội dung trong toàn bộ vòng đời của SK (kể cả sau khi
+  // đã đánh giá) miễn là chưa hoàn tất/hủy và không phải dữ liệu legacy.
+  // Sau khi sửa, FI/Admin sẽ nhận noti SK_CONTENT_EDITED để xét duyệt lại.
+  const canEdit = isOwnAuthor && !item.is_historical_import && AUTHOR_EDITABLE_STATUSES.includes(item.status);
   const canSubmit =
     !item.is_historical_import &&
-    (role === "Admin" || (role === TEAM_ROLE && item.author_user_id === currentUserId)) &&
+    (role === ADMIN_ROLE || (isAuthor && isOwnAuthor)) &&
     ["Draft", "NeedMoreInfo"].includes(item.status);
-  const canReviewDecision = REVIEWER_ROLES.includes(role) && reviewableStatuses.includes(item.status);
-  const canAssign = !item.is_historical_import && role === "Admin" && ["Approved", "Completed"].includes(item.status);
+  // FI_Coordinator không được xét duyệt SK do chính mình đăng ký (xung đột lợi ích).
+  const canReviewDecision =
+    REVIEWER_ROLES.includes(role) &&
+    reviewableStatuses.includes(item.status) &&
+    !(role === FI_COORDINATOR_ROLE && item.author_user_id === currentUserId);
+  const canAssign =
+    !item.is_historical_import &&
+    role === ADMIN_ROLE &&
+    ["Approved", "Completed"].includes(item.status);
   const canDelete =
     !item.is_historical_import &&
-    (role === "Admin" ||
-      (role === TEAM_ROLE && item.author_user_id === currentUserId && item.status === "Draft"));
+    (role === ADMIN_ROLE || (isAuthor && isOwnAuthor && item.status === "Draft"));
   if (canEdit) actions.push("edit");
   if (canSubmit) actions.push("submit");
   if (canReviewDecision) actions.push("reviewDecision");
@@ -216,13 +292,13 @@ export function visibleActionsForSk(role: string, currentUserId: string, item: a
   return actions;
 }
 
-const isReviewerRole = (role: string) => ["FI_Coordinator", "Workshop_Leader"].includes(role);
+const isReviewerRole = (role: string) => REVIEWER_ROLES.includes(role);
 
 function canUploadImages(role: string, currentUserId: string, item: any) {
   if (item.is_historical_import) return false;
   return (
-    role === "Admin" ||
-    (role === TEAM_ROLE && item.author_user_id === currentUserId && ["Draft", "NeedMoreInfo"].includes(item.status))
+    role === ADMIN_ROLE ||
+    (AUTHOR_ROLES.includes(role) && item.author_user_id === currentUserId && ["Draft", "NeedMoreInfo"].includes(item.status))
   );
 }
 
@@ -402,31 +478,30 @@ type TeamProgress = {
 type MonthlyTrend = { key: string; label: string; count: number; year: number; month: number };
 
 function buildStatusSlices(totals: Record<string, any>): StatusSlice[] {
-  const approved = Number(totals.approved ?? 0);
+  const approved = reviewPassedCount(totals);
   const completed = Number(totals.completed_count ?? totals.completed ?? 0);
   const pureApproved = Math.max(0, approved - completed);
   const deferred = Number(totals.deferred ?? 0);
   const pending = Number(totals.pending ?? 0);
-  const rejected = Number(totals.rejected ?? 0) + Number(totals.cancelled ?? 0);
+  const rejected = reviewFailedCount(totals) + Number(totals.cancelled ?? 0);
   return [
     { key: "completed", label: "Hoàn tất", value: completed, color: "#16a34a", tone: "success" },
-    { key: "approved", label: "Đã duyệt", value: pureApproved, color: "#22c55e", tone: "approved" },
+    { key: "approved", label: "Đã xét đạt", value: pureApproved, color: "#22c55e", tone: "approved" },
     { key: "pending", label: "Chờ xét duyệt", value: pending, color: "#2563eb", tone: "info" },
     { key: "deferred", label: "Xem xét sau", value: deferred, color: "#f59e0b", tone: "warning" },
-    { key: "rejected", label: "Từ chối/Hủy", value: rejected, color: "#ef4444", tone: "danger" },
+    { key: "rejected", label: "Đã xét không đạt/Hủy", value: rejected, color: "#ef4444", tone: "danger" },
   ].filter((slice) => slice.value > 0);
 }
 
 function buildTeamProgress(teams: any[]): TeamProgress[] {
   return teams.map((team) => {
     const total = Number(team.total ?? 0);
-    const approved =
-      Number(team.approved ?? 0); // includes completed per backend bucket
+    const approved = reviewPassedCount(team);
     const deferred = Number(team.deferred ?? 0);
     const pending = Number(team.pending ?? 0);
-    const rejected = Number(team.rejected ?? 0) + Number(team.cancelled ?? 0);
+    const rejected = reviewFailedCount(team) + Number(team.cancelled ?? 0);
     const khmt = Number(team.khmt_considered ?? 0);
-    const khmtRate = total ? Math.round((khmt / total) * 100) : 0;
+    const khmtRate = approved ? Math.round((khmt / approved) * 100) : 0;
     return { team: team.team, total, approved, deferred, pending, rejected, khmt, khmtRate };
   });
 }
@@ -550,7 +625,7 @@ function TeamProgressBars({ teams }: { teams: TeamProgress[] }) {
                   <span
                     className="fi-team-seg approved"
                     style={{ width: `${approvedPct}%` }}
-                    title={`Đã duyệt: ${team.approved}`}
+                    title={`Đã xét đạt: ${team.approved}`}
                   />
                 )}
                 {team.deferred > 0 && (
@@ -571,7 +646,7 @@ function TeamProgressBars({ teams }: { teams: TeamProgress[] }) {
                   <span
                     className="fi-team-seg rejected"
                     style={{ width: `${rejectedPct}%` }}
-                    title={`Từ chối/Hủy: ${team.rejected}`}
+                    title={`Đã xét không đạt/Hủy: ${team.rejected}`}
                   />
                 )}
               </div>
@@ -586,10 +661,10 @@ function TeamProgressBars({ teams }: { teams: TeamProgress[] }) {
         );
       })}
       <div className="fi-team-legend" aria-hidden="true">
-        <span><i className="fi-swatch approved" /> Đã duyệt</span>
+        <span><i className="fi-swatch approved" /> Đã xét đạt</span>
         <span><i className="fi-swatch deferred" /> Xem xét sau</span>
         <span><i className="fi-swatch pending" /> Chờ xét duyệt</span>
-        <span><i className="fi-swatch rejected" /> Từ chối/Hủy</span>
+        <span><i className="fi-swatch rejected" /> Đã xét không đạt/Hủy</span>
       </div>
     </div>
   );
@@ -688,23 +763,48 @@ function MonthlyTrendChart({ months }: { months: MonthlyTrend[] }) {
   );
 }
 
-export function FIWorkspace({ role, currentUserId }: { role: string; currentUserId: string }) {
+export function FIWorkspace({
+  role,
+  currentUserId,
+  currentTeam,
+  displayName,
+}: {
+  role: string;
+  currentUserId: string;
+  currentTeam?: string | null;
+  displayName?: string | null;
+}) {
+  const teamFromAccount = currentTeam ?? (AUTHOR_ROLES.includes(role) ? currentUserId : null);
+  const isLockedToTeam = AUTHOR_ROLES.includes(role) && teamFromAccount && FI_TEAMS.includes(teamFromAccount);
+  const defaultHistoryTeam = teamFromAccount && FI_TEAMS.includes(teamFromAccount) ? teamFromAccount : "TBCH";
+  const defaultFormTeam = isLockedToTeam && teamFromAccount ? teamFromAccount : "TBCH";
+  const defaultAuthorName = AUTHOR_ROLES.includes(role)
+    ? (typeof displayName === "string" && displayName.includes(" - ") ? displayName.split(" - ")[0] : displayName ?? "")
+    : "";
+  const accountAuthorName = defaultAuthorName || currentUserId;
+  const accountTeam = AUTHOR_ROLES.includes(role) ? teamFromAccount : null;
+  const canRegister = AUTHOR_ROLES.includes(role) || role === ADMIN_ROLE;
+  const canReview = REVIEWER_ROLES.includes(role);
+  const defaultTab: FITab = canRegister ? "register" : canReview ? "review" : "dashboard";
   const [items, setItems] = useState<any[]>([]);
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [dashboard, setDashboard] = useState<any>(null);
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
-  const [historyTeam, setHistoryTeam] = useState("TBCH");
+  const [historyTeam, setHistoryTeam] = useState(defaultHistoryTeam);
   const [historyMonths, setHistoryMonths] = useState<number[]>([]);
-  const [activeTab, setActiveTab] = useState<FITab>("register");
+  const [activeTab, setActiveTab] = useState<FITab>(defaultTab);
+  const [reviewFilter, setReviewFilter] = useState<ReviewQueueFilter>("pending");
   const [form, setForm] = useState(() => {
     const today = new Date();
     return {
-      author_name: "",
-      team: "TBCH",
+      author_name: defaultAuthorName,
+      team: defaultFormTeam,
       title: "",
       content_description: "",
-      completion_plan: "",
+      // Mặc định kế hoạch hoàn thành = tháng đăng ký + 1 tháng (cùng năm); user có thể đổi.
+      completion_plan_month: ((today.getMonth() + 1) % 12) + 1,
+      completion_plan_year: today.getMonth() === 11 ? today.getFullYear() + 1 : today.getFullYear(),
       registration_month: today.getMonth() + 1,
       registration_year: today.getFullYear(),
     };
@@ -713,7 +813,13 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
   const [actionTarget, setActionTarget] = useState<{ id: string; label: string; decision: ReviewDecision } | null>(null);
   const [actionNote, setActionNote] = useState("");
   const [editTarget, setEditTarget] = useState<any>(null);
-  const [editForm, setEditForm] = useState({ content_description: "", completion_plan: "" });
+  const [editForm, setEditForm] = useState({
+    title: "",
+    content_description: "",
+    completion_plan_month: 1,
+    completion_plan_year: 2026,
+    completion_plan_raw: "" as string,
+  });
   const [savingEdit, setSavingEdit] = useState(false);
   const [khmtTarget, setKhmtTarget] = useState<{ id: string; label: string; month: number; year: number } | null>(null);
   const [assigningKhmt, setAssigningKhmt] = useState(false);
@@ -743,6 +849,22 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
   }, [role, historyTeam]);
 
   useEffect(() => {
+    if (!AUTHOR_ROLES.includes(role)) return;
+    setForm((current) => ({
+      ...current,
+      author_name: accountAuthorName,
+      team: accountTeam ?? current.team,
+    }));
+  }, [role, accountAuthorName, accountTeam]);
+
+  // Reset tab nếu role thay đổi và tab hiện tại không còn hợp lệ
+  // (vd: Admin đang ở "review" → giả lập Team_Account thì canReview = false).
+  useEffect(() => {
+    if (activeTab === "register" && !canRegister) setActiveTab(defaultTab);
+    if (activeTab === "review" && !canReview) setActiveTab(defaultTab);
+  }, [activeTab, canRegister, canReview, defaultTab]);
+
+  useEffect(() => {
     setImagePreviewIndex(null);
   }, [selectedItem?.id]);
 
@@ -754,7 +876,10 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
     if (creating) return;
     // Client-side validation: prevent submitting empty registrations.
     const missing: string[] = [];
-    if (!form.author_name.trim()) missing.push("Tác giả");
+    const authorName = AUTHOR_ROLES.includes(role) ? accountAuthorName : form.author_name;
+    const team = AUTHOR_ROLES.includes(role) ? accountTeam : form.team;
+    if (!authorName.trim()) missing.push("Tác giả");
+    if (!team?.trim()) missing.push("Đội/tổ trên tài khoản");
     if (!form.title.trim()) missing.push("Tên SK-CTKT");
     if (!form.content_description.trim()) missing.push("Nội dung đăng ký");
     if (missing.length > 0) {
@@ -762,7 +887,21 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
       setNotice("");
       return;
     }
-    const payload = role === TEAM_ROLE ? { ...form, team: currentUserId } : form;
+    // Build payload: gửi backend dạng string "T6/2026" để đồng nhất với dữ liệu cũ
+    // (cột completion_plan vẫn là free text).
+    const completionPlan = formatCompletionPlan(form.completion_plan_month, form.completion_plan_year);
+    const basePayload = {
+      author_name: form.author_name,
+      team: form.team,
+      title: form.title,
+      content_description: form.content_description,
+      completion_plan: completionPlan,
+      registration_month: form.registration_month,
+      registration_year: form.registration_year,
+    };
+    const payload = AUTHOR_ROLES.includes(role)
+      ? { ...basePayload, author_name: authorName, team }
+      : basePayload;
     const filesToUpload = [...evidenceFiles];
     setCreating(true);
     setError("");
@@ -781,12 +920,15 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
       } else {
         setNotice(filesToUpload.length > 0 ? `Đã lưu đăng ký và tải lên ${filesToUpload.length} ảnh bằng chứng.` : "Đã lưu đăng ký.");
         // Reset form for next entry after successful save
+        const today = new Date();
         setForm((current) => ({
           ...current,
-          author_name: "",
+          author_name: AUTHOR_ROLES.includes(role) ? authorName : "",
+          team: AUTHOR_ROLES.includes(role) ? team ?? current.team : current.team,
           title: "",
           content_description: "",
-          completion_plan: "",
+          completion_plan_month: ((today.getMonth() + 1) % 12) + 1,
+          completion_plan_year: today.getMonth() === 11 ? today.getFullYear() + 1 : today.getFullYear(),
         }));
       }
     } catch (err: any) {
@@ -862,9 +1004,15 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
     setActionTarget(null);
     setKhmtTarget(null);
     setEditTarget(item);
+    const raw = item.completion_plan || "";
+    const parsed = parseCompletionPlan(raw);
+    const today = new Date();
     setEditForm({
+      title: item.title || "",
       content_description: item.content_description || "",
-      completion_plan: item.completion_plan || "",
+      completion_plan_month: parsed?.month ?? today.getMonth() + 1,
+      completion_plan_year: parsed?.year ?? today.getFullYear(),
+      completion_plan_raw: raw,
     });
     setError("");
     setNotice("");
@@ -903,12 +1051,18 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
     setSavingEdit(true);
     setError("");
     setNotice("");
+    const wasSubmitted = editTarget.status && editTarget.status !== "Draft";
     try {
       const updated = await api.updateSk(editTarget.id, {
         content_description: editForm.content_description,
-        completion_plan: editForm.completion_plan,
+        completion_plan: formatCompletionPlan(editForm.completion_plan_month, editForm.completion_plan_year),
+        title: editForm.title,
       });
-      setNotice("Đã cập nhật nội dung và kế hoạch thực hiện.");
+      setNotice(
+        wasSubmitted
+          ? "Đã cập nhật SK. Đầu mối FI và Quản trị đã nhận thông báo để xem xét lại."
+          : "Đã cập nhật nội dung SK-CTKT."
+      );
       setEditTarget(null);
       setSelectedItem((current: any) => current?.id === updated.id ? { ...current, ...updated } : current);
       reload();
@@ -951,6 +1105,26 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
       setKhmtTarget(null);
       reload();
       if (selectedItem?.id === khmtTarget.id) reloadDetail(khmtTarget.id);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setAssigningKhmt(false);
+    }
+  };
+
+  const handleKhmtMonthSelect = async (item: any, value: string) => {
+    const month = Number(value);
+    if (!Number.isFinite(month) || month < 1 || month > 12 || assigningKhmt) return;
+    const year = khmtAssignmentYear(item);
+    setAssigningKhmt(true);
+    setError("");
+    setNotice("");
+    try {
+      const updated = await api.assignKhmt(item.id, month, year);
+      setNotice(`Đã ghi nhận ${updated.sk_code || item.title} vào KHMT T${month}/${year}.`);
+      setKhmtTarget(null);
+      reload();
+      if (selectedItem?.id === item.id) reloadDetail(item.id);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -1016,7 +1190,32 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
       .catch((err) => setError(err.message));
   };
 
-  const showForm = !isReviewerRole(role);
+  // Form đăng ký luôn hiện cho ai có quyền tạo SK (kể cả FI_Coordinator/Admin).
+  const showForm = canRegister;
+  // "Đăng ký SK-CTKT" giờ chỉ hiển thị SK do user hiện tại đăng ký (cho mọi role).
+  // Admin vẫn thấy tất cả ở tab "Xét duyệt".
+  const myItems = items.filter((item) =>
+    role === ADMIN_ROLE ? item.author_user_id === currentUserId : item.author_user_id === currentUserId
+  );
+  // Hàng đợi xét duyệt: tất cả SK đã ngưng nháp + chưa hủy + không phải dữ liệu legacy.
+  // FI_Coordinator không thấy SK của chính mình trong queue (tránh tự duyệt).
+  const reviewQueueAll = items.filter((item) => {
+    if (item.is_historical_import) return false;
+    if (item.status === "Draft" || item.status === "Cancelled") return false;
+    if (role === FI_COORDINATOR_ROLE && item.author_user_id === currentUserId) return false;
+    return true;
+  });
+  const reviewQueue = reviewQueueAll.filter((item) => {
+    if (reviewFilter === "all") return true;
+    if (reviewFilter === "reviewed") return REVIEWED_STATUSES.includes(item.status);
+    // pending: chờ tay người duyệt — Submitted/NeedMoreInfo (chưa có quyết định)
+    return ["Submitted", "NeedMoreInfo"].includes(item.status);
+  });
+  const reviewCounts = {
+    pending: reviewQueueAll.filter((item) => ["Submitted", "NeedMoreInfo"].includes(item.status)).length,
+    reviewed: reviewQueueAll.filter((item) => REVIEWED_STATUSES.includes(item.status)).length,
+    all: reviewQueueAll.length,
+  };
   const selectedImages = Array.isArray(selectedItem?.supporting_images) ? selectedItem.supporting_images : [];
   const selectedHistory = Array.isArray(selectedItem?.status_history) ? selectedItem.status_history : [];
   const canUploadForSelected = selectedItem ? canUploadImages(role, currentUserId, selectedItem) : false;
@@ -1048,22 +1247,23 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
   const dashboardTeams = Array.isArray(dashboard?.teams) ? dashboard.teams : [];
   const dashboardKhmtMonths = Array.isArray(dashboard?.khmt_by_month) ? dashboard.khmt_by_month : [];
   const dashboardTotalCount = Number(dashboardTotals.total ?? 0);
-  const dashboardApprovedCount = Number(dashboardTotals.approved ?? 0);
+  const dashboardApprovedCount = reviewPassedCount(dashboardTotals);
   const dashboardKhmtCount = Number(dashboardTotals.khmt_considered ?? 0);
   const dashboardCompletedCount = Number(dashboardTotals.completed_count ?? dashboardTotals.completed ?? 0);
   const dashboardPendingCount = Number(dashboardTotals.pending ?? 0);
   const dashboardDeferredCount = Number(dashboardTotals.deferred ?? 0);
-  const dashboardRejectedCount = Number(dashboardTotals.rejected ?? 0) + Number(dashboardTotals.cancelled ?? 0);
+  const dashboardReviewFailedCount = reviewFailedCount(dashboardTotals);
   const statusSlices = useMemo(() => buildStatusSlices(dashboardTotals), [dashboardTotals]);
   const teamProgress = useMemo(() => buildTeamProgress(dashboardTeams), [dashboardTeams]);
   const monthlyTrend = useMemo(() => buildMonthlyTrend(dashboardKhmtMonths), [dashboardKhmtMonths]);
   const approvalRate = dashboardTotalCount
     ? Math.round((dashboardApprovedCount / dashboardTotalCount) * 100)
     : 0;
-  const khmtRate = dashboardTotalCount
-    ? Math.round((dashboardKhmtCount / dashboardTotalCount) * 100)
+  const khmtRate = dashboardApprovedCount
+    ? Math.round((dashboardKhmtCount / dashboardApprovedCount) * 100)
     : 0;
   const historyTeamSummary = dashboardTeams.find((team: any) => team.team === historyTeam);
+  const historyTeamOptions = FI_TEAMS;
 
   const renderMetricPair = (
     primary: number | undefined,
@@ -1076,16 +1276,58 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
     </span>
   );
 
+  const renderKhmtControl = (item: any) => {
+    const canSelect = canSelectKhmtMonth(role, currentUserId, item, currentTeam);
+    const considered = isKhmtConsidered(item);
+    if (!canSelect) {
+      return (
+        <span className={`legacy-khmt-pill ${considered ? "success" : "empty"}`}>
+          {khmtLabel(item)}
+        </span>
+      );
+    }
+
+    const year = khmtAssignmentYear(item);
+    return (
+      <select
+        aria-label={`Chọn tháng KHMT cho ${item.title}`}
+        className={`legacy-khmt-select ${considered ? "success" : "empty"}`}
+        disabled={assigningKhmt}
+        onChange={(event) => handleKhmtMonthSelect(item, event.target.value)}
+        title={`Chọn tháng KHMT năm ${year}`}
+        value={considered && item.khmt_month ? String(item.khmt_month) : ""}
+      >
+        <option value="" disabled>
+          Chưa vào KHMT
+        </option>
+        {KHMT_MONTHS.map((month) => (
+          <option key={month} value={month}>
+            {`T${month}/${year}`}
+          </option>
+        ))}
+      </select>
+    );
+  };
+
   const renderReviewDecisionPanel = (item: any) => {
     if (!actionTarget || actionTarget.id !== item.id) return null;
     const currentOption = reviewDecisionOptions.find((option) => option.value === actionTarget.decision);
     const requiresNote = reviewDecisionRequiresNote(actionTarget.decision);
+    const alreadyReviewed = REVIEWED_STATUSES.includes(item.status);
     return (
       <section className="fi-inline-review-panel">
         <div className="fi-inline-review-head">
           <div>
-            <h3>Đánh giá SK-CTKT</h3>
-            <p className="muted">{actionTarget.label}</p>
+            <h3>{alreadyReviewed ? "Sửa lại đánh giá SK-CTKT" : "Đánh giá SK-CTKT"}</h3>
+            <p className="muted">
+              {actionTarget.label}
+              {alreadyReviewed && (
+                <>
+                  {" · "}
+                  <em>Đánh giá hiện tại: {displayStatus(item.status)}</em>
+                </>
+              )}
+            </p>
           </div>
           <span className={`legacy-status-pill ${statusTone(item.status)}`}>{displayHistoryStatus(item)}</span>
         </div>
@@ -1120,10 +1362,15 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
           </label>
         </div>
         {currentOption && <p className="fi-review-helper">{currentOption.helper}</p>}
+        {alreadyReviewed && (
+          <p className="fi-review-helper" style={{ color: "#0369a1" }}>
+            Bạn đang chỉnh sửa quyết định trước đó. Đổi kết luận hoặc ghi chú rồi bấm "Cập nhật" để ghi đè.
+          </p>
+        )}
         <div className="fi-inline-review-actions">
           <button onClick={handleAction} type="button">
             <ClipboardCheck size={17} />
-            Lưu đánh giá
+            {alreadyReviewed ? "Cập nhật đánh giá" : "Lưu đánh giá"}
           </button>
           <button onClick={() => { setActionTarget(null); setActionNote(""); }} type="button">
             Hủy
@@ -1155,16 +1402,35 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
 
       <div className="fi-workspace-tabs" role="tablist" aria-label="Luồng SK-CTKT">
         <div className="segmented-control">
-          <button
-            aria-selected={activeTab === "register"}
-            className={activeTab === "register" ? "active" : ""}
-            onClick={() => selectTab("register")}
-            role="tab"
-            type="button"
-          >
-            <ClipboardCheck size={16} />
-            Đăng ký SK-CTKT
-          </button>
+          {canRegister && (
+            <button
+              aria-selected={activeTab === "register"}
+              className={activeTab === "register" ? "active" : ""}
+              onClick={() => selectTab("register")}
+              role="tab"
+              type="button"
+            >
+              <ClipboardCheck size={16} />
+              Đăng ký SK-CTKT
+            </button>
+          )}
+          {canReview && (
+            <button
+              aria-selected={activeTab === "review"}
+              className={activeTab === "review" ? "active" : ""}
+              onClick={() => selectTab("review")}
+              role="tab"
+              type="button"
+            >
+              <ClipboardList size={16} />
+              Xét duyệt SK-CTKT
+              {reviewCounts.pending > 0 && (
+                <span className="tab-badge" aria-label={`${reviewCounts.pending} SK đang chờ`}>
+                  {reviewCounts.pending}
+                </span>
+              )}
+            </button>
+          )}
           <button
             aria-selected={activeTab === "dashboard"}
             className={activeTab === "dashboard" ? "active" : ""}
@@ -1189,34 +1455,104 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
       </div>
 
       {editTarget && (
-        <section className="panel wide fi-action-panel">
-          <h2>Chỉnh sửa nội dung/kế hoạch thực hiện</h2>
-          <p className="muted">{editTarget.sk_code || editTarget.title} · {editTarget.team}</p>
-          <div className="form-stack">
-            <label>Nội dung đăng ký</label>
-            <textarea
-              value={editForm.content_description}
-              onChange={(e) => setEditForm({ ...editForm, content_description: e.target.value })}
-              rows={4}
-            />
-            <label>Kế hoạch thực hiện</label>
-            <input
-              value={editForm.completion_plan}
-              onChange={(e) => setEditForm({ ...editForm, completion_plan: e.target.value })}
-            />
-            <div style={{ display: "flex", gap: 8 }}>
+        <div
+          className="fi-edit-modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !savingEdit) setEditTarget(null);
+          }}
+        >
+          <section
+            aria-labelledby="fi-edit-modal-title"
+            aria-modal="true"
+            className="fi-edit-modal"
+            role="dialog"
+          >
+            <div className="fi-edit-modal-head">
+              <div>
+                <h2 id="fi-edit-modal-title">Chỉnh sửa SK-CTKT</h2>
+                <p className="muted">
+                  {editTarget.sk_code || editTarget.title} · {editTarget.team}
+                  {editTarget.status && editTarget.status !== "Draft" && (
+                    <>
+                      {" · "}
+                      <em>FI/Admin sẽ nhận thông báo để xét duyệt lại sau khi lưu.</em>
+                    </>
+                  )}
+                </p>
+              </div>
+              <button
+                aria-label="Đóng chỉnh sửa"
+                className="fi-edit-modal-close"
+                disabled={savingEdit}
+                onClick={() => setEditTarget(null)}
+                type="button"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="fi-edit-modal-body">
+              <label htmlFor="fi-edit-title">Tên SK-CTKT</label>
+              <input
+                id="fi-edit-title"
+                value={editForm.title}
+                onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+              />
+              <label htmlFor="fi-edit-content">Nội dung đăng ký</label>
+              <textarea
+                id="fi-edit-content"
+                value={editForm.content_description}
+                onChange={(e) => setEditForm({ ...editForm, content_description: e.target.value })}
+                rows={9}
+              />
+              <label htmlFor="fi-edit-plan-month">Kế hoạch hoàn thành</label>
+              <div className="period-selector fi-registration-period">
+                <select
+                  id="fi-edit-plan-month"
+                  value={editForm.completion_plan_month}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, completion_plan_month: Number(e.target.value) })
+                  }
+                  aria-label="Tháng hoàn thành"
+                >
+                  {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
+                    <option key={month} value={month}>T{month}</option>
+                  ))}
+                </select>
+                <input
+                  aria-label="Năm hoàn thành"
+                  max={2100}
+                  min={2020}
+                  type="number"
+                  value={editForm.completion_plan_year}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      completion_plan_year: Number(e.target.value) || new Date().getFullYear(),
+                    })
+                  }
+                />
+              </div>
+              {editForm.completion_plan_raw &&
+                !parseCompletionPlan(editForm.completion_plan_raw) && (
+                  <small className="muted">
+                    Kế hoạch cũ: <em>{editForm.completion_plan_raw}</em> · Lưu lại sẽ ghi đè bằng
+                    định dạng tháng/năm chuẩn.
+                  </small>
+                )}
+              {error && <p className="error">{error}</p>}
+            </div>
+            <div className="fi-edit-modal-actions">
               <button onClick={handleEditSave} disabled={savingEdit} type="button">
                 <ClipboardCheck size={17} />
                 {savingEdit ? "Đang lưu..." : "Lưu cập nhật"}
               </button>
-              <button onClick={() => setEditTarget(null)} type="button">
+              <button onClick={() => setEditTarget(null)} disabled={savingEdit} type="button">
                 Hủy
               </button>
             </div>
-          </div>
-          {error && <p className="error">{error}</p>}
-          {notice && <p className="success">{notice}</p>}
-        </section>
+          </section>
+        </div>
       )}
 
       {khmtTarget && (
@@ -1265,27 +1601,38 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
       {showForm && (
         <section className="panel fi-form-panel">
           <h2>Đăng ký SK-CTKT</h2>
-          <p className="muted" style={{ marginTop: -6, marginBottom: 8 }}>
-            Điền đầy đủ thông tin để gửi sáng kiến/cải tiến kỹ thuật vào quy trình xét duyệt.
-          </p>
-          <div className="form-stack">
-            <label htmlFor="fi-author-name">Tác giả <span style={{ color: "#dc2626" }}>*</span></label>
-            <input
-              id="fi-author-name"
-              placeholder="Họ tên người đăng ký, ví dụ: Nguyễn Văn A"
-              value={form.author_name}
-              onChange={(e) => setForm({ ...form, author_name: e.target.value })}
-            />
-            <label htmlFor="fi-team-input">Đội/tổ</label>
-            {role === TEAM_ROLE ? (
-              <input id="fi-team-input" value={currentUserId} readOnly aria-label="Đội/tổ" />
-            ) : (
-              <select id="fi-team-input" value={form.team} onChange={(e) => setForm({ ...form, team: e.target.value })}>
-                {FI_TEAMS.map((team) => (
-                  <option key={team}>{team}</option>
-                ))}
-              </select>
-            )}
+	          <p className="muted" style={{ marginTop: -6, marginBottom: 8 }}>
+	            Điền đầy đủ thông tin để gửi sáng kiến/cải tiến kỹ thuật vào quy trình xét duyệt.
+	          </p>
+	          <div className="form-stack">
+	            {AUTHOR_ROLES.includes(role) ? (
+	              <div className="fi-account-source" aria-label="Thông tin tài khoản đăng ký">
+	                <div>
+	                  <span>Người đăng ký</span>
+	                  <strong>{accountAuthorName}</strong>
+	                </div>
+	                <div>
+	                  <span>Đội/tổ</span>
+	                  <strong>{accountTeam || "Chưa gán đội/tổ"}</strong>
+	                </div>
+	              </div>
+	            ) : (
+	              <>
+	                <label htmlFor="fi-author-name">Tác giả <span style={{ color: "#dc2626" }}>*</span></label>
+	                <input
+	                  id="fi-author-name"
+	                  placeholder="Họ tên người đăng ký, ví dụ: Nguyễn Văn A"
+	                  value={form.author_name}
+	                  onChange={(e) => setForm({ ...form, author_name: e.target.value })}
+	                />
+	                <label htmlFor="fi-team-input">Đội/tổ</label>
+	                <select id="fi-team-input" value={form.team} onChange={(e) => setForm({ ...form, team: e.target.value })}>
+	                  {FI_TEAMS.map((team) => (
+	                    <option key={team}>{team}</option>
+	                  ))}
+	                </select>
+	              </>
+	            )}
             <div className="period-selector fi-registration-period">
               <label htmlFor="fi-registration-month">Tháng đăng ký</label>
               <select
@@ -1321,13 +1668,32 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
               value={form.content_description}
               onChange={(e) => setForm({ ...form, content_description: e.target.value })}
             />
-            <label htmlFor="fi-plan">Kế hoạch hoàn thành</label>
-            <input
-              id="fi-plan"
-              placeholder="Vd: T6/2026 hoặc Quý 3/2026"
-              value={form.completion_plan}
-              onChange={(e) => setForm({ ...form, completion_plan: e.target.value })}
-            />
+            <label htmlFor="fi-plan-month">Kế hoạch hoàn thành</label>
+            <div className="period-selector fi-registration-period">
+              <select
+                id="fi-plan-month"
+                value={form.completion_plan_month}
+                onChange={(e) => setForm({ ...form, completion_plan_month: Number(e.target.value) })}
+                aria-label="Tháng hoàn thành"
+              >
+                {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
+                  <option key={month} value={month}>T{month}</option>
+                ))}
+              </select>
+              <input
+                aria-label="Năm hoàn thành"
+                max={2100}
+                min={2020}
+                type="number"
+                value={form.completion_plan_year}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    completion_plan_year: Number(e.target.value) || new Date().getFullYear(),
+                  })
+                }
+              />
+            </div>
             <label>
               Ảnh bằng chứng FI <span className="muted">(tùy chọn — có thể thêm sau khi lưu)</span>
             </label>
@@ -1364,15 +1730,20 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
 
       <section className="panel fi-processing-panel">
         <div className="panel-header">
-          <h2>Danh sách xử lý</h2>
+          <h2>Sáng kiến của tôi</h2>
           <button onClick={reload} title="Tải lại danh sách">
             <RefreshCw size={17} />
           </button>
         </div>
+        <p className="muted" style={{ marginTop: -4, marginBottom: 10 }}>
+          Danh sách SK-CTKT do bạn đứng tên đăng ký. Sau khi gửi duyệt, bạn vẫn được sửa nội dung;
+          khi sửa, đầu mối FI và Quản trị sẽ nhận thông báo để xem xét lại.
+        </p>
         {error && <p className="error">{error}</p>}
         <div className="list">
-          {items.map((item) => {
+          {myItems.map((item) => {
             const actions = visibleActionsForSk(role, currentUserId, item);
+            const editedAfterSubmit = item.status !== "Draft" && AUTHOR_EDITABLE_STATUSES.includes(item.status);
             return (
               <div className={`workflow-item ${selectedItem?.id === item.id ? "active-row" : ""}`} key={item.id}>
                 <button className="workflow-main" onClick={() => openItem(item.id)} type="button">
@@ -1387,7 +1758,10 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                 </button>
                 <div className="toolbar">
                   {actions.includes("edit") && (
-                    <button title="Chỉnh sửa nội dung/kế hoạch" onClick={() => openEdit(item)}>
+                    <button
+                      title={editedAfterSubmit ? "Chỉnh sửa (sẽ gửi noti xét duyệt lại)" : "Chỉnh sửa nội dung/kế hoạch"}
+                      onClick={() => openEdit(item)}
+                    >
                       <Pencil size={16} />
                     </button>
                   )}
@@ -1396,32 +1770,129 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                       <Send size={16} />
                     </button>
                   )}
-                  {actions.includes("reviewDecision") && (
-                    <button title="Đánh giá" onClick={() => openReviewDecision(item)} type="button">
-                      <ClipboardCheck size={16} />
-                    </button>
-                  )}
-                  {actions.includes("assignKhmt") && (
-                    <button title="Ghi nhận vào KHMT" onClick={() => openKhmtAssign(item)} type="button">
-                      <CalendarDays size={16} />
-                    </button>
-                  )}
                   {actions.includes("delete") && (
                     <button title="Xóa SK" onClick={() => handleDelete(item.id)}>
                       <Trash2 size={16} />
                     </button>
                   )}
                 </div>
-                {renderReviewDecisionPanel(item)}
               </div>
             );
           })}
-          {items.length === 0 && <p className="muted">Không có SK nào cần xử lý.</p>}
+          {myItems.length === 0 && <p className="muted">Bạn chưa có SK-CTKT nào. Hãy điền form bên trái để đăng ký.</p>}
         </div>
       </section>
       </div>
+        </>
+      )}
 
-      {selectedItem && !selectedItem.is_historical_import && (
+      {activeTab === "review" && canReview && (
+        <section className="panel wide fi-review-panel">
+          <div className="panel-header">
+            <div>
+              <h2>Xét duyệt SK-CTKT</h2>
+              <p className="muted">
+                {role === FI_COORDINATOR_ROLE
+                  ? "SK của 4 đội/tổ chờ Đầu mối FI xét duyệt. SK do chính bạn đăng ký sẽ do Admin xét duyệt."
+                  : "Toàn bộ SK đang trong luồng xét duyệt. Admin có thể xem & ghi đè quyết định nếu cần."}
+              </p>
+            </div>
+            <button onClick={reload} title="Tải lại hàng đợi xét duyệt">
+              <RefreshCw size={17} />
+            </button>
+          </div>
+          <div className="fi-review-filter segmented-control" role="tablist" aria-label="Bộ lọc xét duyệt">
+            <button
+              aria-selected={reviewFilter === "pending"}
+              className={reviewFilter === "pending" ? "active" : ""}
+              onClick={() => setReviewFilter("pending")}
+              type="button"
+            >
+              <Clock3 size={14} />
+              Chờ xét duyệt
+              <span className="tab-badge">{reviewCounts.pending}</span>
+            </button>
+            <button
+              aria-selected={reviewFilter === "reviewed"}
+              className={reviewFilter === "reviewed" ? "active" : ""}
+              onClick={() => setReviewFilter("reviewed")}
+              type="button"
+            >
+              <CheckCircle2 size={14} />
+              Đã đánh giá
+              <span className="tab-badge">{reviewCounts.reviewed}</span>
+            </button>
+            <button
+              aria-selected={reviewFilter === "all"}
+              className={reviewFilter === "all" ? "active" : ""}
+              onClick={() => setReviewFilter("all")}
+              type="button"
+            >
+              <ListChecks size={14} />
+              Tất cả
+              <span className="tab-badge">{reviewCounts.all}</span>
+            </button>
+          </div>
+          {error && <p className="error">{error}</p>}
+          <div className="list">
+            {reviewQueue.map((item) => {
+              const actions = visibleActionsForSk(role, currentUserId, item);
+              const alreadyReviewed = REVIEWED_STATUSES.includes(item.status);
+              return (
+                <div className={`workflow-item ${selectedItem?.id === item.id ? "active-row" : ""}`} key={item.id}>
+                  <button className="workflow-main" onClick={() => openItem(item.id)} type="button">
+                    <strong>{item.sk_code}</strong>
+                    <span>{item.title}</span>
+                    <small>{item.author_name} · {item.team}</small>
+                    <small>
+                      <span className={`fi-status-pill ${statusTone(item.status)}`} style={{ marginRight: 6 }}>
+                        {displayStatus(item.status)}
+                      </span>
+                      {item.submitted_at && ` gửi ${new Date(item.submitted_at).toLocaleDateString("vi-VN")}`}
+                      {isKhmtConsidered(item) && ` · ${khmtLabel(item)}`}
+                    </small>
+                  </button>
+                  <div className="toolbar">
+                    {actions.includes("reviewDecision") && (
+                      <button
+                        className="fi-review-command"
+                        title={alreadyReviewed ? "Sửa lại đánh giá của bạn" : "Đánh giá SK"}
+                        onClick={() => openReviewDecision(item)}
+                        type="button"
+                      >
+                        <ClipboardCheck size={16} />
+                        <span>{alreadyReviewed ? "Sửa đánh giá" : "Đánh giá"}</span>
+                      </button>
+                    )}
+                    {actions.includes("assignKhmt") && (
+                      <button title="Ghi nhận vào KHMT" onClick={() => openKhmtAssign(item)} type="button">
+                        <CalendarDays size={16} />
+                      </button>
+                    )}
+                    {actions.includes("delete") && (
+                      <button title="Xóa SK" onClick={() => handleDelete(item.id)}>
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                  {renderReviewDecisionPanel(item)}
+                </div>
+              );
+            })}
+            {reviewQueue.length === 0 && (
+              <p className="muted">
+                {reviewFilter === "pending"
+                  ? "Không có SK nào đang chờ xét duyệt."
+                  : reviewFilter === "reviewed"
+                  ? "Chưa có SK nào được đánh giá."
+                  : "Hàng đợi đang trống."}
+              </p>
+            )}
+          </div>
+        </section>
+      )}
+
+      {(activeTab === "register" || activeTab === "review") && selectedItem && !selectedItem.is_historical_import && (
         <section className="panel wide fi-detail-card">
           <div className="fi-detail-header">
             <div className="fi-detail-title">
@@ -1595,9 +2066,6 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
         </section>
       )}
 
-        </>
-      )}
-
       {activeTab === "dashboard" && (
         <section className="wide fi-dashboard-shell">
           <div className="fi-dashboard-hero">
@@ -1609,10 +2077,10 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
               <p>Bức tranh toàn cảnh về SK-CTKT của 4 đội/tổ — trạng thái xử lý, KHMT đã ghi nhận và xu hướng theo tháng.</p>
               <div className="fi-dashboard-hero-stats">
                 <span>
-                  <CheckCircle2 size={14} /> {approvalRate}% được duyệt
+                  <CheckCircle2 size={14} /> {approvalRate}% đã xét đạt
                 </span>
                 <span>
-                  <CalendarDays size={14} /> {khmtRate}% đã vào KHMT
+                  <CalendarDays size={14} /> {khmtRate}% SK đạt đã vào KHMT
                 </span>
                 <span>
                   <Clock3 size={14} /> Cập nhật {dashboard?.generated_at ? formatHistoryTime(dashboard.generated_at) : "—"}
@@ -1637,7 +2105,7 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
             </div>
             <div className="fi-dashboard-kpi success">
               <div className="fi-dashboard-kpi-icon"><CheckCircle2 size={20} /></div>
-              <span>Đã duyệt</span>
+              <span>Đã xét đạt</span>
               <strong>{formatCount(dashboardApprovedCount)}</strong>
               <small>{approvalRate}% tổng SK</small>
               <div className="fi-kpi-bar"><div className="fi-kpi-bar-fill success" style={{ width: `${approvalRate}%` }} /></div>
@@ -1652,7 +2120,7 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
               <div className="fi-dashboard-kpi-icon"><CalendarDays size={20} /></div>
               <span>Đã vào KHMT</span>
               <strong>{formatCount(dashboardKhmtCount)}</strong>
-              <small>{formatCount(dashboardTotals.khmt_not_considered)} SK chưa vào KHMT</small>
+              <small>{formatCount(khmtMissingCount(dashboardTotals))} SK đạt chưa vào KHMT</small>
               <div className="fi-kpi-bar"><div className="fi-kpi-bar-fill info" style={{ width: `${khmtRate}%` }} /></div>
             </div>
             <div className="fi-dashboard-kpi neutral">
@@ -1702,7 +2170,8 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                   <tr>
                     <th>Đội/tổ</th>
                     <th>Tổng</th>
-                    <th>Đã duyệt</th>
+                    <th>Đã xét đạt</th>
+                    <th>Đã xét không đạt</th>
                     <th>Xem xét sau</th>
                     <th>Chưa duyệt</th>
                     <th>KHMT</th>
@@ -1711,7 +2180,10 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                 </thead>
                 <tbody>
                   {dashboardTeams.map((team: any) => {
-                    const teamApprovalRate = team.total ? Math.round(((team.approved ?? 0) / team.total) * 100) : 0;
+                    const teamPassed = reviewPassedCount(team);
+                    const teamFailed = reviewFailedCount(team);
+                    const teamKhmtMissing = khmtMissingCount(team);
+                    const teamApprovalRate = team.total ? Math.round((teamPassed / team.total) * 100) : 0;
                     return (
                       <tr key={team.team}>
                         <td>
@@ -1720,12 +2192,13 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                         </td>
                         <td>{formatCount(team.total)}</td>
                         <td>
-                          {renderMetricPair(team.approved, `(${teamApprovalRate}%)`, "cell-approved")}
+                          {renderMetricPair(teamPassed, `(${teamApprovalRate}%)`, "cell-approved")}
                         </td>
+                        <td>{formatCount(teamFailed)}</td>
                         <td>{formatCount(team.deferred)}</td>
                         <td>{formatCount(team.pending)}</td>
                         <td>
-                          {renderMetricPair(team.khmt_considered, `/ ${formatCount(team.khmt_not_considered)} chưa vào`, "cell-khmt")}
+                          {renderMetricPair(team.khmt_considered, `/ ${formatCount(teamPassed)} đạt · ${formatCount(teamKhmtMissing)} chưa vào`, "cell-khmt")}
                         </td>
                         <td>
                           {renderMetricPair(team.completed_count ?? team.completed, `/ ${formatCount(team.not_completed)} chưa xong`)}
@@ -1735,7 +2208,7 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                   })}
                   {dashboardTeams.length === 0 && (
                     <tr>
-                      <td colSpan={7}>Chưa có dữ liệu FI.</td>
+                      <td colSpan={8}>Chưa có dữ liệu FI.</td>
                     </tr>
                   )}
                 </tbody>
@@ -1765,7 +2238,7 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                 </div>
                 <div className="fi-dashboard-status-list">
                   <div>
-                    <span><i className="fi-swatch approved" /> Đã duyệt</span>
+                    <span><i className="fi-swatch approved" /> Đã xét đạt</span>
                     <strong>{formatCount(dashboardApprovedCount)}</strong>
                   </div>
                   <div>
@@ -1777,8 +2250,8 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                     <strong>{formatCount(dashboardPendingCount)}</strong>
                   </div>
                   <div>
-                    <span><i className="fi-swatch rejected" /> Từ chối/Hủy</span>
-                    <strong>{formatCount(dashboardRejectedCount)}</strong>
+                    <span><i className="fi-swatch rejected" /> Đã xét không đạt</span>
+                    <strong>{formatCount(dashboardReviewFailedCount)}</strong>
                   </div>
                 </div>
               </div>
@@ -1797,7 +2270,7 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
             </div>
             <div className="toolbar">
               <div className="segmented-control legacy-team-picker" aria-label="Chọn đội/tổ">
-                {FI_TEAMS.map((team) => (
+                {historyTeamOptions.map((team) => (
                   <button
                     className={historyTeam === team ? "active" : ""}
                     key={team}
@@ -1852,40 +2325,51 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                 </div>
               </div>
             </div>
-            {historyTeamSummary && (
-              <div className="legacy-team-summary">
-                <table className="fi-dashboard-table compact">
-                  <thead>
-                    <tr>
-                      <th>Đội/tổ</th>
-                      <th>Tổng</th>
-                      <th>Đã duyệt</th>
-                      <th>Xem xét sau</th>
-                      <th>Chưa duyệt</th>
-                      <th>KHMT</th>
+	            {historyTeamSummary && (
+	              <div className="legacy-team-summary">
+	                <table className="fi-dashboard-table compact">
+	                  <thead>
+	                    <tr>
+	                      <th>Đội/tổ</th>
+	                      <th>Tổng</th>
+	                      <th>Đã xét đạt</th>
+	                      <th>Đã xét không đạt</th>
+	                      <th>Xem xét sau</th>
+	                      <th>Chưa duyệt</th>
+	                      <th>KHMT</th>
                       <th>Hoàn thành</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td>
-                        <strong>{historyTeamSummary.team}</strong>
-                        <small>{formatCount(historyTeamSummary.current)} hiện hành · {formatCount(historyTeamSummary.historical)} lịch sử</small>
-                      </td>
-                      <td>{formatCount(historyTeamSummary.total)}</td>
-                      <td>{renderMetricPair(historyTeamSummary.approved, `(${percent(historyTeamSummary.approved, historyTeamSummary.total)}%)`, "cell-approved")}</td>
-                      <td>{formatCount(historyTeamSummary.deferred)}</td>
-                      <td>{formatCount(historyTeamSummary.pending)}</td>
-                      <td>{renderMetricPair(historyTeamSummary.khmt_considered, `/ ${formatCount(historyTeamSummary.khmt_not_considered)} chưa vào`, "cell-khmt")}</td>
-                      <td>{renderMetricPair(historyTeamSummary.completed_count ?? historyTeamSummary.completed, `/ ${formatCount(historyTeamSummary.not_completed)} chưa xong`)}</td>
-                    </tr>
+	                    <tr>
+	                      {(() => {
+	                        const passed = reviewPassedCount(historyTeamSummary);
+	                        const failed = reviewFailedCount(historyTeamSummary);
+	                        const khmtMissing = khmtMissingCount(historyTeamSummary);
+	                        return (
+	                          <>
+	                      <td>
+	                        <strong>{historyTeamSummary.team}</strong>
+	                        <small>{formatCount(historyTeamSummary.current)} hiện hành · {formatCount(historyTeamSummary.historical)} lịch sử</small>
+	                      </td>
+	                      <td>{formatCount(historyTeamSummary.total)}</td>
+	                      <td>{renderMetricPair(passed, `(${percent(passed, historyTeamSummary.total)}%)`, "cell-approved")}</td>
+	                      <td>{formatCount(failed)}</td>
+	                      <td>{formatCount(historyTeamSummary.deferred)}</td>
+	                      <td>{formatCount(historyTeamSummary.pending)}</td>
+	                      <td>{renderMetricPair(historyTeamSummary.khmt_considered, `/ ${formatCount(passed)} đạt · ${formatCount(khmtMissing)} chưa vào`, "cell-khmt")}</td>
+	                      <td>{renderMetricPair(historyTeamSummary.completed_count ?? historyTeamSummary.completed, `/ ${formatCount(historyTeamSummary.not_completed)} chưa xong`)}</td>
+	                          </>
+	                        );
+	                      })()}
+	                    </tr>
                   </tbody>
                 </table>
               </div>
             )}
           </div>
           <div className="legacy-column-heading" aria-hidden="true">
-            <span>Kết luận</span>
+            <span>Kết luận LĐX</span>
             <span>KHMT</span>
           </div>
         </div>
@@ -1925,9 +2409,7 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                     <div className="legacy-row-side">
                       <span className="legacy-period-pill">{registrationMonthLabel(item)}</span>
                       <span className={`legacy-status-pill ${statusTone(item.status)}`}>{displayHistoryStatus(item)}</span>
-                      <span className={`legacy-khmt-pill ${isKhmtConsidered(item) ? "success" : "empty"}`}>
-                        {khmtLabel(item)}
-                      </span>
+                      {renderKhmtControl(item)}
                       <div className="legacy-row-controls">
                         {actions.includes("edit") && (
                           <button
@@ -1941,12 +2423,13 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                         )}
                         {actions.includes("reviewDecision") && (
                           <button
-                            className="legacy-icon-action"
+                            className="legacy-row-action legacy-review-action"
                             title="Đánh giá"
                             onClick={() => openReviewDecision(item)}
                             type="button"
                           >
                             <ClipboardCheck size={15} />
+                            <span>Đánh giá</span>
                           </button>
                         )}
                         <button className="legacy-row-action" onClick={() => openHistoryItem(item)} type="button">
@@ -2016,14 +2499,9 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                         {detailImages.length > 0 ? (
                           <div className="legacy-evidence-grid">
                             {detailImages.map((img: any, idx: number) => (
-                              <button
+                              <div
                                 key={img.id}
                                 className="legacy-evidence-thumb"
-                                type="button"
-                                onClick={() => {
-                                  setSelectedItem(detail);
-                                  setImagePreviewIndex(idx);
-                                }}
                                 title={img.file_name}
                               >
                                 <AuthenticatedSkImage
@@ -2034,7 +2512,7 @@ export function FIWorkspace({ role, currentUserId }: { role: string; currentUser
                                     setImagePreviewIndex(idx);
                                   }}
                                 />
-                              </button>
+                              </div>
                             ))}
                           </div>
                         ) : (

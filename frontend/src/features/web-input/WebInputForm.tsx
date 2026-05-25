@@ -181,10 +181,19 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function WebInputForm({ role, currentUserId }: { role: string; currentUserId: string }) {
+export function WebInputForm({
+  role,
+  currentUserId,
+  currentTeam,
+}: {
+  role: string;
+  currentUserId: string;
+  currentTeam?: string | null;
+}) {
   const now = new Date();
+  const teamFromAccount = currentTeam ?? currentUserId;
   const [mapping, setMapping] = useState<KRMapping[]>([]);
-  const [team, setTeam] = useState(TEAMS.includes(currentUserId) ? currentUserId : "TBHTĐK");
+  const [team, setTeam] = useState(TEAMS.includes(teamFromAccount) ? teamFromAccount : "TBHTĐK");
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [data, setData] = useState<WebInputData>(emptyData([]));
@@ -203,7 +212,7 @@ export function WebInputForm({ role, currentUserId }: { role: string; currentUse
   const [copied, setCopied] = useState(false);
   const autosaveTimer = useRef<number | null>(null);
 
-  const canWrite = role === "Admin" || (role === "Team_Account" && currentUserId === team);
+  const canWrite = role === "Admin" || (role === "Team_Account" && teamFromAccount === team);
   const readOnly = !canWrite || locked;
   const emailText = useMemo(() => buildEmailText(team, month, data), [team, month, data]);
 

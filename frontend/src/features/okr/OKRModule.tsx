@@ -14,14 +14,24 @@ const okrTabs: Array<{ id: OKRTab; label: string; icon: LucideIcon }> = [
   { id: "principles", label: "Nguyên tắc đánh giá", icon: Scale },
 ];
 
-export function OKRModule({ role, currentUserId }: { role: string; currentUserId: string }) {
+export function OKRModule({
+  role,
+  currentUserId,
+  currentTeam,
+}: {
+  role: string;
+  currentUserId: string;
+  currentTeam?: string | null;
+}) {
   const [activeTab, setActiveTab] = useState<OKRTab>("dashboard");
+  // Staff chỉ được xem dashboard + reference; ẩn tab nhập liệu OKR.
+  const visibleTabs = okrTabs.filter((tab) => !(role === "Staff" && tab.id === "web-input"));
 
   return (
     <div className="okr-module-shell">
       <div className="okr-module-tabs" role="tablist" aria-label="OKR">
         <div className="segmented-control">
-          {okrTabs.map((tab) => {
+          {visibleTabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
@@ -40,7 +50,9 @@ export function OKRModule({ role, currentUserId }: { role: string; currentUserId
         </div>
       </div>
       {activeTab === "dashboard" && <OKRWorkspace role={role} />}
-      {activeTab === "web-input" && <WebInputForm role={role} currentUserId={currentUserId} />}
+      {activeTab === "web-input" && role !== "Staff" && (
+        <WebInputForm role={role} currentUserId={currentUserId} currentTeam={currentTeam} />
+      )}
       {activeTab === "criteria" && <EvaluationReference kind="criteria" />}
       {activeTab === "principles" && <EvaluationReference kind="principles" />}
     </div>

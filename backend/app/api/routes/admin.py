@@ -60,8 +60,11 @@ def create_user(
     user = User(
         id=payload.id,
         display_name=payload.display_name,
+        full_name=payload.full_name or payload.display_name,
         password_hash=hash_password(payload.password),
         role=_validate_role(payload.role),
+        team=payload.team,
+        must_change_password=payload.must_change_password,
         is_active=payload.is_active,
     )
     db.add(user)

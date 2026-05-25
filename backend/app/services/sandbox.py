@@ -119,4 +119,37 @@ def ensure_sandbox_data() -> None:
 
 
 def sandbox_identity(user_id: str) -> SandboxIdentity | None:
-    return SANDBOX_IDENTITIES.get(user_id)
+    """Trả về identity để switch role trong sandbox.
+
+    Ưu tiên các identity hardcoded (cho legacy/test). Nếu không có, lookup
+    trực tiếp trong sandbox DB — cho phép admin giả lập bất kỳ user thật nào.
+    """
+    static = SANDBOX_IDENTITIES.get(user_id)
+    if static is not None:
+        return static
+    ensure_sandbox_data()
+    with create_session(sandbox=True) as db:
+        user = db.get(User, user_id)
+        if user is None or not user.is_active:
+            return None
+        try:
+            role = Role(user.role)
+        except ValueError:
+            return None
+        return SandboxIdentity(id=user.id, display_name=user.display_name, role=role)
+
+
+def list_sandbox_identities() -> list[dict[str, str | None]]:
+    """Trả về danh sách tất cả user trong sandbox DB để admin chọn giả lập."""
+    ensure_sandbox_data()
+    with create_session(sandbox=True) as db:
+        users = list(db.execute(select(User).order_by(User.role, User.id)).scalars())
+    return [
+        {
+            "id": user.id,
+            "display_name": user.display_name,
+            "role": user.role,
+            "team": getattr(user, "team", None),
+        }
+        for user in users
+    ]

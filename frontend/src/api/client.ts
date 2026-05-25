@@ -79,14 +79,42 @@ export function decodeToken(value: string): any {
   }
 }
 
+export type LoginResponse = {
+  access_token: string;
+  token_type?: string;
+  must_change_password?: boolean;
+  display_name?: string | null;
+  role?: string | null;
+  team?: string | null;
+};
+
 export const api = {
   login: (userId: string, password: string) =>
-    request<{ access_token: string }>("/auth/login", {
+    request<LoginResponse>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ user_id: userId, password })
     }),
+  me: () =>
+    request<{
+      user_id: string;
+      role: string;
+      team: string | null;
+      display_name: string | null;
+      must_change_password: boolean;
+      sandbox: boolean;
+    }>("/auth/me"),
+  changePassword: (oldPassword: string, newPassword: string) =>
+    request<LoginResponse>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ old_password: oldPassword, new_password: newPassword })
+    }),
+  sandboxEnter: () => request<LoginResponse>("/auth/sandbox/enter", { method: "POST" }),
+  sandboxIdentities: () =>
+    request<Array<{ id: string; display_name: string; role: string; team: string | null }>>(
+      "/auth/sandbox/identities"
+    ),
   sandboxSwitchRole: (userId: string) =>
-    request<{ access_token: string }>("/auth/sandbox/switch-role", {
+    request<LoginResponse>("/auth/sandbox/switch-role", {
       method: "POST",
       body: JSON.stringify({ user_id: userId })
     }),

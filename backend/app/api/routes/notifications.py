@@ -12,7 +12,7 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 @router.get("")
 def list_notifications(
-    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
     role = principal["role"]
@@ -29,7 +29,7 @@ def list_notifications(
 @router.put("/{notification_id}/read")
 def mark_read(
     notification_id: str,
-    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
     record = db.get(NotificationModel, notification_id)

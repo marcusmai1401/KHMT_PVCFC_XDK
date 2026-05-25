@@ -20,12 +20,12 @@ from app.services.okr.web_input import (
     submit_report,
     unlock_report,
 )
-from app.services.repositories import audit
+from app.services.repositories import audit, notify
 
 
 router = APIRouter(prefix="/okr/web-input", tags=["okr-web-input"])
 
-READ_ROLES = (Role.ADMIN, Role.WORKSHOP_LEADER, Role.FI_COORDINATOR, Role.TEAM_ACCOUNT)
+READ_ROLES = (Role.ADMIN, Role.WORKSHOP_LEADER, Role.FI_COORDINATOR, Role.TEAM_ACCOUNT, Role.STAFF)
 WRITE_ROLES = (Role.ADMIN, Role.TEAM_ACCOUNT)
 
 
@@ -75,6 +75,20 @@ def post_web_input_submit(
     db: Session = Depends(get_db),
 ):
     report = submit_report(db, team, month, year, payload.data, principal)
+    notify(
+        db,
+        "OKR_TEAM_SUBMITTED",
+        {
+            "report_id": report.id,
+            "team": team,
+            "month": month,
+            "year": year,
+            "submitted_by": principal["user_id"],
+            "display_name": principal.get("display_name"),
+        },
+        recipient_role=Role.WORKSHOP_LEADER.value,
+    )
+    db.commit()
     return serialize_web_input(report, team, month, year)
 
 

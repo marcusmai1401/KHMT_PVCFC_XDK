@@ -13,11 +13,18 @@ def _login(client, user_id: str, password: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
-def _create_user(client, admin_headers, user_id: str, role: str = "Team_Account") -> dict[str, str]:
+def _create_user(client, admin_headers, user_id: str, role: str = "Team_Account", team: str = "TBCH") -> dict[str, str]:
     response = client.post(
         "/api/v1/admin/users",
         headers=admin_headers,
-        json={"id": user_id, "display_name": user_id, "password": "pw", "role": role},
+        json={
+            "id": user_id,
+            "display_name": user_id,
+            "full_name": user_id,
+            "password": "pw",
+            "role": role,
+            "team": team,
+        },
     )
     assert response.status_code == 200, response.text
     return _login(client, user_id, "pw")
@@ -89,6 +96,7 @@ def test_team_account_create_is_locked_to_own_team(client):
     assert created.status_code == 200, created.text
     assert created.json()["team"] == "TBCH"
     assert created.json()["author_user_id"] == "TBCH"
+    assert created.json()["author_name"] == "TBCH"
     assert created.json()["sk_code"].startswith("FI-2026-TBCH-")
 
 
@@ -218,6 +226,7 @@ def test_team_account_can_delete_own_draft_only(client):
 
 def test_public_sk_is_internal_and_excludes_drafts(client):
     team_headers = _login(client, "TCĐK", "tcdk-pass")
+    other_team_headers = _login(client, "TBCH", "tbch-pass")
     created = client.post(
         "/api/v1/fi/sk-ctkt",
         headers=team_headers,
@@ -235,10 +244,14 @@ def test_public_sk_is_internal_and_excludes_drafts(client):
     assert record_id not in {item["id"] for item in client.get("/api/v1/fi/sk-ctkt/public", headers=team_headers).json()}
     assert client.post(f"/api/v1/fi/sk-ctkt/{record_id}/submit", headers=team_headers, json={}).status_code == 200
     assert record_id in {item["id"] for item in client.get("/api/v1/fi/sk-ctkt/public", headers=team_headers).json()}
+    cross_team_detail = client.get(f"/api/v1/fi/sk-ctkt/{record_id}", headers=other_team_headers)
+    assert cross_team_detail.status_code == 200, cross_team_detail.text
+    assert cross_team_detail.json()["team"] == "TCĐK"
 
 
 def test_legacy_sk_is_history_and_can_be_reviewed_from_history(client, admin_headers):
     team_headers = _login(client, "TBCH", "tbch-pass")
+    other_team_headers = _login(client, "TBĐL", "tbdl-pass")
     fi_headers = _login(client, "fi", "fi-pass")
     with create_session() as db:
         db.add(
@@ -283,9 +296,7 @@ def test_legacy_sk_is_history_and_can_be_reviewed_from_history(client, admin_hea
         headers=team_headers,
         json={"content_description": "Nội dung đã cập nhật", "completion_plan": "Dự kiến 07/2026"},
     )
-    assert content_update.status_code == 200, content_update.text
-    assert content_update.json()["content_description"] == "Nội dung đã cập nhật"
-    assert content_update.json()["completion_plan"] == "Dự kiến 07/2026"
+    assert content_update.status_code == 403
 
     protected_update = client.put(
         "/api/v1/fi/sk-ctkt/sk-legacy",
@@ -298,6 +309,22 @@ def test_legacy_sk_is_history_and_can_be_reviewed_from_history(client, admin_hea
     assert transition.status_code == 200
     assert transition.json()["status"] == "Approved"
     assert transition.json()["is_historical_import"] is True
+
+    foreign_khmt = client.post(
+        "/api/v1/fi/sk-ctkt/sk-legacy/assign-khmt",
+        headers=other_team_headers,
+        json={"month": 7, "year": 2026},
+    )
+    assert foreign_khmt.status_code == 403
+
+    khmt = client.post(
+        "/api/v1/fi/sk-ctkt/sk-legacy/assign-khmt",
+        headers=team_headers,
+        json={"month": 7, "year": 2026},
+    )
+    assert khmt.status_code == 200, khmt.text
+    assert khmt.json()["consider_for_khmt"] is True
+    assert khmt.json()["khmt_month"] == 7
 
 
 def test_okr_duplicate_requires_confirmation_and_export_is_valid_xlsx(client, admin_headers):

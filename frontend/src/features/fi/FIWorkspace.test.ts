@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isKhmtConsidered, khmtLabel, visibleActionsForSk } from "./FIWorkspace";
+import { canSelectKhmtMonth, isKhmtConsidered, khmtLabel, visibleActionsForSk } from "./FIWorkspace";
 
 describe("FI action visibility", () => {
   it("allows a team account to submit its own draft but not another team's draft", () => {
@@ -16,37 +16,59 @@ describe("FI action visibility", () => {
     expect(visibleActionsForSk("Team_Account", "u1", ownSubmitted)).toEqual(["edit"]);
   });
 
+  it("does not let another author account edit someone else's submitted SK", () => {
+    const submitted = { status: "Submitted", author_user_id: "cunghv" };
+
+    expect(visibleActionsForSk("Staff", "khanhdv1", submitted)).toEqual([]);
+    expect(visibleActionsForSk("Team_Account", "TBCH", submitted)).toEqual([]);
+    expect(visibleActionsForSk("Staff", "cunghv", submitted)).toEqual(["edit"]);
+  });
+
   it("shows one review decision action for FI_Coordinator on Submitted items", () => {
-    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Submitted" })).toEqual(["edit", "reviewDecision"]);
+    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Submitted" })).toEqual(["reviewDecision"]);
   });
 
   it("shows one review decision action for FI_Coordinator on Reviewed items", () => {
-    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Reviewed" })).toEqual(["edit", "reviewDecision"]);
+    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Reviewed" })).toEqual(["reviewDecision"]);
   });
 
-  it("shows review decision for reviewer roles on editable decision statuses", () => {
-    expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Submitted" })).toEqual(["edit", "reviewDecision"]);
-    expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Deferred" })).toEqual(["edit", "reviewDecision"]);
-    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Deferred" })).toEqual(["edit", "reviewDecision"]);
-    expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Approved" })).toEqual(["edit", "reviewDecision"]);
-    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Rejected" })).toEqual(["edit", "reviewDecision"]);
+  it("shows review decision for FI_Coordinator on editable decision statuses", () => {
+    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Deferred" })).toEqual(["reviewDecision"]);
+    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Rejected" })).toEqual(["reviewDecision"]);
+    expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Submitted" })).toEqual([]);
   });
 
   it("allows historical pending items to be reviewed but not deleted", () => {
-    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Submitted", is_historical_import: true })).toEqual(["edit", "reviewDecision"]);
-    expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Deferred", is_historical_import: true })).toEqual(["edit", "reviewDecision"]);
-    expect(visibleActionsForSk("Admin", "admin", { status: "Approved", is_historical_import: true })).toEqual(["edit", "reviewDecision"]);
+    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Submitted", is_historical_import: true })).toEqual(["reviewDecision"]);
+    expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Deferred", is_historical_import: true })).toEqual([]);
+    expect(visibleActionsForSk("Admin", "admin", { status: "Approved", is_historical_import: true })).toEqual(["reviewDecision"]);
   });
 
-  it("keeps KHMT assignment admin-only", () => {
+  it("keeps the toolbar KHMT action admin-only", () => {
     const approved = { status: "Approved", author_user_id: "u1" };
 
-    expect(visibleActionsForSk("Admin", "admin", approved)).toEqual(["edit", "reviewDecision", "assignKhmt", "delete"]);
-    expect(visibleActionsForSk("Workshop_Leader", "leader", approved)).toEqual(["edit", "reviewDecision"]);
+    expect(visibleActionsForSk("Admin", "admin", approved)).toEqual(["reviewDecision", "assignKhmt", "delete"]);
+    expect(visibleActionsForSk("Admin", "admin", { ...approved, author_user_id: "admin" })).toEqual([
+      "edit",
+      "reviewDecision",
+      "assignKhmt",
+      "delete",
+    ]);
+    expect(visibleActionsForSk("Workshop_Leader", "leader", approved)).toEqual([]);
+  });
+
+  it("allows only Admin or the owning team account to choose KHMT month", () => {
+    const approved = { status: "Approved", team: "TBCH" };
+
+    expect(canSelectKhmtMonth("Admin", "admin", approved)).toBe(true);
+    expect(canSelectKhmtMonth("Team_Account", "TBCH", approved)).toBe(true);
+    expect(canSelectKhmtMonth("Team_Account", "TBĐL", approved)).toBe(false);
+    expect(canSelectKhmtMonth("FI_Coordinator", "fi", approved)).toBe(false);
+    expect(canSelectKhmtMonth("Team_Account", "TBCH", { ...approved, status: "Submitted" })).toBe(false);
   });
 
   it("does not allow FI_Coordinator to delete approved items", () => {
-    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Approved" })).toEqual(["edit", "reviewDecision"]);
+    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Approved" })).toEqual(["reviewDecision"]);
   });
 });
 

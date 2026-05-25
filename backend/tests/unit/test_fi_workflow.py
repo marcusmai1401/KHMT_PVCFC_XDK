@@ -31,10 +31,22 @@ def test_invalid_transition_rejected():
         next_status("Draft", "approve", "FI_Coordinator")
 
 
-def test_workshop_leader_can_review_submitted_and_deferred():
-    assert next_status("Submitted", "approve", "Workshop_Leader").to_status.value == "Approved"
-    assert next_status("Deferred", "approve", "Workshop_Leader").to_status.value == "Approved"
-    assert next_status("Submitted", "reject", "Workshop_Leader", decision_note="Không phù hợp").to_status.value == "Rejected"
+def test_workshop_leader_cannot_review_fi():
+    """Workshop_Leader chỉ xem & nhận noti; mọi action duyệt FI đều bị từ chối."""
+    with pytest.raises(PermissionError):
+        next_status("Submitted", "approve", "Workshop_Leader")
+    with pytest.raises(PermissionError):
+        next_status("Deferred", "approve", "Workshop_Leader")
+    with pytest.raises(PermissionError):
+        next_status("Submitted", "reject", "Workshop_Leader", decision_note="Không phù hợp")
+
+
+def test_staff_can_submit_and_cancel_like_team_account():
+    """Staff đăng ký FI giống Team_Account."""
+    assert next_status("Draft", "submit", "Staff").to_status.value == "Submitted"
+    assert next_status("Draft", "cancel", "Staff", decision_note="Sai nội dung").to_status.value == "Cancelled"
+    with pytest.raises(PermissionError):
+        next_status("Submitted", "approve", "Staff")
 
 
 def test_decision_note_required_for_reject():

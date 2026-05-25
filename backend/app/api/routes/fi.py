@@ -73,16 +73,33 @@ def _validate_image_upload(safe_name: str, content_type: str | None) -> str:
     return normalized_content_type if normalized_content_type.startswith("image/") else guessed_content_type or "application/octet-stream"
 
 
+def _principal_author_name(principal: dict) -> str:
+    full_name = str(principal.get("full_name") or "").strip()
+    if full_name:
+        return full_name
+    display_name = str(principal.get("display_name") or "").strip()
+    if " - " in display_name:
+        display_name = display_name.split(" - ", 1)[0].strip()
+    return display_name or principal["user_id"]
+
+
 @router.post("/sk-ctkt")
 def create(
     payload: SKCreate,
-    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.ADMIN)),
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
     data = payload.model_dump()
-    if principal["role"] == Role.TEAM_ACCOUNT.value:
-        data["team"] = principal["user_id"]
+    if principal["role"] in {Role.TEAM_ACCOUNT.value, Role.STAFF.value, Role.FI_COORDINATOR.value}:
+        team = principal.get("team")
+        if not team:
+            raise HTTPException(status_code=400, detail="Tài khoản chưa được gán đội/tổ")
+        # Buộc tác giả và team theo account đăng nhập, không cho ghi đè qua payload.
+        data["author_name"] = _principal_author_name(principal)
+        data["team"] = team
         data["author_user_id"] = principal["user_id"]
+    elif not data.get("author_name") or not data.get("team"):
+        raise HTTPException(status_code=400, detail="Thiếu tác giả hoặc đội/tổ")
     result = model_to_dict(create_sk_ctkt(db, data, principal["user_id"]))
     cache_delete_prefix("fi:public_sk")
     return result
@@ -97,7 +114,7 @@ def list_sk(
     status: str | None = None,
     q: str | None = None,
     include_historical: bool = False,
-    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
     query = select(SKCTKTModel)
@@ -134,7 +151,7 @@ def public_sk(
     khmt_year: int | None = Query(default=None, ge=2020, le=2100),
     q: str | None = None,
     historical: bool | None = None,
-    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
     namespace = "sandbox" if principal.get("sandbox") else "prod"
@@ -170,7 +187,7 @@ def public_sk(
 @router.get("/sk-ctkt/{record_id}")
 def get_sk(
     record_id: str,
-    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
     record = _record_or_404(db, record_id)
@@ -187,7 +204,7 @@ def get_sk(
 def update(
     record_id: str,
     payload: SKUpdate,
-    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
     try:
@@ -203,7 +220,7 @@ def update(
 @router.delete("/sk-ctkt/{record_id}")
 def delete(
     record_id: str,
-    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.ADMIN)),
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
     try:
@@ -242,7 +259,7 @@ def _transition(record_id: str, action: str, payload: TransitionRequest, princip
 
 
 @router.post("/sk-ctkt/{record_id}/submit")
-def submit(record_id: str, payload: TransitionRequest = TransitionRequest(), principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.ADMIN)), db: Session = Depends(get_db)):
+def submit(record_id: str, payload: TransitionRequest = TransitionRequest(), principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.ADMIN)), db: Session = Depends(get_db)):
     return _transition(record_id, "submit", payload, principal, db)
 
 
@@ -260,7 +277,7 @@ def review(record_id: str, payload: TransitionRequest, principal: dict = Depends
 def approve(
     record_id: str,
     payload: TransitionRequest = TransitionRequest(),
-    principal: dict = Depends(require_role(Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
+    principal: dict = Depends(require_role(Role.FI_COORDINATOR, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
     return _transition(record_id, "approve", payload, principal, db)
@@ -270,7 +287,7 @@ def approve(
 def reject(
     record_id: str,
     payload: TransitionRequest,
-    principal: dict = Depends(require_role(Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
+    principal: dict = Depends(require_role(Role.FI_COORDINATOR, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
     return _transition(record_id, "reject", payload, principal, db)
@@ -280,14 +297,14 @@ def reject(
 def defer(
     record_id: str,
     payload: TransitionRequest,
-    principal: dict = Depends(require_role(Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
+    principal: dict = Depends(require_role(Role.FI_COORDINATOR, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
     return _transition(record_id, "defer", payload, principal, db)
 
 
 @router.post("/sk-ctkt/{record_id}/cancel")
-def cancel(record_id: str, payload: TransitionRequest = TransitionRequest(), principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.ADMIN)), db: Session = Depends(get_db)):
+def cancel(record_id: str, payload: TransitionRequest = TransitionRequest(), principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.ADMIN)), db: Session = Depends(get_db)):
     return _transition(record_id, "cancel", payload, principal, db)
 
 
@@ -297,22 +314,39 @@ def complete(record_id: str, payload: TransitionRequest = TransitionRequest(), p
 
 
 @router.post("/sk-ctkt/{record_id}/assign-khmt")
-def assign(record_id: str, payload: KHMTAssignRequest, principal: dict = Depends(require_role(Role.ADMIN)), db: Session = Depends(get_db)):
+def assign(
+    record_id: str,
+    payload: KHMTAssignRequest,
+    principal: dict = Depends(require_role(Role.ADMIN, Role.TEAM_ACCOUNT, Role.FI_COORDINATOR)),
+    db: Session = Depends(get_db),
+):
     try:
-        result = model_to_dict(assign_khmt(db, record_id, payload.month, payload.year, principal["user_id"]))
+        result = model_to_dict(
+            assign_khmt(
+                db,
+                record_id,
+                payload.month,
+                payload.year,
+                principal["user_id"],
+                principal["role"],
+                principal_team=principal.get("team"),
+            )
+        )
         cache_delete_prefix("fi:public_sk")
         cache_delete_prefix("okr:dashboard")
         return result
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/sk-ctkt/{record_id}/images")
-async def upload_image(record_id: str, file: UploadFile = File(...), principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.ADMIN)), db: Session = Depends(get_db)):
+async def upload_image(record_id: str, file: UploadFile = File(...), principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.ADMIN)), db: Session = Depends(get_db)):
     record = _record_or_404(db, record_id)
-    if principal["role"] == Role.TEAM_ACCOUNT.value:
+    if principal["role"] in {Role.TEAM_ACCOUNT.value, Role.STAFF.value, Role.FI_COORDINATOR.value}:
         if record.author_user_id != principal["user_id"] or record.status not in {"Draft", "NeedMoreInfo"}:
             raise HTTPException(status_code=403, detail="Only owner can upload images for editable entries")
     safe_name = _safe_filename(file.filename)
@@ -341,7 +375,7 @@ async def upload_image(record_id: str, file: UploadFile = File(...), principal: 
 
 
 @router.get("/sk-ctkt/{record_id}/images")
-def list_images(record_id: str, principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)), db: Session = Depends(get_db)):
+def list_images(record_id: str, principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)), db: Session = Depends(get_db)):
     record = _record_or_404(db, record_id)
     require_visible(record, principal)
     return [
@@ -351,7 +385,7 @@ def list_images(record_id: str, principal: dict = Depends(require_role(Role.TEAM
 
 
 @router.get("/sk-ctkt/{record_id}/images/{image_id}/raw")
-def get_image_raw(record_id: str, image_id: str, principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)), db: Session = Depends(get_db)):
+def get_image_raw(record_id: str, image_id: str, principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)), db: Session = Depends(get_db)):
     record = _record_or_404(db, record_id)
     require_visible(record, principal)
     image = db.get(SKImageModel, image_id)
@@ -364,12 +398,12 @@ def get_image_raw(record_id: str, image_id: str, principal: dict = Depends(requi
 
 
 @router.delete("/sk-ctkt/{record_id}/images/{image_id}")
-def delete_image(record_id: str, image_id: str, principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.ADMIN)), db: Session = Depends(get_db)):
+def delete_image(record_id: str, image_id: str, principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.ADMIN)), db: Session = Depends(get_db)):
     record = _record_or_404(db, record_id)
     image = db.get(SKImageModel, image_id)
     if image is None or image.sk_ctkt_id != record_id:
         raise HTTPException(status_code=404, detail="Image not found")
-    if principal["role"] == Role.TEAM_ACCOUNT.value:
+    if principal["role"] in {Role.TEAM_ACCOUNT.value, Role.STAFF.value, Role.FI_COORDINATOR.value}:
         if record.author_user_id != principal["user_id"] or record.status not in {"Draft", "NeedMoreInfo"}:
             raise HTTPException(status_code=403, detail="Only owner can delete images for editable entries")
     try:
@@ -389,7 +423,7 @@ def okr_counts(month: int, year: int, _: dict = Depends(require_role(Role.ADMIN,
 
 @router.get("/dashboard")
 def dashboard(
-    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
     return fi_dashboard(db, principal)

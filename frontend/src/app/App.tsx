@@ -391,7 +391,7 @@ export function App() {
             </div>
 
             <p className="auth-hero-lede">
-              Một nền tảng vận hành — OKR, sáng kiến cải tiến kỹ thuật và năng lực ET — được số hoá xuyên suốt, minh bạch theo thời gian thực.
+              Chung một niềm tin - Vươn mình phát triển
             </p>
 
             <ul className="auth-hero-features">
@@ -418,10 +418,16 @@ export function App() {
               </li>
             </ul>
 
+            <div className="auth-hero-notice">
+              <p>
+                Anh/ chị thuộc các đơn vị khác, có nhu cầu tham khảo website thì liên hệ qua email <a href="mailto:baomt@pvcfc.com.vn" className="auth-notice-link">baomt@pvcfc.com.vn</a> hoặc Zalo: <a href="https://zalo.me/0945569945" target="_blank" rel="noopener noreferrer" className="auth-notice-link">0945569945</a> để được cấp quyền truy cập.
+              </p>
+            </div>
+
             <div className="auth-hero-foot">
               <span>© {new Date().getFullYear()} PVCFC · Đội ngũ Xưởng Điều khiển</span>
               <span className="auth-hero-dot" aria-hidden="true">•</span>
-              <span>Internal use only</span>
+              <span className="auth-credits">Sản phẩm được phát triển bởi Mai Thái Bảo &amp; Lâm Phùng Phước Vinh</span>
             </div>
           </div>
 
@@ -433,7 +439,6 @@ export function App() {
                 Hệ thống nội bộ
               </span>
               <h1>Đăng nhập</h1>
-              <p>Truy cập Xưởng Điều khiển bằng tài khoản nội bộ.</p>
             </header>
 
             <div className="auth-card-body">

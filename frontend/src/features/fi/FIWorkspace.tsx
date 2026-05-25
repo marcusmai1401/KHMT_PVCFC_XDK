@@ -1276,10 +1276,9 @@ export function FIWorkspace({
     </span>
   );
 
-  const renderKhmtMetric = (considered: number | undefined, missing: number | undefined) => (
+  const renderKhmtMetric = (considered: number | undefined) => (
     <span className="metric-pair cell-khmt">
       <strong>Đã vào {formatCount(considered)}</strong>
-      <small>{formatCount(missing)} chưa vào</small>
     </span>
   );
 
@@ -2200,7 +2199,6 @@ export function FIWorkspace({
                   {dashboardTeams.map((team: any) => {
                     const teamPassed = reviewPassedCount(team);
                     const teamFailed = reviewFailedCount(team);
-                    const teamKhmtMissing = khmtMissingCount(team);
                     const teamApprovalRate = team.total ? Math.round((teamPassed / team.total) * 100) : 0;
                     return (
                       <tr key={team.team}>
@@ -2215,7 +2213,7 @@ export function FIWorkspace({
                         <td>{formatCount(teamFailed)}</td>
                         <td>{formatCount(team.deferred)}</td>
                         <td>{formatCount(team.pending)}</td>
-                        <td>{renderKhmtMetric(team.khmt_considered, teamKhmtMissing)}</td>
+                        <td>{renderKhmtMetric(team.khmt_considered)}</td>
                         <td>
                           {renderMetricPair(team.completed_count ?? team.completed, `/ ${formatCount(team.not_completed)} chưa xong`)}
                         </td>
@@ -2357,27 +2355,26 @@ export function FIWorkspace({
                     </tr>
                   </thead>
                   <tbody>
-	                    <tr>
-	                      {(() => {
-	                        const passed = reviewPassedCount(historyTeamSummary);
-	                        const failed = reviewFailedCount(historyTeamSummary);
-	                        const khmtMissing = khmtMissingCount(historyTeamSummary);
-	                        return (
+		                    <tr>
+		                      {(() => {
+		                        const passed = reviewPassedCount(historyTeamSummary);
+		                        const failed = reviewFailedCount(historyTeamSummary);
+		                        return (
 	                          <>
-		                      <td>
-		                        <strong>{historyTeamSummary.team}</strong>
-		                        <small>{formatCount(historyTeamSummary.current)} hiện hành · {formatCount(historyTeamSummary.historical)} lịch sử</small>
-		                      </td>
-		                      <td>{formatCount(historyTeamSummary.total)}</td>
-		                      <td>{renderMetricPair(passed, `(${percent(passed, historyTeamSummary.total)}%)`, "cell-approved")}</td>
-		                      <td>{formatCount(failed)}</td>
-		                      <td>{formatCount(historyTeamSummary.deferred)}</td>
-		                      <td>{formatCount(historyTeamSummary.pending)}</td>
-		                      <td>{renderKhmtMetric(historyTeamSummary.khmt_considered, khmtMissing)}</td>
-		                      <td>{renderMetricPair(historyTeamSummary.completed_count ?? historyTeamSummary.completed, `/ ${formatCount(historyTeamSummary.not_completed)} chưa xong`)}</td>
+	                            <td>
+	                              <strong>{historyTeamSummary.team}</strong>
+	                              <small>{formatCount(historyTeamSummary.current)} hiện hành · {formatCount(historyTeamSummary.historical)} lịch sử</small>
+	                            </td>
+	                            <td>{formatCount(historyTeamSummary.total)}</td>
+	                            <td>{renderMetricPair(passed, `(${percent(passed, historyTeamSummary.total)}%)`, "cell-approved")}</td>
+	                            <td>{formatCount(failed)}</td>
+	                            <td>{formatCount(historyTeamSummary.deferred)}</td>
+	                            <td>{formatCount(historyTeamSummary.pending)}</td>
+	                            <td>{renderKhmtMetric(historyTeamSummary.khmt_considered)}</td>
+	                            <td>{renderMetricPair(historyTeamSummary.completed_count ?? historyTeamSummary.completed, `/ ${formatCount(historyTeamSummary.not_completed)} chưa xong`)}</td>
 	                          </>
 	                        );
-	                      })()}
+		                      })()}
 	                    </tr>
                   </tbody>
                 </table>
@@ -2494,6 +2491,12 @@ export function FIWorkspace({
                           <section>
                             <span>Kết luận LĐX</span>
                             <p>{detail.workshop_leader_conclusion}</p>
+                          </section>
+                        )}
+                        {detail.decision_note && (
+                          <section className="legacy-review-note">
+                            <span>Ghi chú đánh giá</span>
+                            <p>{detail.decision_note}</p>
                           </section>
                         )}
                         <section className={isKhmtConsidered(detail) ? "legacy-khmt-note" : ""}>

@@ -1,6 +1,6 @@
 """reparse FI completed_at dates from completion_plan
 
-Revision ID: 0007_reparse_fi_completed_at_dates
+Revision ID: 0007_fi_completed_at_dates
 Revises: 0006_backfill_fi_completed_at
 Create Date: 2026-05-25
 """
@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision = "0007_reparse_fi_completed_at_dates"
+revision = "0007_fi_completed_at_dates"
 down_revision = "0006_backfill_fi_completed_at"
 branch_labels = None
 depends_on = None

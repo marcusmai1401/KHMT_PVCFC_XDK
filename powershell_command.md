@@ -1,6 +1,21 @@
 cd "C:\Users\Admin\Desktop\KẾ HOẠCH MỤC TIÊU\KHMT Hàng tháng"
 .\start-dev.cmd -SkipInstall
 
-Chạy lại và xóa toàn bộ data test cũ:
+Push code lên main và deploy luôn
 
-.\start-dev.cmd -SkipInstall -ResetData
+git checkout main
+git pull origin main
+git add .
+git commit -m "Mo ta thay doi"
+git push origin main
+
+
+Nếu đang làm trên branch riêng thì quy trình nên là:
+
+git checkout main
+git pull origin main
+git checkout -b feature/ten-task
+# sửa code
+git add .
+git commit -m "Mo ta thay doi"
+git push origin feature/ten-task

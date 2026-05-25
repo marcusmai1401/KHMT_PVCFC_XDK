@@ -2,7 +2,8 @@ param(
     [int]$BackendPort = 8000,
     [int]$FrontendPort = 5173,
     [switch]$SkipInstall,
-    [switch]$ResetData
+    [switch]$ResetData,
+    [switch]$SeparateWindows
 )
 
 $ErrorActionPreference = "Stop"
@@ -103,6 +104,60 @@ function Reset-DevData {
     }
 }
 
+function Receive-PrefixedJobOutput {
+    param(
+        [System.Management.Automation.Job]$Job,
+        [string]$Prefix,
+        [ConsoleColor]$Color
+    )
+    $lines = Receive-Job -Job $Job -ErrorAction SilentlyContinue
+    foreach ($line in $lines) {
+        if ($null -ne $line) {
+            Write-Host "[$Prefix] " -NoNewline -ForegroundColor $Color
+            Write-Host ($line.ToString())
+        }
+    }
+}
+
+function Receive-AllDevOutput {
+    param(
+        [System.Management.Automation.Job]$BackendJob,
+        [System.Management.Automation.Job]$FrontendJob
+    )
+    if ($BackendJob) {
+        Receive-PrefixedJobOutput -Job $BackendJob -Prefix "backend" -Color DarkCyan
+    }
+    if ($FrontendJob) {
+        Receive-PrefixedJobOutput -Job $FrontendJob -Prefix "frontend" -Color DarkMagenta
+    }
+}
+
+function Wait-ForDevServers {
+    param(
+        [System.Management.Automation.Job]$BackendJob,
+        [System.Management.Automation.Job]$FrontendJob,
+        [int]$TimeoutSeconds = 90
+    )
+    $backendReady = Test-TcpPort $BackendPort
+    $frontendReady = Test-TcpPort $FrontendPort
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline -and (-not $backendReady -or -not $frontendReady)) {
+        Receive-AllDevOutput -BackendJob $BackendJob -FrontendJob $FrontendJob
+        if (-not $backendReady) {
+            $backendReady = Wait-ForHttp "http://127.0.0.1:$BackendPort/health" 1
+        }
+        if (-not $frontendReady) {
+            $frontendReady = Wait-ForHttp $FrontendUrl 1
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    Receive-AllDevOutput -BackendJob $BackendJob -FrontendJob $FrontendJob
+    return @{
+        Backend = $backendReady
+        Frontend = $frontendReady
+    }
+}
+
 Write-Host "OKR Automation dev launcher" -ForegroundColor Green
 Write-Host "Project: $RootDir"
 
@@ -163,60 +218,130 @@ if (-not (Test-Path $BackendPython)) {
     throw "Backend Python not found. Rerun without -SkipInstall first."
 }
 
-$BackendRunning = Test-TcpPort $BackendPort
-if ($BackendRunning) {
-    Write-Step "Backend already appears to be running on port $BackendPort"
-} else {
-    Write-Step "Starting backend on http://127.0.0.1:$BackendPort"
-    $backendCmd = @"
+$npmCommand = "npm"
+if (Get-Command npm.cmd -ErrorAction SilentlyContinue) {
+    $npmCommand = (Get-Command npm.cmd).Source
+}
+
+if ($SeparateWindows) {
+    $BackendRunning = Test-TcpPort $BackendPort
+    if ($BackendRunning) {
+        Write-Step "Backend already appears to be running on port $BackendPort"
+    } else {
+        Write-Step "Starting backend on http://127.0.0.1:$BackendPort"
+        $backendCmd = @"
 `$Host.UI.RawUI.WindowTitle = 'OKR Backend :$BackendPort'
 Set-Location -LiteralPath $(Quote-PowerShellString $BackendDir)
 & $(Quote-PowerShellString $BackendPython) -m uvicorn app.main:app --reload --host 127.0.0.1 --port $BackendPort
 "@
-    Start-Process powershell.exe -ArgumentList @(
-        "-NoExit",
-        "-NoProfile",
-        "-ExecutionPolicy", "Bypass",
-        "-Command", $backendCmd
-    )
-}
-
-$FrontendRunning = Test-TcpPort $FrontendPort
-if ($FrontendRunning) {
-    Write-Step "Frontend already appears to be running on port $FrontendPort"
-} else {
-    Write-Step "Starting frontend on $FrontendUrl"
-    $npmCommand = "npm"
-    if (Get-Command npm.cmd -ErrorAction SilentlyContinue) {
-        $npmCommand = (Get-Command npm.cmd).Source
+        Start-Process powershell.exe -ArgumentList @(
+            "-NoExit",
+            "-NoProfile",
+            "-ExecutionPolicy", "Bypass",
+            "-Command", $backendCmd
+        )
     }
-    $frontendCmd = @"
+
+    $FrontendRunning = Test-TcpPort $FrontendPort
+    if ($FrontendRunning) {
+        Write-Step "Frontend already appears to be running on port $FrontendPort"
+    } else {
+        Write-Step "Starting frontend on $FrontendUrl"
+        $frontendCmd = @"
 `$Host.UI.RawUI.WindowTitle = 'OKR Frontend :$FrontendPort'
 Set-Location -LiteralPath $(Quote-PowerShellString $FrontendDir)
 & $(Quote-PowerShellString $npmCommand) run dev -- --host 0.0.0.0 --port $FrontendPort
 "@
-    Start-Process powershell.exe -ArgumentList @(
-        "-NoExit",
-        "-NoProfile",
-        "-ExecutionPolicy", "Bypass",
-        "-Command", $frontendCmd
-    )
+        Start-Process powershell.exe -ArgumentList @(
+            "-NoExit",
+            "-NoProfile",
+            "-ExecutionPolicy", "Bypass",
+            "-Command", $frontendCmd
+        )
+    }
+
+    Write-Step "Waiting for backend health"
+    if (-not (Wait-ForHttp "http://127.0.0.1:$BackendPort/health" 90)) {
+        Write-Warning "Backend did not respond in time. Check the 'OKR Backend' window."
+    }
+
+    Write-Step "Waiting for frontend"
+    if (-not (Wait-ForHttp $FrontendUrl 90)) {
+        Write-Warning "Frontend did not respond in time. Check the 'OKR Frontend' window."
+    }
+
+    Write-Step "Opening website"
+    Start-Process $FrontendUrl
+
+    Write-Host ""
+    Write-Host "Website: $FrontendUrl" -ForegroundColor Green
+    Write-Host "Demo login: admin / admin-pass" -ForegroundColor Green
+    Write-Host "Close the 'OKR Backend' and 'OKR Frontend' windows to stop the servers."
+    return
 }
 
-Write-Step "Waiting for backend health"
-if (-not (Wait-ForHttp "http://127.0.0.1:$BackendPort/health" 90)) {
-    Write-Warning "Backend did not respond in time. Check the 'OKR Backend' window."
+$BackendJob = $null
+$FrontendJob = $null
+
+try {
+    $BackendRunning = Test-TcpPort $BackendPort
+    if ($BackendRunning) {
+        Write-Step "Backend already appears to be running on port $BackendPort"
+    } else {
+        Write-Step "Starting backend on http://127.0.0.1:$BackendPort in this terminal"
+        $BackendJob = Start-Job -Name "OKR Backend" -ScriptBlock {
+            param($WorkingDir, $PythonExe, $Port)
+            Set-Location -LiteralPath $WorkingDir
+            & $PythonExe -m uvicorn app.main:app --reload --host 127.0.0.1 --port $Port 2>&1
+        } -ArgumentList $BackendDir, $BackendPython, $BackendPort
+    }
+
+    $FrontendRunning = Test-TcpPort $FrontendPort
+    if ($FrontendRunning) {
+        Write-Step "Frontend already appears to be running on port $FrontendPort"
+    } else {
+        Write-Step "Starting frontend on $FrontendUrl in this terminal"
+        $FrontendJob = Start-Job -Name "OKR Frontend" -ScriptBlock {
+            param($WorkingDir, $NpmExe, $Port)
+            Set-Location -LiteralPath $WorkingDir
+            & $NpmExe run dev -- --host 0.0.0.0 --port $Port 2>&1
+        } -ArgumentList $FrontendDir, $npmCommand, $FrontendPort
+    }
+
+    Write-Step "Waiting for dev servers"
+    $ready = Wait-ForDevServers -BackendJob $BackendJob -FrontendJob $FrontendJob -TimeoutSeconds 90
+    if (-not $ready.Backend) {
+        Write-Warning "Backend did not respond in time."
+    }
+    if (-not $ready.Frontend) {
+        Write-Warning "Frontend did not respond in time."
+    }
+
+    Write-Step "Opening website"
+    Start-Process $FrontendUrl
+
+    Write-Host ""
+    Write-Host "Website: $FrontendUrl" -ForegroundColor Green
+    Write-Host "Demo login: admin / admin-pass" -ForegroundColor Green
+    Write-Host "Logs are streaming in this terminal. Press Ctrl+C to stop servers." -ForegroundColor Yellow
+    Write-Host ""
+
+    while ($true) {
+        Receive-AllDevOutput -BackendJob $BackendJob -FrontendJob $FrontendJob
+        $runningJobs = @($BackendJob, $FrontendJob) | Where-Object { $null -ne $_ -and $_.State -eq "Running" }
+        if ($runningJobs.Count -eq 0) {
+            break
+        }
+        Start-Sleep -Milliseconds 500
+    }
+
+    Receive-AllDevOutput -BackendJob $BackendJob -FrontendJob $FrontendJob
+} finally {
+    Write-Step "Stopping dev servers"
+    foreach ($job in @($BackendJob, $FrontendJob)) {
+        if ($null -ne $job) {
+            Stop-Job -Job $job -ErrorAction SilentlyContinue
+            Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+        }
+    }
 }
-
-Write-Step "Waiting for frontend"
-if (-not (Wait-ForHttp $FrontendUrl 90)) {
-    Write-Warning "Frontend did not respond in time. Check the 'OKR Frontend' window."
-}
-
-Write-Step "Opening website"
-Start-Process $FrontendUrl
-
-Write-Host ""
-Write-Host "Website: $FrontendUrl" -ForegroundColor Green
-Write-Host "Demo login: admin / admin-pass" -ForegroundColor Green
-Write-Host "Close the 'OKR Backend' and 'OKR Frontend' windows to stop the servers."

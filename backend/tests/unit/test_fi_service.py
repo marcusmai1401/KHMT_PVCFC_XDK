@@ -15,19 +15,38 @@ from app.models.domain import NotificationModel, SKCTKTModel
 from sqlalchemy import select
 
 
-def test_sk_code_unique_per_team_year(db_session):
+def test_sk_code_unique_per_team_month(db_session):
     payload = {
         "author_name": "A",
         "team": "TBCH",
         "title": "Title",
         "content_description": "Content",
         "completion_plan": "T6/2026",
-        "year": 2026,
+        "registration_year": 2026,
+        "registration_month": 5,
     }
     one = create_sk_ctkt(db_session, payload, "u1")
     two = create_sk_ctkt(db_session, payload, "u1")
-    assert one.sk_code == "FI-2026-TBCH-0001"
-    assert two.sk_code == "FI-2026-TBCH-0002"
+    assert one.sk_code == "FI/05/2026-TBCH-01"
+    assert two.sk_code == "FI/05/2026-TBCH-02"
+
+
+def test_sk_code_sequence_resets_per_month_and_team(db_session):
+    base = {
+        "author_name": "A",
+        "title": "Title",
+        "content_description": "Content",
+        "completion_plan": "T6/2026",
+        "registration_year": 2026,
+    }
+    may_tbch_1 = create_sk_ctkt(db_session, {**base, "team": "TBCH", "registration_month": 5}, "u1")
+    may_tbch_2 = create_sk_ctkt(db_session, {**base, "team": "TBCH", "registration_month": 5}, "u1")
+    jun_tbch_1 = create_sk_ctkt(db_session, {**base, "team": "TBCH", "registration_month": 6}, "u1")
+    may_tbdl_1 = create_sk_ctkt(db_session, {**base, "team": "TBĐL", "registration_month": 5}, "u1")
+    assert may_tbch_1.sk_code == "FI/05/2026-TBCH-01"
+    assert may_tbch_2.sk_code == "FI/05/2026-TBCH-02"
+    assert jun_tbch_1.sk_code == "FI/06/2026-TBCH-01"
+    assert may_tbdl_1.sk_code == "FI/05/2026-TBĐL-01"
 
 
 def test_create_sk_stores_registration_period_in_history(db_session):
@@ -45,7 +64,7 @@ def test_create_sk_stores_registration_period_in_history(db_session):
         "TBCH",
     )
     history = record.status_history[0]
-    assert record.sk_code == "FI-2026-TBCH-0001"
+    assert record.sk_code == "FI/06/2026-TBCH-01"
     assert history["to_status"] == "Draft"
     assert history["comments"]["registration_month"] == 6
     assert history["comments"]["registration_year"] == 2026
@@ -578,6 +597,34 @@ def test_fi_coordinator_can_review_others_sk_and_revise_decision(db_session):
     )
     assert revised.status == "Deferred"
     assert revised.decision_note == "Cần xem lại"
+
+
+def test_submit_notifies_fi_coordinator_and_admin(db_session):
+    """Khi tác giả submit SK, cả FI_Coordinator lẫn Admin đều nhận noti SK_SUBMITTED."""
+    record = create_sk_ctkt(
+        db_session,
+        {
+            "author_name": "Mai Thái Bảo",
+            "team": "TBCH",
+            "title": "SK chờ duyệt",
+            "content_description": "Nội dung",
+            "completion_plan": "T6/2026",
+            "registration_year": 2026,
+            "registration_month": 5,
+        },
+        "baomt",
+    )
+    db_session.execute(NotificationModel.__table__.delete())
+    db_session.commit()
+
+    transition_sk_ctkt(db_session, record.id, "submit", "baomt", "Team_Account")
+
+    notifications = db_session.execute(
+        select(NotificationModel).where(NotificationModel.event == "SK_SUBMITTED")
+    ).scalars().all()
+    recipient_roles = {n.recipient_role for n in notifications}
+    assert "FI_Coordinator" in recipient_roles
+    assert "Admin" in recipient_roles
 
 
 def test_author_edit_after_submit_notifies_reviewers(db_session):

@@ -7048,9 +7048,18 @@ pre {
   white-space: nowrap;
 }
 
+.auth-hero-factory {
+  color: #93c5fd;
+  font-size: clamp(14px, 1.5vw, 17px);
+  font-weight: 600;
+  margin-top: 4px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
 .auth-hero-tagline {
   color: #94a3b8;
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 500;
   margin-top: 2px;
 }
@@ -7120,35 +7129,59 @@ pre {
 
 .auth-hero-foot {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  color: #64748b;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0;
+}
+
+.auth-hero-copyright {
+  color: #475569;
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.02em;
-  margin: 0;
 }
 
-.auth-hero-dot {
+.auth-credits {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #cbd5e1;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(14, 165, 233, 0.04) 100%);
+  border: 1.5px solid rgba(59, 130, 246, 0.2);
+  padding: 6px 14px;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+  transition: all 0.25s ease;
+}
+
+.auth-credits:hover {
+  transform: translateY(-1px);
+  border-color: rgba(96, 165, 250, 0.4);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.2);
+}
+
+.auth-credits-icon {
+  color: #60a5fa;
+  flex-shrink: 0;
+}
+
+.auth-external-notice {
   color: #475569;
-  font-size: 10px;
-}
-
-.auth-hero-notice {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px dashed rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 14px 18px;
-  margin-top: 4px;
-  margin-bottom: 4px;
-}
-
-.auth-hero-notice p {
-  margin: 0;
-  color: #94a3b8;
-  font-size: 13.5px;
+  font-size: 11px;
   line-height: 1.6;
+  max-width: 58ch;
+  margin: 10px 0 0 0;
+  opacity: 0.55;
+  transition: opacity 0.25s ease, color 0.25s ease;
+}
+
+.auth-external-notice:hover {
+  opacity: 0.9;
+  color: #94a3b8;
 }
 
 .auth-notice-link {
@@ -7162,12 +7195,6 @@ pre {
 .auth-notice-link:hover {
   color: #93c5fd;
   border-bottom-color: #93c5fd;
-}
-
-.auth-credits {
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 500;
 }
 
 /* Card */

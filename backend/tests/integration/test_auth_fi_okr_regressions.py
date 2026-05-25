@@ -97,7 +97,8 @@ def test_team_account_create_is_locked_to_own_team(client):
     assert created.json()["team"] == "TBCH"
     assert created.json()["author_user_id"] == "TBCH"
     assert created.json()["author_name"] == "TBCH"
-    assert created.json()["sk_code"].startswith("FI-2026-TBCH-")
+    assert created.json()["sk_code"].startswith("FI/")
+    assert "-TBCH-" in created.json()["sk_code"]
 
 
 def test_fi_team_draft_is_private_until_submitted(client, admin_headers):

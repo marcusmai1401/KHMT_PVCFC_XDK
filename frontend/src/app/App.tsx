@@ -384,8 +384,8 @@ export function App() {
                 <img src="/logo.webp" alt="PVCFC" />
               </div>
               <div className="auth-hero-name">
-                <span className="auth-hero-eyebrow">PVCFC · Petrovietnam</span>
                 <strong>Tổng Công Ty Phân Bón Dầu Khí Cà Mau</strong>
+                <span className="auth-hero-factory">Nhà máy Đạm Cà Mau</span>
                 <span className="auth-hero-tagline">Xưởng Điều khiển</span>
               </div>
             </div>
@@ -418,16 +418,17 @@ export function App() {
               </li>
             </ul>
 
-            <div className="auth-hero-notice">
-              <p>
+            <div className="auth-hero-foot">
+              <div className="auth-hero-copyright">
+                © {new Date().getFullYear()} PVCFC · Đội ngũ Xưởng Điều khiển
+              </div>
+              <div className="auth-credits">
+                <ShieldCheck size={12} className="auth-credits-icon" />
+                Sản phẩm được phát triển bởi Mai Thái Bảo &amp; Lâm Phùng Phước Vinh
+              </div>
+              <p className="auth-external-notice">
                 Anh/ chị thuộc các đơn vị khác, có nhu cầu tham khảo website thì liên hệ qua email <a href="mailto:baomt@pvcfc.com.vn" className="auth-notice-link">baomt@pvcfc.com.vn</a> hoặc Zalo: <a href="https://zalo.me/0945569945" target="_blank" rel="noopener noreferrer" className="auth-notice-link">0945569945</a> để được cấp quyền truy cập.
               </p>
-            </div>
-
-            <div className="auth-hero-foot">
-              <span>© {new Date().getFullYear()} PVCFC · Đội ngũ Xưởng Điều khiển</span>
-              <span className="auth-hero-dot" aria-hidden="true">•</span>
-              <span className="auth-credits">Sản phẩm được phát triển bởi Mai Thái Bảo &amp; Lâm Phùng Phước Vinh</span>
             </div>
           </div>
 
@@ -520,9 +521,9 @@ export function App() {
 
             <footer className="auth-card-foot">
               <p className="auth-help">
-                Quên mật khẩu? Vui lòng liên hệ{" "}
-                <a href="mailto:baomt@pvcfc.com.vn" className="auth-help-link">
-                  baomt@pvcfc.com.vn
+                Quên mật khẩu? Vui lòng liên hệ Zalo:{" "}
+                <a href="https://zalo.me/0945569945" target="_blank" rel="noopener noreferrer" className="auth-help-link">
+                  0945569945
                 </a>
               </p>
             </footer>

@@ -52,8 +52,15 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def generate_sk_code(db: Session, team: str, year: int) -> str:
-    prefix = f"FI-{year}-{team}"
+def generate_sk_code(db: Session, team: str, year: int, month: int) -> str:
+    """Sinh mã SK-CTKT theo format FI/MM/YYYY-TEAM-NN.
+
+    Sequence được reset mỗi tháng cho từng team — ví dụ:
+      * TBĐL tháng 5/2026: FI/05/2026-TBĐL-01, -02, -03 ...
+      * TBĐL tháng 6/2026: lại quay về -01
+      * TBCH tháng 5/2026: -01 (độc lập với TBĐL)
+    """
+    prefix = f"FI/{month:02d}/{year}-{team}"
     sequence = db.get(SKCodeSequenceModel, prefix)
     if sequence is None:
         sequence = SKCodeSequenceModel(prefix=prefix, next_value=1)
@@ -61,7 +68,7 @@ def generate_sk_code(db: Session, team: str, year: int) -> str:
         db.flush()
     value = sequence.next_value
     sequence.next_value += 1
-    return f"{prefix}-{value:04d}"
+    return f"{prefix}-{value:02d}"
 
 
 def _int_or_default(value: Any, default: int) -> int:
@@ -104,7 +111,7 @@ def create_sk_ctkt(db: Session, payload: dict[str, Any], actor: str) -> SKCTKTMo
     completed_at = _completed_at_from_payload(payload, fallback=now)
     record = SKCTKTModel(
         id=make_id("sk"),
-        sk_code=generate_sk_code(db, team, year),
+        sk_code=generate_sk_code(db, team, registration_year, registration_month),
         title=payload["title"],
         author_name=payload["author_name"],
         author_user_id=payload.get("author_user_id") or actor,
@@ -315,6 +322,7 @@ def _notify_transition(db: Session, record: SKCTKTModel, record_id: str) -> None
     payload = {"id": record_id, "status": record.status, "sk_code": record.sk_code}
     if record.status == SKStatus.SUBMITTED.value:
         notify(db, "SK_SUBMITTED", payload, recipient_role=Role.FI_COORDINATOR.value)
+        notify(db, "SK_SUBMITTED", payload, recipient_role=Role.ADMIN.value)
     elif record.status == SKStatus.NEED_MORE_INFO.value:
         notify(db, "SK_NEED_MORE_INFO", payload, recipient_user_id=record.author_user_id)
     elif record.status == SKStatus.REVIEWED.value:

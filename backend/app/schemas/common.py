@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -34,6 +35,8 @@ class SKCreate(BaseModel):
     title: str
     content_description: str
     completion_plan: str
+    completion_done: bool | None = None
+    completion_date: date | None = None
     registration_month: int | None = Field(default=None, ge=1, le=12)
     registration_year: int | None = Field(default=None, ge=2020, le=2100)
     author_user_id: str | None = None
@@ -46,6 +49,8 @@ class SKUpdate(BaseModel):
     title: str | None = None
     content_description: str | None = None
     completion_plan: str | None = None
+    completion_done: bool | None = None
+    completion_date: date | None = None
 
 
 class TransitionRequest(BaseModel):

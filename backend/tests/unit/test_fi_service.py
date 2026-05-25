@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 
 from app.services.fi.service import (
@@ -48,6 +50,53 @@ def test_create_sk_stores_registration_period_in_history(db_session):
     assert history["comments"]["registration_month"] == 6
     assert history["comments"]["registration_year"] == 2026
     assert history["comments"]["source"] == "web"
+
+
+def test_create_sk_can_mark_actual_completion_without_review_status(db_session):
+    record = create_sk_ctkt(
+        db_session,
+        {
+            "author_name": "A",
+            "team": "TBCH",
+            "title": "Already done",
+            "content_description": "Content",
+            "completion_plan": "Đã hoàn thành 10/05/2026",
+            "completion_done": True,
+            "completion_date": date(2026, 5, 10),
+            "registration_month": 5,
+            "registration_year": 2026,
+        },
+        "u1",
+    )
+
+    assert record.status == "Draft"
+    assert record.completed_at is not None
+    payload = fi_dashboard(db_session, {"user_id": "admin", "role": "Admin"})
+    assert payload["totals"]["completed_count"] == 1
+    assert payload["totals"]["not_completed"] == 0
+
+
+def test_create_sk_keeps_future_completion_plan_not_completed(db_session):
+    record = create_sk_ctkt(
+        db_session,
+        {
+            "author_name": "A",
+            "team": "TBCH",
+            "title": "Future plan",
+            "content_description": "Content",
+            "completion_plan": "Dự kiến hoàn thành 10/06/2026",
+            "completion_done": False,
+            "completion_date": date(2026, 6, 10),
+            "registration_month": 5,
+            "registration_year": 2026,
+        },
+        "u1",
+    )
+
+    assert record.completed_at is None
+    payload = fi_dashboard(db_session, {"user_id": "admin", "role": "Admin"})
+    assert payload["totals"]["completed_count"] == 0
+    assert payload["totals"]["not_completed"] == 1
 
 
 def test_khmt_count_only_approved_with_month_year(db_session):
@@ -302,6 +351,35 @@ def test_fi_dashboard_tracks_review_failed_separately(db_session):
     assert payload["totals"]["review_failed"] == 1
     assert team["review_failed"] == 1
     assert payload["totals"]["khmt_not_considered"] == 0
+
+
+def test_fi_dashboard_counts_legacy_completion_plan_as_done(db_session):
+    record = SKCTKTModel(
+        id="sk-legacy-completed-plan",
+        sk_code="HIST-TBĐL-TBĐ-06",
+        title="Legacy done",
+        author_name="A",
+        author_user_id="historical-import",
+        team="TBĐL",
+        content_description="Content",
+        completion_plan="Đã triển khai BDTT 2025",
+        status="Approved",
+        status_history=[],
+        is_public=True,
+        is_counted_for_okr=False,
+        is_historical_import=True,
+    )
+    db_session.add(record)
+    db_session.commit()
+
+    payload = fi_dashboard(db_session, {"user_id": "admin", "role": "Admin"})
+    team = next(item for item in payload["teams"] if item["team"] == "TBĐL")
+
+    assert payload["totals"]["approved"] == 1
+    assert payload["totals"]["status_counts"]["Completed"] == 0
+    assert payload["totals"]["completed_count"] == 1
+    assert payload["totals"]["not_completed"] == 0
+    assert team["completed_count"] == 1
 
 
 def test_only_author_can_edit_new_sk_content(db_session):

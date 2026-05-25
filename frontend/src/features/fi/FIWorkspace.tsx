@@ -111,23 +111,59 @@ function reviewDecisionRequiresNote(value: ReviewDecision) {
   return value === "defer" || value === "reject";
 }
 
-function parseCompletionPlan(value: string | null | undefined): { month: number; year: number } | null {
+function isoDateInput(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addMonths(date: Date, months: number) {
+  const copy = new Date(date);
+  copy.setMonth(copy.getMonth() + months);
+  return copy;
+}
+
+function parseCompletionPlan(value: string | null | undefined, completedAt?: string | null): { date: string; done: boolean } | null {
+  if (completedAt) {
+    const parsed = new Date(completedAt);
+    if (!Number.isNaN(parsed.getTime())) return { date: isoDateInput(parsed), done: true };
+  }
   if (!value) return null;
   const trimmed = String(value).trim();
-  // Hỗ trợ các dạng: "T6/2026", "06/2026", "6-2026", "T6 / 2026"
-  const match = trimmed.match(/^T?\s*(\d{1,2})\s*[/-]\s*(\d{4})$/i);
-  if (match) {
-    const month = Number(match[1]);
-    const year = Number(match[2]);
+  const done = /(^|\s)(đã\s+hoàn\s+thành|đã\s+thực\s+hiện|đã\s+triển\s+khai|hoàn\s+thành)(\s|$)/i.test(trimmed) &&
+    !/(chưa\s+thực\s+hiện|chưa\s+hoàn\s+thành|dự\s+kiến)/i.test(trimmed);
+  const dateMatch = trimmed.match(/\b(\d{1,2})\s*[./-]\s*(\d{1,2})\s*[./-]\s*(20\d{2})\b/);
+  if (dateMatch) {
+    const day = Number(dateMatch[1]);
+    const month = Number(dateMatch[2]);
+    const year = Number(dateMatch[3]);
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day) {
+      return { date: isoDateInput(date), done };
+    }
+  }
+  // Hỗ trợ các dạng: "T6/2026", "06/2026", "6-2026", "T6 / 2026", và text có kèm tháng/năm.
+  const monthMatch = trimmed.match(/(?:T|tháng)?\s*(\d{1,2})\s*[./-]\s*(20\d{2})/i);
+  if (monthMatch) {
+    const month = Number(monthMatch[1]);
+    const year = Number(monthMatch[2]);
     if (month >= 1 && month <= 12 && year >= 2020 && year <= 2100) {
-      return { month, year };
+      return { date: isoDateInput(new Date(year, month - 1, 1)), done };
     }
   }
   return null;
 }
 
-function formatCompletionPlan(month: number, year: number): string {
-  return `T${month}/${year}`;
+function formatDateForPlan(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-");
+  if (!year || !month || !day) return isoDate;
+  return `${day}/${month}/${year}`;
+}
+
+function formatCompletionPlan(done: boolean, isoDate: string): string {
+  const dateText = formatDateForPlan(isoDate);
+  return done ? `Đã hoàn thành ${dateText}` : `Dự kiến hoàn thành ${dateText}`;
 }
 
 function registrationInfo(item: any) {
@@ -802,9 +838,8 @@ export function FIWorkspace({
       team: defaultFormTeam,
       title: "",
       content_description: "",
-      // Mặc định kế hoạch hoàn thành = tháng đăng ký + 1 tháng (cùng năm); user có thể đổi.
-      completion_plan_month: ((today.getMonth() + 1) % 12) + 1,
-      completion_plan_year: today.getMonth() === 11 ? today.getFullYear() + 1 : today.getFullYear(),
+      completion_done: false,
+      completion_plan_date: isoDateInput(addMonths(today, 1)),
       registration_month: today.getMonth() + 1,
       registration_year: today.getFullYear(),
     };
@@ -816,8 +851,8 @@ export function FIWorkspace({
   const [editForm, setEditForm] = useState({
     title: "",
     content_description: "",
-    completion_plan_month: 1,
-    completion_plan_year: 2026,
+    completion_done: false,
+    completion_plan_date: isoDateInput(addMonths(new Date(), 1)),
     completion_plan_raw: "" as string,
   });
   const [savingEdit, setSavingEdit] = useState(false);
@@ -882,20 +917,23 @@ export function FIWorkspace({
     if (!team?.trim()) missing.push("Đội/tổ trên tài khoản");
     if (!form.title.trim()) missing.push("Tên SK-CTKT");
     if (!form.content_description.trim()) missing.push("Nội dung đăng ký");
+    if (!form.completion_plan_date) {
+      missing.push(form.completion_done ? "Ngày hoàn thành" : "Ngày dự kiến hoàn thành");
+    }
     if (missing.length > 0) {
       setError(`Vui lòng nhập: ${missing.join(", ")}.`);
       setNotice("");
       return;
     }
-    // Build payload: gửi backend dạng string "T6/2026" để đồng nhất với dữ liệu cũ
-    // (cột completion_plan vẫn là free text).
-    const completionPlan = formatCompletionPlan(form.completion_plan_month, form.completion_plan_year);
+    const completionPlan = formatCompletionPlan(form.completion_done, form.completion_plan_date);
     const basePayload = {
       author_name: form.author_name,
       team: form.team,
       title: form.title,
       content_description: form.content_description,
       completion_plan: completionPlan,
+      completion_done: form.completion_done,
+      completion_date: form.completion_plan_date,
       registration_month: form.registration_month,
       registration_year: form.registration_year,
     };
@@ -927,8 +965,8 @@ export function FIWorkspace({
           team: AUTHOR_ROLES.includes(role) ? team ?? current.team : current.team,
           title: "",
           content_description: "",
-          completion_plan_month: ((today.getMonth() + 1) % 12) + 1,
-          completion_plan_year: today.getMonth() === 11 ? today.getFullYear() + 1 : today.getFullYear(),
+          completion_done: false,
+          completion_plan_date: isoDateInput(addMonths(today, 1)),
         }));
       }
     } catch (err: any) {
@@ -1005,13 +1043,13 @@ export function FIWorkspace({
     setKhmtTarget(null);
     setEditTarget(item);
     const raw = item.completion_plan || "";
-    const parsed = parseCompletionPlan(raw);
+    const parsed = parseCompletionPlan(raw, item.completed_at);
     const today = new Date();
     setEditForm({
       title: item.title || "",
       content_description: item.content_description || "",
-      completion_plan_month: parsed?.month ?? today.getMonth() + 1,
-      completion_plan_year: parsed?.year ?? today.getFullYear(),
+      completion_done: parsed?.done ?? Boolean(item.completed_at),
+      completion_plan_date: parsed?.date ?? isoDateInput(addMonths(today, 1)),
       completion_plan_raw: raw,
     });
     setError("");
@@ -1055,7 +1093,9 @@ export function FIWorkspace({
     try {
       const updated = await api.updateSk(editTarget.id, {
         content_description: editForm.content_description,
-        completion_plan: formatCompletionPlan(editForm.completion_plan_month, editForm.completion_plan_year),
+        completion_plan: formatCompletionPlan(editForm.completion_done, editForm.completion_plan_date),
+        completion_done: editForm.completion_done,
+        completion_date: editForm.completion_plan_date,
         title: editForm.title,
       });
       setNotice(
@@ -1279,6 +1319,12 @@ export function FIWorkspace({
   const renderKhmtMetric = (considered: number | undefined) => (
     <span className="metric-pair cell-khmt">
       <strong>Đã vào {formatCount(considered)}</strong>
+    </span>
+  );
+
+  const renderKhmtMissing = (missing: number | undefined) => (
+    <span className="metric-pair cell-khmt-missing">
+      <strong>{formatCount(missing)}</strong>
     </span>
   );
 
@@ -1511,32 +1557,26 @@ export function FIWorkspace({
                 onChange={(e) => setEditForm({ ...editForm, content_description: e.target.value })}
                 rows={9}
               />
-              <label htmlFor="fi-edit-plan-month">Kế hoạch hoàn thành</label>
-              <div className="period-selector fi-registration-period">
-                <select
-                  id="fi-edit-plan-month"
-                  value={editForm.completion_plan_month}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, completion_plan_month: Number(e.target.value) })
-                  }
-                  aria-label="Tháng hoàn thành"
-                >
-                  {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
-                    <option key={month} value={month}>T{month}</option>
-                  ))}
-                </select>
+              <div className="fi-completion-row">
+                <span className="fi-completion-title">Kế hoạch hoàn thành</span>
+                <label className="fi-check-option" htmlFor="fi-edit-completion-done">
+                  <input
+                    id="fi-edit-completion-done"
+                    type="checkbox"
+                    checked={editForm.completion_done}
+                    onChange={(e) => setEditForm({ ...editForm, completion_done: e.target.checked })}
+                  />
+                  Đã hoàn thành
+                </label>
+                <label htmlFor="fi-edit-plan-date">
+                  {editForm.completion_done ? "Ngày hoàn thành" : "Ngày dự kiến hoàn thành"}
+                </label>
                 <input
-                  aria-label="Năm hoàn thành"
-                  max={2100}
-                  min={2020}
-                  type="number"
-                  value={editForm.completion_plan_year}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      completion_plan_year: Number(e.target.value) || new Date().getFullYear(),
-                    })
-                  }
+                  id="fi-edit-plan-date"
+                  required
+                  type="date"
+                  value={editForm.completion_plan_date}
+                  onChange={(e) => setEditForm({ ...editForm, completion_plan_date: e.target.value })}
                 />
               </div>
               {editForm.completion_plan_raw &&
@@ -1674,30 +1714,26 @@ export function FIWorkspace({
               value={form.content_description}
               onChange={(e) => setForm({ ...form, content_description: e.target.value })}
             />
-            <label htmlFor="fi-plan-month">Kế hoạch hoàn thành</label>
-            <div className="period-selector fi-registration-period">
-              <select
-                id="fi-plan-month"
-                value={form.completion_plan_month}
-                onChange={(e) => setForm({ ...form, completion_plan_month: Number(e.target.value) })}
-                aria-label="Tháng hoàn thành"
-              >
-                {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
-                  <option key={month} value={month}>T{month}</option>
-                ))}
-              </select>
+            <div className="fi-completion-row">
+              <span className="fi-completion-title">Kế hoạch hoàn thành</span>
+              <label className="fi-check-option" htmlFor="fi-completion-done">
+                <input
+                  id="fi-completion-done"
+                  type="checkbox"
+                  checked={form.completion_done}
+                  onChange={(e) => setForm({ ...form, completion_done: e.target.checked })}
+                />
+                Đã hoàn thành
+              </label>
+              <label htmlFor="fi-plan-date">
+                {form.completion_done ? "Ngày hoàn thành" : "Ngày dự kiến hoàn thành"} <span style={{ color: "#dc2626" }}>*</span>
+              </label>
               <input
-                aria-label="Năm hoàn thành"
-                max={2100}
-                min={2020}
-                type="number"
-                value={form.completion_plan_year}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    completion_plan_year: Number(e.target.value) || new Date().getFullYear(),
-                  })
-                }
+                id="fi-plan-date"
+                required
+                type="date"
+                value={form.completion_plan_date}
+                onChange={(e) => setForm({ ...form, completion_plan_date: e.target.value })}
               />
             </div>
             <label>
@@ -2191,7 +2227,8 @@ export function FIWorkspace({
                     <th>Đã xét không đạt</th>
                     <th>Xem xét sau</th>
                     <th>Chưa duyệt</th>
-                    <th>KHMT</th>
+                    <th>Đã vào KHMT</th>
+                    <th>Chưa vào KHMT</th>
                     <th>Hoàn thành</th>
                   </tr>
                 </thead>
@@ -2214,6 +2251,7 @@ export function FIWorkspace({
                         <td>{formatCount(team.deferred)}</td>
                         <td>{formatCount(team.pending)}</td>
                         <td>{renderKhmtMetric(team.khmt_considered)}</td>
+                        <td>{renderKhmtMissing(khmtMissingCount(team))}</td>
                         <td>
                           {renderMetricPair(team.completed_count ?? team.completed, `/ ${formatCount(team.not_completed)} chưa xong`)}
                         </td>
@@ -2222,7 +2260,7 @@ export function FIWorkspace({
                   })}
                   {dashboardTeams.length === 0 && (
                     <tr>
-                      <td colSpan={8}>Chưa có dữ liệu FI.</td>
+                      <td colSpan={9}>Chưa có dữ liệu FI.</td>
                     </tr>
                   )}
                 </tbody>
@@ -2350,7 +2388,8 @@ export function FIWorkspace({
 	                      <th>Đã xét không đạt</th>
 	                      <th>Xem xét sau</th>
 	                      <th>Chưa duyệt</th>
-	                      <th>KHMT</th>
+	                      <th>Đã vào KHMT</th>
+	                      <th>Chưa vào KHMT</th>
                       <th>Hoàn thành</th>
                     </tr>
                   </thead>
@@ -2371,6 +2410,7 @@ export function FIWorkspace({
 	                            <td>{formatCount(historyTeamSummary.deferred)}</td>
 	                            <td>{formatCount(historyTeamSummary.pending)}</td>
 	                            <td>{renderKhmtMetric(historyTeamSummary.khmt_considered)}</td>
+	                            <td>{renderKhmtMissing(khmtMissingCount(historyTeamSummary))}</td>
 	                            <td>{renderMetricPair(historyTeamSummary.completed_count ?? historyTeamSummary.completed, `/ ${formatCount(historyTeamSummary.not_completed)} chưa xong`)}</td>
 	                          </>
 	                        );

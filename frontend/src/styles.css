@@ -2827,6 +2827,52 @@ th {
   white-space: nowrap;
 }
 
+.fi-completion-row {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #dbe4ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px 12px;
+  grid-template-columns: max-content max-content minmax(180px, 1fr) 180px;
+  padding: 10px;
+}
+
+.fi-completion-title {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.fi-completion-row > label:not(.fi-check-option) {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.fi-check-option {
+  align-items: center;
+  color: #0f172a;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 8px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.fi-check-option input {
+  flex: 0 0 auto;
+  min-height: auto;
+  width: 16px;
+}
+
+.fi-completion-row input[type="date"] {
+  min-width: 170px;
+}
+
 .fi-dashboard-shell {
   display: grid;
   gap: 16px;
@@ -2934,7 +2980,7 @@ th {
 
 .fi-dashboard-table {
   border-collapse: collapse;
-  min-width: 760px;
+  min-width: 860px;
   width: 100%;
 }
 
@@ -2957,7 +3003,7 @@ th {
 }
 
 .fi-dashboard-table.compact {
-  min-width: 680px;
+  min-width: 780px;
 }
 
 .fi-dashboard-table .metric-pair {
@@ -3272,6 +3318,7 @@ th {
 /* Table emphasised cells */
 .fi-dashboard-table td .cell-approved { color: #16a34a; }
 .fi-dashboard-table td .cell-khmt { color: #2563eb; }
+.fi-dashboard-table td .cell-khmt-missing { color: #d97706; }
 
 /* Legacy evidence (history detail) */
 .legacy-evidence {
@@ -4543,6 +4590,14 @@ th {
 
   .fi-registration-period label {
     grid-column: 1 / -1;
+  }
+
+  .fi-completion-row {
+    grid-template-columns: 1fr;
+  }
+
+  .fi-completion-row input[type="date"] {
+    min-width: 0;
   }
 
   .image-viewer-backdrop {

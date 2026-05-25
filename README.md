@@ -181,6 +181,106 @@ KHMT Hàng tháng/
 
 ---
 
+## Quy trình làm việc và tự động deploy
+
+Repo này đã cấu hình GitHub Actions để tự động kiểm tra và deploy production.
+
+### Nguyên tắc nhánh
+
+- `main` là nhánh production. Code đã merge vào `main` sẽ được deploy lên VPS production sau khi CI pass.
+- Không làm việc trực tiếp trên `main` nếu là thay đổi có rủi ro.
+- Mỗi task nên tạo branch riêng từ `main`, ví dụ:
+  - `feature/fi-dashboard`
+  - `fix/khmt-display`
+  - `hotfix/login-error`
+
+### Quy trình chuẩn cho team
+
+```
+git checkout main
+git pull origin main
+git checkout -b feature/ten-task
+        ↓
+code + test local
+        ↓
+git push origin feature/ten-task
+        ↓
+tạo Pull Request vào main
+        ↓
+GitHub Actions chạy Frontend CI + Backend CI
+        ↓
+review code, sửa nếu cần
+        ↓
+merge Pull Request vào main
+        ↓
+GitHub Actions chạy CI lại và Deploy Production
+        ↓
+kiểm tra production
+```
+
+### GitHub Actions đang làm gì?
+
+Workflow chính nằm ở `.github/workflows/deploy-production.yml`.
+
+Khi tạo Pull Request vào `main`:
+
+- Chạy test frontend.
+- Build frontend.
+- Chạy test backend.
+- Không deploy production.
+
+Khi push hoặc merge vào `main`:
+
+- Chạy test frontend.
+- Build frontend.
+- Chạy test backend.
+- Nếu tất cả pass, tự động deploy lên VPS.
+
+Production hiện chạy tại:
+
+```text
+http://103.200.20.225/
+```
+
+Health check:
+
+```text
+http://103.200.20.225/health
+```
+
+### Khi nào cần deploy thủ công?
+
+Thông thường không cần deploy thủ công nữa. Nếu cần chạy lại deploy cho cùng một commit:
+
+1. Vào GitHub repo.
+2. Mở tab `Actions`.
+3. Chọn workflow `CI and Production Deploy`.
+4. Bấm `Run workflow`.
+
+Các tùy chọn thủ công:
+
+- `import_bm01`: mặc định tắt, chỉ bật khi muốn import lại dữ liệu BM01 legacy.
+- `reset_user_passwords`: mặc định tắt, chỉ bật khi thật sự muốn reset password các user seed.
+
+### GitHub Secrets production
+
+Deploy dùng GitHub Environment `production` và các secret sau:
+
+| Secret | Ý nghĩa |
+|--------|---------|
+| `VPS_HOST` | IP VPS production |
+| `VPS_PORT` | Port SSH |
+| `VPS_USER` | User SSH |
+| `VPS_PASSWORD` | Password SSH |
+| `VPS_REMOTE_DIR` | Thư mục deploy trên VPS, hiện là `/opt/okr-system` |
+| `VPS_HOST_KEY` | Khuyến nghị, dùng xác thực SSH host key |
+
+Không commit password, `.env.production`, private key hoặc thông tin nhạy cảm vào repo.
+
+Chi tiết thêm: `docs/GITHUB_ACTIONS_DEPLOY.md`.
+
+---
+
 ## Dữ liệu tự động nạp khi khởi động lần đầu
 
 - **37 KR mapping** — bảng mapping chuẩn cho 6 Objectives (O1–O6), đọc từ file `OKR tháng 04-2026 - X.ĐK.xlsx`

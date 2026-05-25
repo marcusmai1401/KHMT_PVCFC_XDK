@@ -8,6 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.core.security import Role
 from app.models.domain import SKCTKTModel, SKCodeSequenceModel, SKImageModel
+from app.services.fi.completion import (
+    completion_date_to_datetime,
+    completion_plan_completed_at,
+    completion_plan_indicates_done,
+)
 from app.services.fi.workflow import FIAction, SKStatus, is_public_status, next_status
 from app.services.repositories import audit, make_id, model_to_dict, notify
 
@@ -22,7 +27,13 @@ REVIEWABLE_STATUSES = {
 }
 REVIEW_DECISION_ACTIONS = {FIAction.APPROVE.value, FIAction.DEFER.value, FIAction.REJECT.value}
 HISTORICAL_REVIEW_ACTIONS = REVIEW_DECISION_ACTIONS
-SHARED_CONTENT_EDIT_FIELDS = {"content_description", "completion_plan", "title"}
+SHARED_CONTENT_EDIT_FIELDS = {
+    "content_description",
+    "completion_date",
+    "completion_done",
+    "completion_plan",
+    "title",
+}
 # Người dùng được phép đứng tên đăng ký SK-CTKT.
 AUTHOR_ROLES = {Role.TEAM_ACCOUNT.value, Role.STAFF.value, Role.FI_COORDINATOR.value}
 # Sau khi đã gửi duyệt, tác giả vẫn được sửa nội dung nhưng phải gửi noti
@@ -60,6 +71,28 @@ def _int_or_default(value: Any, default: int) -> int:
         return default
 
 
+def _completed_at_from_payload(
+    payload: dict[str, Any],
+    *,
+    fallback: datetime,
+    existing: datetime | None = None,
+) -> datetime | None:
+    completion_done = payload.get("completion_done")
+    if completion_done is not None:
+        if not completion_done:
+            return None
+        return (
+            completion_date_to_datetime(payload.get("completion_date"))
+            or completion_plan_completed_at(payload.get("completion_plan"), fallback=fallback)
+            or fallback
+        )
+    if "completion_plan" in payload:
+        inferred = completion_plan_completed_at(payload.get("completion_plan"), fallback=fallback)
+        if inferred is not None:
+            return inferred
+    return existing
+
+
 def create_sk_ctkt(db: Session, payload: dict[str, Any], actor: str) -> SKCTKTModel:
     now = _utc_now()
     team = payload["team"]
@@ -68,6 +101,7 @@ def create_sk_ctkt(db: Session, payload: dict[str, Any], actor: str) -> SKCTKTMo
     if registration_month < 1 or registration_month > 12:
         registration_month = now.month
     registration_year = _int_or_default(payload.get("registration_year"), year)
+    completed_at = _completed_at_from_payload(payload, fallback=now)
     record = SKCTKTModel(
         id=make_id("sk"),
         sk_code=generate_sk_code(db, team, year),
@@ -98,6 +132,7 @@ def create_sk_ctkt(db: Session, payload: dict[str, Any], actor: str) -> SKCTKTMo
         is_historical_import=False,
         created_at=now,
         updated_at=now,
+        completed_at=completed_at,
     )
     db.add(record)
     audit(db, actor, "SK_CTKT", record.id, "create", model_to_dict(record))
@@ -160,6 +195,12 @@ def update_sk_ctkt(
     for field in ["title", "content_description", "completion_plan"]:
         if field in payload:
             setattr(record, field, payload[field])
+    if {"completion_plan", "completion_done", "completion_date"} & requested_fields:
+        record.completed_at = _completed_at_from_payload(
+            payload,
+            fallback=record.created_at or _utc_now(),
+            existing=record.completed_at,
+        )
     record.updated_at = _utc_now()
     audit(db, actor, "SK_CTKT", record_id, "update", {"before": before, "after": model_to_dict(record)})
     # Nếu tác giả chỉnh sửa SK đã gửi duyệt thì gửi noti cho FI_Coordinator +
@@ -384,6 +425,14 @@ def _is_khmt_considered(record: SKCTKTModel) -> bool:
     return bool(record.consider_for_khmt)
 
 
+def _is_completion_done(record: SKCTKTModel) -> bool:
+    return bool(
+        record.status == SKStatus.COMPLETED.value
+        or record.completed_at is not None
+        or completion_plan_indicates_done(record.completion_plan)
+    )
+
+
 def _add_record_to_bucket(bucket: dict[str, Any], record: SKCTKTModel) -> None:
     status = record.status
     bucket["total"] += 1
@@ -391,7 +440,7 @@ def _add_record_to_bucket(bucket: dict[str, Any], record: SKCTKTModel) -> None:
     if status in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}:
         bucket["approved"] += 1
         bucket["review_passed"] += 1
-    if status == SKStatus.COMPLETED.value:
+    if _is_completion_done(record):
         bucket["completed"] += 1
         bucket["completed_count"] += 1
     else:

@@ -11,9 +11,12 @@ def test_bm01_preview_reads_four_sheets_when_workbook_exists():
 
     tbd_first = next(row for row in preview["rows"] if row["source_sheet"] == "TBĐ" and row["source_row"] == 6)
     assert tbd_first["status"] == "Approved"
+    assert tbd_first["completion_done"] is True
     tbd_khmt = next(row for row in preview["rows"] if row["source_sheet"] == "TBĐ" and row["source_row"] == 7)
     assert tbd_khmt["khmt_month"] == 1
     assert tbd_khmt["consider_for_khmt"] is True
+    tbch_not_done = next(row for row in preview["rows"] if row["source_sheet"] == "TBCH" and row["source_row"] == 17)
+    assert tbch_not_done["completion_done"] is False
 
     expected_rows = {
         ("TBCH", 7): {"status": "Deferred", "khmt_month": None, "consider_for_khmt": False},

@@ -6,6 +6,8 @@ from typing import Any
 
 from openpyxl import load_workbook
 
+from app.services.fi.completion import completion_plan_indicates_done
+
 
 SHEET_TEAM = {"TBCH": "TBCH", "TBĐ": "TBĐL", "TBHTĐK": "TBHTĐK", "TC- ĐK": "TCĐK"}
 SHEET_KHMT_COLUMN = {"TBĐ": 14}
@@ -22,6 +24,7 @@ class BM01PreviewRow:
     title: str
     content_description: str
     completion_plan: str
+    completion_done: bool
     raw_conclusion: str
     workshop_leader_conclusion: str
     khmt_raw: str
@@ -111,6 +114,8 @@ def build_bm01_status_history(
         "khmt_month": row.get("khmt_month"),
         "khmt_year": row.get("khmt_year"),
         "consider_for_khmt": row.get("consider_for_khmt", False),
+        "completion_done": row.get("completion_done", False),
+        "completion_plan": row.get("completion_plan"),
     }
     history = [
         {
@@ -161,6 +166,7 @@ def preview_bm01(path: Path) -> dict[str, Any]:
             if not _has_data(sheet, row):
                 continue
             raw_conclusion = _cell(sheet, row, 13)
+            completion_plan = _cell(sheet, row, 11)
             status, status_warning = _status_from_review(raw_conclusion)
             khmt_raw = _cell(sheet, row, khmt_column)
             khmt_month, khmt_year = _parse_month_year(khmt_raw)
@@ -186,7 +192,8 @@ def preview_bm01(path: Path) -> dict[str, Any]:
                     author_name=_cell(sheet, row, 4),
                     title=_cell(sheet, row, 5),
                     content_description=_cell(sheet, row, 6),
-                    completion_plan=_cell(sheet, row, 11),
+                    completion_plan=completion_plan,
+                    completion_done=completion_plan_indicates_done(completion_plan),
                     raw_conclusion=raw_conclusion,
                     workshop_leader_conclusion=_cell(sheet, row, leader_column),
                     khmt_raw=khmt_raw,

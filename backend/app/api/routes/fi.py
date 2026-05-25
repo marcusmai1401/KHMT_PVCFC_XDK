@@ -24,6 +24,7 @@ from app.services.fi.service import (
     transition_sk_ctkt,
     update_sk_ctkt,
 )
+from app.services.fi.completion import completion_plan_completed_at
 from app.services.fi.workflow import SKStatus
 from app.services.integration.bm01_import import build_bm01_status_history, preview_bm01
 from app.services.repositories import audit, make_id, model_to_dict, sk_image_to_dict
@@ -480,6 +481,7 @@ def bm01_commit(principal: dict = Depends(require_role(Role.ADMIN)), db: Session
     for row in preview["rows"]:
         source_key = (preview["source_file"], row["source_sheet"], row["source_row"])
         created_at = _legacy_created_at(row, imported_at)
+        completed_at = completion_plan_completed_at(row["completion_plan"], fallback=created_at)
         values = {
             "sk_code": f"HIST-{row['team']}-{row['source_sheet']}-{row['source_row']}",
             "title": row["title"] or "(Missing title)",
@@ -511,6 +513,7 @@ def bm01_commit(principal: dict = Depends(require_role(Role.ADMIN)), db: Session
             "submitted_at": created_at,
             "reviewed_at": imported_at if row["status"] in {"Approved", "Rejected", "Deferred"} else None,
             "approved_at": imported_at if row["status"] == "Approved" else None,
+            "completed_at": completed_at,
         }
         record = existing_sources.get(source_key) or existing_codes.get(values["sk_code"])
         if record is None:

@@ -8,6 +8,7 @@ from sqlalchemy import and_, or_, select
 
 from app.db.session import create_session
 from app.models.domain import SKCTKTModel
+from app.services.fi.completion import completion_plan_completed_at
 from app.services.fi.workflow import SKStatus
 from app.services.integration.bm01_import import SHEET_TEAM, build_bm01_status_history, preview_bm01
 from app.services.repositories import make_id
@@ -29,6 +30,7 @@ def parse_sheet(workbook_path: Path, sheet_name: str, year: int) -> list[dict]:
             "title": row["title"],
             "content_description": row["content_description"],
             "completion_plan": row["completion_plan"],
+            "completion_done": row["completion_done"],
             "review": row["raw_conclusion"],
             "leader_conclusion": row["workshop_leader_conclusion"],
             "khmt_raw": row["khmt_raw"],
@@ -69,6 +71,7 @@ def import_rows(
             ).scalar_one_or_none()
             created_at = datetime(year, item["registration_month"], 1, tzinfo=timezone.utc)
             now = datetime.now(timezone.utc)
+            completed_at = completion_plan_completed_at(item["completion_plan"], fallback=created_at)
             is_approved = item["status"] in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}
             consider_for_khmt = bool(item["consider_for_khmt"])
             khmt_year = item["khmt_year"] if consider_for_khmt else None
@@ -112,7 +115,7 @@ def import_rows(
                 if item["status"] in {SKStatus.APPROVED.value, SKStatus.REJECTED.value, SKStatus.DEFERRED.value}
                 else None,
                 "approved_at": now if item["status"] == SKStatus.APPROVED.value else None,
-                "completed_at": None,
+                "completed_at": completed_at,
             }
             if record is None:
                 db.add(SKCTKTModel(id=make_id("sk"), **values))

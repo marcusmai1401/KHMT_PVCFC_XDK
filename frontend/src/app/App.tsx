@@ -60,6 +60,9 @@ const ROLE_ORDER = ["Admin", "Workshop_Leader", "FI_Coordinator", "Team_Account"
 
 const SIDEBAR_COLLAPSED_KEY = "okr.sidebar.collapsed";
 const REAL_TOKEN_KEY = "okr.real.token";
+const REMEMBER_FLAG_KEY = "okr.remember.enabled";
+const REMEMBERED_USER_KEY = "okr.remember.user";
+const PERSISTED_TOKEN_KEY = "okr.session.token";
 
 type SandboxIdentity = {
   id: string;
@@ -92,7 +95,22 @@ function canAccessTab(role: string, candidate: Tab) {
 export function App() {
   const [tab, setTab] = useState<Tab>("okr");
   const [role, setRole] = useState("");
-  const [userId, setUserId] = useState("");
+  const [userId, setUserId] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.localStorage.getItem(REMEMBERED_USER_KEY) ?? "";
+    }
+    return "";
+  });
+  const [rememberMe, setRememberMe] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.localStorage.getItem(REMEMBER_FLAG_KEY) === "true";
+    }
+    return false;
+  });
+  const [restoringSession, setRestoringSession] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return Boolean(window.localStorage.getItem(PERSISTED_TOKEN_KEY));
+  });
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -125,6 +143,12 @@ export function App() {
     setSandbox(Boolean(payload.sandbox));
     setVoluntaryChange(false);
     setError("");
+    if (typeof window !== "undefined" && response.access_token && !payload.sandbox) {
+      const shouldPersist = window.localStorage.getItem(REMEMBER_FLAG_KEY) === "true";
+      if (shouldPersist) {
+        window.localStorage.setItem(PERSISTED_TOKEN_KEY, response.access_token);
+      }
+    }
   };
 
   const logout = () => {
@@ -139,13 +163,17 @@ export function App() {
     setHasRealSession(false);
     setNotifications([]);
     setSandboxIdentities([]);
-    setUserId("");
+    if (typeof window !== "undefined") {
+      const stillRemember = window.localStorage.getItem(REMEMBER_FLAG_KEY) === "true";
+      setUserId(stillRemember ? (window.localStorage.getItem(REMEMBERED_USER_KEY) ?? "") : "");
+      window.localStorage.removeItem(PERSISTED_TOKEN_KEY);
+      window.sessionStorage.removeItem(REAL_TOKEN_KEY);
+    } else {
+      setUserId("");
+    }
     setPassword("");
     setError("");
     setNotice("");
-    if (typeof window !== "undefined") {
-      window.sessionStorage.removeItem(REAL_TOKEN_KEY);
-    }
   };
 
   const login = (event?: React.FormEvent) => {
@@ -153,6 +181,18 @@ export function App() {
     if (submitting || !userId.trim() || !password) return;
     setNotice("");
     setSubmitting(true);
+
+    if (typeof window !== "undefined") {
+      if (rememberMe) {
+        window.localStorage.setItem(REMEMBERED_USER_KEY, userId.trim());
+        window.localStorage.setItem(REMEMBER_FLAG_KEY, "true");
+      } else {
+        window.localStorage.removeItem(REMEMBERED_USER_KEY);
+        window.localStorage.removeItem(REMEMBER_FLAG_KEY);
+        window.localStorage.removeItem(PERSISTED_TOKEN_KEY);
+      }
+    }
+
     api.login(userId.trim(), password)
       .then((response) => {
         applySession(response, userId.trim());
@@ -233,6 +273,36 @@ export function App() {
   };
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const savedToken = window.localStorage.getItem(PERSISTED_TOKEN_KEY);
+    if (!savedToken) {
+      setRestoringSession(false);
+      return;
+    }
+    setToken(savedToken);
+    api.me()
+      .then((profile) => {
+        const fallback = window.localStorage.getItem(REMEMBERED_USER_KEY) ?? profile.user_id;
+        applySession(
+          {
+            access_token: savedToken,
+            display_name: profile.display_name,
+            role: profile.role,
+            team: profile.team,
+            must_change_password: profile.must_change_password,
+          },
+          fallback,
+        );
+      })
+      .catch(() => {
+        setToken("");
+        window.localStorage.removeItem(PERSISTED_TOKEN_KEY);
+      })
+      .finally(() => setRestoringSession(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     if (role) loadNotifications();
   }, [role]);
 
@@ -264,6 +334,25 @@ export function App() {
     return ROLE_ORDER.filter((r) => groups[r]?.length).map((r) => ({ role: r, items: groups[r] }));
   }, [sandboxIdentities]);
 
+  if (restoringSession) {
+    return (
+      <main className="auth-shell" aria-busy="true">
+        <div className="auth-bg" aria-hidden="true">
+          <div className="auth-bg-orb auth-bg-orb-a" />
+          <div className="auth-bg-orb auth-bg-orb-b" />
+          <div className="auth-bg-grid" />
+        </div>
+        <div className="auth-boot">
+          <div className="auth-boot-mark">
+            <img src="/logo.webp" alt="PVCFC" />
+          </div>
+          <div className="auth-boot-spinner" aria-hidden="true" />
+          <p>Đang khôi phục phiên đăng nhập…</p>
+        </div>
+      </main>
+    );
+  }
+
   if (role && (mustChangePassword || voluntaryChange)) {
     return (
       <ChangePasswordForm
@@ -286,77 +375,152 @@ export function App() {
           <div className="auth-bg-orb auth-bg-orb-a" />
           <div className="auth-bg-orb auth-bg-orb-b" />
           <div className="auth-bg-grid" />
+          <div className="auth-bg-noise" />
         </div>
         <div className="auth-content">
           <div className="auth-hero">
             <div className="auth-hero-brand">
-              <img src="/logo.webp" alt="PVCFC" />
-              <div>
-                <strong>PVCFC · Xưởng Điều khiển</strong>
-                <span>Hệ thống tự động hóa OKR, FI &amp; Năng lực ET</span>
+              <div className="auth-hero-logo">
+                <img src="/logo.webp" alt="PVCFC" />
+              </div>
+              <div className="auth-hero-name">
+                <span className="auth-hero-eyebrow">PVCFC · Petrovietnam</span>
+                <strong>Tổng Công Ty Phân Bón Dầu Khí Cà Mau</strong>
+                <span className="auth-hero-tagline">Xưởng Điều khiển</span>
               </div>
             </div>
+
+            <p className="auth-hero-lede">
+              Một nền tảng vận hành — OKR, sáng kiến cải tiến kỹ thuật và năng lực ET — được số hoá xuyên suốt, minh bạch theo thời gian thực.
+            </p>
+
             <ul className="auth-hero-features">
-              <li><BarChart3 size={16} /> Theo dõi OKR theo tháng, tự động cảnh báo</li>
-              <li><Lightbulb size={16} /> Đăng ký &amp; xét duyệt sáng kiến – cải tiến kỹ thuật</li>
-              <li><ClipboardCheck size={16} /> Khung năng lực ET, đánh giá &amp; lộ trình học tập</li>
+              <li>
+                <span className="auth-hero-feature-ico"><BarChart3 size={18} /></span>
+                <div>
+                  <strong>OKR theo tháng</strong>
+                  <small>Theo dõi tiến độ, cảnh báo lệch chỉ tiêu, tổng hợp tự động.</small>
+                </div>
+              </li>
+              <li>
+                <span className="auth-hero-feature-ico"><Lightbulb size={18} /></span>
+                <div>
+                  <strong>Sáng kiến – CTKT</strong>
+                  <small>Đăng ký, xét duyệt và lưu vết toàn bộ vòng đời cải tiến.</small>
+                </div>
+              </li>
+              <li>
+                <span className="auth-hero-feature-ico"><ClipboardCheck size={18} /></span>
+                <div>
+                  <strong>Năng lực ET</strong>
+                  <small>Khung năng lực, đánh giá định kỳ và lộ trình học tập cá nhân hoá.</small>
+                </div>
+              </li>
             </ul>
-            <p className="auth-hero-foot">© PVCFC – Đội ngũ Xưởng Điều khiển</p>
+
+            <div className="auth-hero-foot">
+              <span>© {new Date().getFullYear()} PVCFC · Đội ngũ Xưởng Điều khiển</span>
+              <span className="auth-hero-dot" aria-hidden="true">•</span>
+              <span>Internal use only</span>
+            </div>
           </div>
 
-          <form className="auth-card" onSubmit={login}>
+          <form className="auth-card" onSubmit={login} autoComplete="on" noValidate>
+            <div className="auth-card-glow" aria-hidden="true" />
             <header className="auth-card-head">
+              <span className="auth-card-eyebrow">
+                <ShieldCheck size={12} />
+                Hệ thống nội bộ
+              </span>
               <h1>Đăng nhập</h1>
-              <p>Sử dụng tài khoản nội bộ PVCFC để tiếp tục.</p>
+              <p>Truy cập Xưởng Điều khiển bằng tài khoản nội bộ.</p>
             </header>
 
-            <label className="auth-field">
-              <span>Tài khoản</span>
-              <div className="auth-input">
-                <LogIn size={16} className="auth-input-icon" />
-                <input
-                  autoComplete="username"
-                  placeholder="ví dụ: baomt"
-                  value={userId}
-                  onChange={(event) => setUserId(event.target.value)}
-                />
+            <div className="auth-card-body">
+              <label className="auth-field">
+                <span>Tài khoản</span>
+                <div className="auth-input">
+                  <LogIn size={16} className="auth-input-icon" />
+                  <input
+                    autoComplete="username"
+                    placeholder="ví dụ: baomt"
+                    value={userId}
+                    onChange={(event) => setUserId(event.target.value)}
+                  />
+                </div>
+              </label>
+
+              <label className="auth-field">
+                <span>Mật khẩu</span>
+                <div className="auth-input">
+                  <KeyRound size={16} className="auth-input-icon" />
+                  <input
+                    autoComplete="current-password"
+                    placeholder="Nhập mật khẩu"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="auth-input-toggle"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                    title={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </label>
+
+              <div className="auth-options">
+                <label className="auth-remember">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(event) => setRememberMe(event.target.checked)}
+                  />
+                  <span className="auth-remember-custom" aria-hidden="true"></span>
+                  <span className="auth-remember-label">Duy trì đăng nhập trên thiết bị này</span>
+                </label>
               </div>
-            </label>
 
-            <label className="auth-field">
-              <span>Mật khẩu</span>
-              <div className="auth-input">
-                <KeyRound size={16} className="auth-input-icon" />
-                <input
-                  autoComplete="current-password"
-                  placeholder="Nhập mật khẩu"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                />
-                <button
-                  type="button"
-                  className="auth-input-toggle"
-                  onClick={() => setShowPassword((v) => !v)}
-                  aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
-                  title={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </label>
+              <button className="auth-submit" type="submit" disabled={submitting}>
+                {submitting ? (
+                  <>
+                    <span className="auth-submit-spinner" aria-hidden="true" />
+                    Đang xác thực…
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck size={16} />
+                    Đăng nhập
+                  </>
+                )}
+              </button>
 
-            <button className="auth-submit" type="submit" disabled={submitting}>
-              <ShieldCheck size={16} />
-              {submitting ? "Đang đăng nhập..." : "Đăng nhập"}
-            </button>
+              {error && (
+                <p className="auth-error" role="alert">
+                  <span className="auth-error-dot" aria-hidden="true" />
+                  {error}
+                </p>
+              )}
+              {notice && (
+                <p className="auth-success" role="status">
+                  <ShieldCheck size={14} />
+                  {notice}
+                </p>
+              )}
+            </div>
 
-            {error && <p className="auth-error">{error}</p>}
-            {notice && <p className="auth-success">{notice}</p>}
-
-            <p className="auth-help">
-              Lần đầu đăng nhập sẽ được yêu cầu đổi mật khẩu. Mất quyền truy cập? Liên hệ Quản trị hệ thống.
-            </p>
+            <footer className="auth-card-foot">
+              <p className="auth-help">
+                Quên mật khẩu? Vui lòng liên hệ{" "}
+                <a href="mailto:baomt@pvcfc.com.vn" className="auth-help-link">
+                  baomt@pvcfc.com.vn
+                </a>
+              </p>
+            </footer>
           </form>
         </div>
       </main>

@@ -78,6 +78,7 @@ def create_schema() -> None:
     Base.metadata.create_all(bind=engine)
     _ensure_sqlite_web_input_columns()
     _ensure_user_extra_columns()
+    _ensure_sk_ctkt_completed_at_column()
 
 
 def _ensure_sqlite_web_input_columns() -> None:
@@ -103,6 +104,19 @@ def _ensure_sqlite_web_input_columns() -> None:
                 connection.execute(text(statement))
         if "report_status" not in existing:
             connection.execute(text("UPDATE team_reports SET report_status = 'submitted' WHERE source_type = 'excel_upload'"))
+
+
+def _ensure_sk_ctkt_completed_at_column() -> None:
+    if engine.dialect.name != "sqlite":
+        return
+    inspector = inspect(engine)
+    if "sk_ctkt" not in inspector.get_table_names():
+        return
+    existing = {column["name"] for column in inspector.get_columns("sk_ctkt")}
+    if "completed_at" in existing:
+        return
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE sk_ctkt ADD COLUMN completed_at DATETIME"))
 
 
 def _ensure_user_extra_columns() -> None:

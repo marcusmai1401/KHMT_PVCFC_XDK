@@ -252,6 +252,22 @@ http://103.200.20.225/health
 
 Thông thường không cần deploy thủ công nữa. Nếu cần chạy lại deploy cho cùng một commit:
 
+Chạy bằng script:
+
+```bash
+./deploy_github_actions.sh --watch
+```
+
+Nếu cần import lại BM01 legacy trong lúc deploy:
+
+```bash
+./deploy_github_actions.sh --import-bm01 --watch
+```
+
+Script này chỉ kích hoạt GitHub Actions, không lưu password VPS trong máy. Cần cài GitHub CLI và đăng nhập trước bằng `gh auth login`.
+
+Hoặc chạy trên giao diện GitHub:
+
 1. Vào GitHub repo.
 2. Mở tab `Actions`.
 3. Chọn workflow `CI and Production Deploy`.

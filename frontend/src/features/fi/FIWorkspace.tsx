@@ -39,6 +39,9 @@ const ADMIN_ROLE = "Admin";
 // không chỉ là người xét duyệt.
 const AUTHOR_ROLES = [TEAM_ROLE, STAFF_ROLE, FI_COORDINATOR_ROLE];
 const FI_TEAMS = ["TBCH", "TBĐL", "TBHTĐK", "TCĐK"];
+const TEAM_DISPLAY_LABELS: Record<string, string> = {
+  Workshop_Staff: "Xưởng quản lí",
+};
 const REVIEWER_ROLES = [ADMIN_ROLE, FI_COORDINATOR_ROLE];
 const REVIEW_DECISION_STATUSES = ["Submitted", "Reviewed", "Deferred", "Approved", "Rejected"];
 const REVIEWED_STATUSES = ["Approved", "Rejected", "Deferred", "Reviewed"];
@@ -135,6 +138,11 @@ function completionFilterForItem(item: any): HistoryCompletionFilter {
 
 function displayStatus(value: string) {
   return statusLabels[value] ?? value;
+}
+
+export function displayTeam(value: string | null | undefined) {
+  if (!value) return "";
+  return TEAM_DISPLAY_LABELS[value] ?? value;
 }
 
 function displayImportedStatus(value: string) {
@@ -590,6 +598,41 @@ function buildTeamProgress(teams: any[]): TeamProgress[] {
   });
 }
 
+function aggregateTeamSummaries(rows: any[]) {
+  if (rows.length === 0) return null;
+  return rows.reduce(
+    (acc, row) => {
+      acc.total += Number(row?.total ?? 0);
+      acc.current += Number(row?.current ?? 0);
+      acc.historical += Number(row?.historical ?? 0);
+      acc.review_passed += reviewPassedCount(row);
+      acc.review_failed += reviewFailedCount(row);
+      acc.khmt_considered += Number(row?.khmt_considered ?? 0);
+      acc.khmt_not_considered += khmtMissingCount(row);
+      acc.deferred += Number(row?.deferred ?? 0);
+      acc.pending += Number(row?.pending ?? 0);
+      acc.completed_count += Number(row?.completed_count ?? row?.completed ?? 0);
+      acc.not_completed += Number(row?.not_completed ?? 0);
+      acc.cancelled += Number(row?.cancelled ?? 0);
+      return acc;
+    },
+    {
+      total: 0,
+      current: 0,
+      historical: 0,
+      review_passed: 0,
+      review_failed: 0,
+      khmt_considered: 0,
+      khmt_not_considered: 0,
+      deferred: 0,
+      pending: 0,
+      completed_count: 0,
+      not_completed: 0,
+      cancelled: 0,
+    },
+  );
+}
+
 function buildMonthlyTrend(months: any[]): MonthlyTrend[] {
   return months
     .map((m) => ({
@@ -700,7 +743,7 @@ function TeamProgressBars({ teams }: { teams: TeamProgress[] }) {
         return (
           <div className="fi-team-row" key={team.team}>
             <div className="fi-team-meta">
-              <strong>{team.team}</strong>
+              <strong>{displayTeam(team.team)}</strong>
               <small>{team.total} SK · KHMT {team.khmt} ({team.khmtRate}%)</small>
             </div>
             <div className="fi-team-track" title={`Tổng ${team.total} SK`}>
@@ -1005,7 +1048,6 @@ export function FIWorkspace({
 }) {
   const teamFromAccount = currentTeam ?? (AUTHOR_ROLES.includes(role) ? currentUserId : null);
   const isLockedToTeam = AUTHOR_ROLES.includes(role) && teamFromAccount && FI_TEAMS.includes(teamFromAccount);
-  const defaultHistoryTeam = teamFromAccount && FI_TEAMS.includes(teamFromAccount) ? teamFromAccount : "TBCH";
   const defaultFormTeam = isLockedToTeam && teamFromAccount ? teamFromAccount : "TBCH";
   const defaultAuthorName = AUTHOR_ROLES.includes(role)
     ? (typeof displayName === "string" && displayName.includes(" - ") ? displayName.split(" - ")[0] : displayName ?? "")
@@ -1016,11 +1058,11 @@ export function FIWorkspace({
   const canReview = REVIEWER_ROLES.includes(role);
   const defaultTab: FITab = canRegister ? "register" : canReview ? "review" : "dashboard";
   const [items, setItems] = useState<any[]>([]);
-  const [historyItems, setHistoryItems] = useState<any[]>([]);
+  const [allHistoryItems, setAllHistoryItems] = useState<any[]>([]);
   const [dashboard, setDashboard] = useState<any>(null);
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
-  const [historyTeam, setHistoryTeam] = useState(defaultHistoryTeam);
+  const [historyTeams, setHistoryTeams] = useState<string[]>([]);
   const [historyMonths, setHistoryMonths] = useState<number[]>([]);
   const [historyDecisions, setHistoryDecisions] = useState<HistoryDecisionFilter[]>([]);
   const [historyKhmt, setHistoryKhmt] = useState<HistoryKhmtFilter[]>([]);
@@ -1064,10 +1106,10 @@ export function FIWorkspace({
 
   const reload = () => {
     setDashboardLoading(true);
-    Promise.all([api.listSk(), api.publicSk({ team: historyTeam }), api.fiDashboard()])
+    Promise.all([api.listSk(), api.publicSk(), api.fiDashboard()])
       .then(([privateList, historyList, dashboardData]) => {
         setItems(privateList.filter((item) => !item.is_historical_import));
-        setHistoryItems(historyList.filter((item) => item.team === historyTeam));
+        setAllHistoryItems(historyList);
         setDashboard(dashboardData);
         setError("");
       })
@@ -1077,7 +1119,7 @@ export function FIWorkspace({
 
   useEffect(() => {
     reload();
-  }, [role, historyTeam]);
+  }, [role]);
 
   useEffect(() => {
     if (!AUTHOR_ROLES.includes(role)) return;
@@ -1203,8 +1245,8 @@ export function FIWorkspace({
     setSelectedItem(null);
   };
 
-  const selectHistoryTeam = (team: string) => {
-    setHistoryTeam(team);
+  const selectHistoryTeams = (teams: string[]) => {
+    setHistoryTeams(teams);
     setHistoryMonths([]);
     setHistoryDecisions([]);
     setHistoryKhmt([]);
@@ -1233,6 +1275,7 @@ export function FIWorkspace({
   };
 
   const resetHistoryFilters = () => {
+    setHistoryTeams([]);
     setHistoryMonths([]);
     setHistoryDecisions([]);
     setHistoryKhmt([]);
@@ -1477,6 +1520,14 @@ export function FIWorkspace({
   const selectedImages = Array.isArray(selectedItem?.supporting_images) ? selectedItem.supporting_images : [];
   const selectedHistory = Array.isArray(selectedItem?.status_history) ? selectedItem.status_history : [];
   const canUploadForSelected = selectedItem ? canUploadImages(role, currentUserId, selectedItem) : false;
+  const selectedHistoryTeamSet = new Set(historyTeams);
+  const historyItems = allHistoryItems.filter((item) =>
+    historyTeams.length === 0 || selectedHistoryTeamSet.has(item.team)
+  );
+  const historyTeamCounts = allHistoryItems.reduce<Record<string, number>>((acc, item) => {
+    if (item?.team) acc[item.team] = (acc[item.team] ?? 0) + 1;
+    return acc;
+  }, {});
   const historyMonthCounts = historyItems.reduce<Map<number, number>>((monthCounts, item) => {
     const month = registrationMonthValue(item);
     if (month) monthCounts.set(month, (monthCounts.get(month) ?? 0) + 1);
@@ -1510,7 +1561,7 @@ export function FIWorkspace({
     { done: 0, pending: 0 },
   );
   const historyActiveFilterCount =
-    historyMonths.length + historyDecisions.length + historyKhmt.length + historyCompletion.length;
+    historyTeams.length + historyMonths.length + historyDecisions.length + historyKhmt.length + historyCompletion.length;
   const filteredHistoryItems = historyItems
     .filter((item) => historyMonths.length === 0 || selectedHistoryMonthSet.has(registrationMonthValue(item) ?? -1))
     .filter((item) => historyDecisions.length === 0 || selectedHistoryDecisionSet.has(decisionFilterForItem(item)))
@@ -1550,8 +1601,20 @@ export function FIWorkspace({
   const khmtRate = dashboardApprovedCount
     ? Math.round((dashboardKhmtCount / dashboardApprovedCount) * 100)
     : 0;
-  const historyTeamSummary = dashboardTeams.find((team: any) => team.team === historyTeam);
-  const historyTeamOptions = FI_TEAMS;
+  const historySummaryTeamRows = historyTeams.length === 0
+    ? dashboardTeams
+    : dashboardTeams.filter((team: any) => selectedHistoryTeamSet.has(team.team));
+  const historyTeamSummary = aggregateTeamSummaries(historySummaryTeamRows);
+  const historyTeamOptions = [
+    ...FI_TEAMS,
+    ...Array.from(
+      new Set(
+        allHistoryItems
+          .map((item) => item?.team)
+          .filter((team): team is string => Boolean(team) && !FI_TEAMS.includes(team))
+      )
+    ).sort((a, b) => displayTeam(a).localeCompare(displayTeam(b), "vi")),
+  ];
 
   const renderMetricPair = (
     primary: number | undefined,
@@ -1777,7 +1840,7 @@ export function FIWorkspace({
               <div>
                 <h2 id="fi-edit-modal-title">Chỉnh sửa SK-CTKT</h2>
                 <p className="muted">
-                  {editTarget.sk_code || editTarget.title} · {editTarget.team}
+                  {editTarget.sk_code || editTarget.title} · {displayTeam(editTarget.team)}
                   {editTarget.status && editTarget.status !== "Draft" && (
                     <>
                       {" · "}
@@ -1912,7 +1975,7 @@ export function FIWorkspace({
 	                </div>
 	                <div>
 	                  <span>Đội/tổ</span>
-	                  <strong>{accountTeam || "Chưa gán đội/tổ"}</strong>
+	                  <strong>{displayTeam(accountTeam) || "Chưa gán đội/tổ"}</strong>
 	                </div>
 	              </div>
 	            ) : (
@@ -2044,7 +2107,7 @@ export function FIWorkspace({
                 <button className="workflow-main" onClick={() => openItem(item.id)} type="button">
                   <strong>{item.sk_code}</strong>
                   <span>{item.title}</span>
-                  <small>{item.author_name} · {item.team}</small>
+                  <small>{item.author_name} · {displayTeam(item.team)}</small>
                   <small>
                     {displayStatus(item.status)}
                     {item.submitted_at && item.status === "Submitted" && ` · gửi ${new Date(item.submitted_at).toLocaleDateString("vi-VN")}`}
@@ -2144,7 +2207,7 @@ export function FIWorkspace({
                     <strong className="fi-review-title">{item.title}</strong>
                     <span className="fi-review-meta">
                       <UserRound size={14} />
-                      {item.author_name} · {item.team}
+                      {item.author_name} · {displayTeam(item.team)}
                     </span>
                     <span className="fi-review-state-line">
                       <span className={`fi-status-pill ${statusTone(item.status)}`}>
@@ -2208,7 +2271,7 @@ export function FIWorkspace({
                   {displayStatus(selectedItem.status)}
                 </span>
               </div>
-              <p>{selectedItem.team}</p>
+              <p>{displayTeam(selectedItem.team)}</p>
             </div>
             <div className="fi-detail-actions">
             {visibleActionsForSk(role, currentUserId, selectedItem).includes("edit") && (
@@ -2492,7 +2555,7 @@ export function FIWorkspace({
                     <article className="fi-team-detail-card" key={team.team}>
                       <header className="fi-team-detail-head">
                         <div>
-                          <span className="fi-team-detail-name">{team.team}</span>
+                          <span className="fi-team-detail-name">{displayTeam(team.team)}</span>
                           <small>{formatCount(team.current)} hiện hành · {formatCount(team.historical)} lịch sử</small>
                         </div>
                         <div className="fi-team-detail-total">
@@ -2653,11 +2716,12 @@ export function FIWorkspace({
               icon={<Users2 size={14} />}
               options={historyTeamOptions.map((team) => ({
                 value: team,
-                label: team,
+                label: displayTeam(team),
+                count: historyTeamCounts[team] ?? 0,
               }))}
-              selected={[historyTeam]}
-              onChange={(next) => { if (next.length) selectHistoryTeam(next[0]); }}
-              single
+              selected={historyTeams}
+              onChange={selectHistoryTeams}
+              emptyLabel="Tất cả"
               prominent
             />
             <FilterChip<number>
@@ -2928,7 +2992,13 @@ export function FIWorkspace({
               })}
             </div>
           ))}
-          {historyItems.length === 0 && <p className="muted">Không có FI cho đội {historyTeam}.</p>}
+          {historyItems.length === 0 && (
+            <p className="muted">
+              {historyTeams.length > 0
+                ? `Không có FI cho đội ${historyTeams.map(displayTeam).join(", ")}.`
+                : "Không có FI nào."}
+            </p>
+          )}
           {historyItems.length > 0 && filteredHistoryItems.length === 0 && (
             <p className="muted">Không có FI cho tháng đang chọn.</p>
           )}

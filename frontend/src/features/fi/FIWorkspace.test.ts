@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canSelectKhmtMonth, isKhmtConsidered, khmtLabel, visibleActionsForSk } from "./FIWorkspace";
+import { canSelectKhmtMonth, displayTeam, isKhmtConsidered, khmtLabel, visibleActionsForSk } from "./FIWorkspace";
 
 describe("FI action visibility", () => {
   it("allows a team account to submit its own draft but not another team's draft", () => {
@@ -84,5 +84,12 @@ describe("FI KHMT display", () => {
     expect(khmtLabel(staleApproved)).toBe("Chưa vào KHMT");
     expect(isKhmtConsidered(deferred)).toBe(false);
     expect(khmtLabel(deferred)).toBe("Chưa vào KHMT");
+  });
+});
+
+describe("FI team display", () => {
+  it("uses the Vietnamese label for workshop staff accounts", () => {
+    expect(displayTeam("Workshop_Staff")).toBe("Xưởng quản lí");
+    expect(displayTeam("TBCH")).toBe("TBCH");
   });
 });

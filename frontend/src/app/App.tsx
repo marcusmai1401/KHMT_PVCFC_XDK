@@ -8,6 +8,7 @@ import {
   FileSpreadsheet,
   FlaskConical,
   History,
+  ImageDown,
   KeyRound,
   Lightbulb,
   LogIn,
@@ -24,6 +25,7 @@ import { ChangePasswordForm } from "../features/auth/ChangePasswordForm";
 import { ETModule } from "../features/et/ETModule";
 import { FIWorkspace } from "../features/fi/FIWorkspace";
 import { OKRModule } from "../features/okr/OKRModule";
+import { captureElementAsPng, findActiveSnapshotTarget, snapshotFilename } from "../utils/pngSnapshot";
 
 type Tab = "okr" | "et" | "fi" | "admin";
 
@@ -32,6 +34,13 @@ const tabTitles: Record<Tab, string> = {
   et: "Năng lực ET",
   fi: "Luồng SK-CTKT",
   admin: "Quản trị hệ thống",
+};
+
+const tabSnapshotNames: Record<Tab, string> = {
+  okr: "okr",
+  et: "nang-luc-et",
+  fi: "fi",
+  admin: "quan-tri",
 };
 
 const roleLabels: Record<string, string> = {
@@ -126,6 +135,7 @@ export function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [resettingSandbox, setResettingSandbox] = useState(false);
+  const [exportingPng, setExportingPng] = useState(false);
   const [workspaceVersion, setWorkspaceVersion] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -270,6 +280,20 @@ export function App() {
 
   const markRead = (id: string) => {
     api.markNotificationRead(id).then(loadNotifications).catch((err) => setError(friendlyError(err.message)));
+  };
+
+  const handleSnapshot = () => {
+    if (exportingPng) return;
+    const target = findActiveSnapshotTarget();
+    if (!target) {
+      setError("Không tìm thấy vùng nội dung để xuất PNG ở tab hiện tại.");
+      return;
+    }
+    setError("");
+    setExportingPng(true);
+    captureElementAsPng(target.element, snapshotFilename(target.name))
+      .catch((err) => setError(friendlyError(err.message ?? "Không thể xuất PNG.")))
+      .finally(() => setExportingPng(false));
   };
 
   useEffect(() => {
@@ -666,6 +690,19 @@ export function App() {
                 </button>
               </div>
             )}
+            {role === "Admin" && (
+              <button
+                className="topbar-snapshot-btn"
+                data-export-exclude="true"
+                disabled={exportingPng}
+                onClick={handleSnapshot}
+                title="Tải PNG snapshot tab hiện tại"
+                type="button"
+              >
+                <ImageDown size={17} />
+                <span>{exportingPng ? "Đang xuất..." : "Tải PNG"}</span>
+              </button>
+            )}
             <div className="notifications">
               <button title="Tải lại thông báo" onClick={loadNotifications}>
                 <Bell size={17} />
@@ -685,7 +722,11 @@ export function App() {
             <FileSpreadsheet size={26} />
           </div>
         </header>
-        <div key={workspaceVersion}>
+        <div
+          data-snapshot-fallback="true"
+          data-snapshot-name={tabSnapshotNames[tab]}
+          key={workspaceVersion}
+        >
           {tab === "okr" && <OKRModule role={role} currentUserId={currentUserId} currentTeam={currentTeam} />}
           {tab === "et" && <ETModule role={role} currentUserId={currentUserId} />}
           {tab === "fi" && <FIWorkspace role={role} currentUserId={currentUserId} currentTeam={currentTeam} displayName={currentDisplayName} />}

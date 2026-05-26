@@ -34,7 +34,7 @@ export function KRDrillDownPanel({
   if (!row) return null;
 
   return (
-    <aside className="kr-drilldown" aria-label="Chi tiết KR">
+    <aside className="kr-drilldown" data-export-exclude="true" aria-label="Chi tiết KR">
       <div className="panel-header">
         <div>
           <h2>{row.workshop_kr_code}</h2>

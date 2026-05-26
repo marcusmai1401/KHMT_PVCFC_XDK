@@ -345,7 +345,7 @@ function ObjectiveKRPanel({
   const { objectiveCode, team } = activeObjective;
 
   return (
-    <aside className="kr-drilldown objective-kr-panel" aria-label="Danh sách KR theo mục tiêu">
+    <aside className="kr-drilldown objective-kr-panel" data-export-exclude="true" aria-label="Danh sách KR theo mục tiêu">
       <div className="panel-header">
         <div>
           <h2>{team ? `${team.code} · ${objectiveCode}` : objectiveCode}</h2>

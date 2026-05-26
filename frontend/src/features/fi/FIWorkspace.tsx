@@ -3,6 +3,7 @@ import {
   BarChart3,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
@@ -20,6 +21,7 @@ import {
   PieChart,
   RefreshCw,
   Send,
+  SlidersHorizontal,
   Sparkles,
   Trash2,
   TrendingUp,
@@ -75,15 +77,61 @@ const importedStatusLabels: Record<string, string> = {
 };
 
 type FITab = "register" | "review" | "history" | "dashboard";
+const fiSnapshotNames: Record<FITab, string> = {
+  register: "fi-dang-ky",
+  review: "fi-xet-duyet",
+  dashboard: "fi-dashboard",
+  history: "fi-lich-su",
+};
 type ReviewQueueFilter = "pending" | "reviewed" | "all";
 type HistoryMonthGroup = { key: string; month: number | null; year: number; items: any[] };
 type ReviewDecision = "approve" | "defer" | "reject";
+
+type HistoryDecisionFilter = "approved" | "rejected" | "deferred" | "pending";
+type HistoryKhmtFilter = "in" | "out";
+type HistoryCompletionFilter = "done" | "pending";
 
 const reviewDecisionOptions: Array<{ value: ReviewDecision; label: string; helper: string }> = [
   { value: "approve", label: "Đồng ý", helper: "Ghi nhận SK đạt yêu cầu xét duyệt." },
   { value: "defer", label: "Xem xét sau", helper: "Giữ lại để đánh giá tiếp hoặc cần thêm cơ sở." },
   { value: "reject", label: "Không đồng ý", helper: "Không đưa SK vào luồng thực hiện." },
 ];
+
+const historyDecisionFilterOptions: Array<{ value: HistoryDecisionFilter; label: string; tone: string }> = [
+  { value: "approved", label: "Đồng ý", tone: "success" },
+  { value: "rejected", label: "Không đồng ý", tone: "danger" },
+  { value: "deferred", label: "Xem xét sau", tone: "warning" },
+  { value: "pending", label: "Chưa duyệt", tone: "neutral" },
+];
+
+const historyKhmtFilterOptions: Array<{ value: HistoryKhmtFilter; label: string; tone: string }> = [
+  { value: "in", label: "Đã vào KHMT", tone: "success" },
+  { value: "out", label: "Chưa vào KHMT", tone: "neutral" },
+];
+
+const historyCompletionFilterOptions: Array<{ value: HistoryCompletionFilter; label: string; tone: string }> = [
+  { value: "done", label: "Đã hoàn thành", tone: "success" },
+  { value: "pending", label: "Chưa hoàn thành", tone: "warning" },
+];
+
+function decisionFilterForItem(item: any): HistoryDecisionFilter {
+  const status = item?.status;
+  if (status === "Approved" || status === "Completed") return "approved";
+  if (status === "Rejected") return "rejected";
+  if (status === "Deferred") return "deferred";
+  return "pending";
+}
+
+function khmtFilterForItem(item: any): HistoryKhmtFilter {
+  return isKhmtConsidered(item) ? "in" : "out";
+}
+
+function completionFilterForItem(item: any): HistoryCompletionFilter {
+  if (item?.status === "Completed") return "done";
+  if (item?.completed_at) return "done";
+  const parsed = parseCompletionPlan(item?.completion_plan, item?.completed_at);
+  return parsed?.done ? "done" : "pending";
+}
 
 function displayStatus(value: string) {
   return statusLabels[value] ?? value;
@@ -799,6 +847,131 @@ function MonthlyTrendChart({ months }: { months: MonthlyTrend[] }) {
   );
 }
 
+type FilterChipOption<T extends string | number> = {
+  value: T;
+  label: string;
+  count?: number;
+  tone?: string;
+};
+
+function FilterChip<T extends string | number>({
+  label,
+  icon,
+  options,
+  selected,
+  onChange,
+  emptyLabel = "Tất cả",
+}: {
+  label: string;
+  icon?: React.ReactNode;
+  options: FilterChipOption<T>[];
+  selected: T[];
+  onChange: (next: T[]) => void;
+  emptyLabel?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const firstOptionRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    // Auto-focus first checkbox for keyboard users.
+    const id = window.setTimeout(() => firstOptionRef.current?.focus(), 30);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+      window.clearTimeout(id);
+    };
+  }, [open]);
+
+  const toggle = (value: T) => {
+    if (selected.includes(value)) onChange(selected.filter((entry) => entry !== value));
+    else onChange([...selected, value]);
+  };
+
+  const selectedOptions = options.filter((option) => selected.includes(option.value));
+  const summaryText = selectedOptions.length === 0
+    ? emptyLabel
+    : selectedOptions.length === 1
+      ? selectedOptions[0].label
+      : `${selectedOptions.length} mục`;
+
+  return (
+    <div ref={containerRef} className={`fi-filter-chip-wrap ${open ? "open" : ""}`}>
+      <button
+        type="button"
+        className={`fi-filter-chip ${selected.length > 0 ? "active" : ""}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {icon && <span className="fi-filter-chip-icon" aria-hidden="true">{icon}</span>}
+        <span className="fi-filter-chip-label">{label}</span>
+        <span className="fi-filter-chip-divider" aria-hidden="true">·</span>
+        <span className="fi-filter-chip-value" title={summaryText}>{summaryText}</span>
+        <ChevronDown size={14} className={`fi-filter-chip-caret ${open ? "open" : ""}`} aria-hidden="true" />
+      </button>
+      {open && (
+        <div
+          className="fi-filter-popover"
+          role="listbox"
+          aria-multiselectable="true"
+          aria-label={label}
+        >
+          <div className="fi-filter-popover-head">
+            <span>{label}</span>
+            {selected.length > 0 ? (
+              <button
+                type="button"
+                className="fi-filter-popover-clear"
+                onClick={() => onChange([])}
+              >
+                Bỏ chọn
+              </button>
+            ) : (
+              <small className="fi-filter-popover-hint">Chọn để lọc</small>
+            )}
+          </div>
+          <div className="fi-filter-popover-body">
+            {options.length === 0 && (
+              <p className="fi-filter-popover-empty">Không có giá trị để lọc.</p>
+            )}
+            {options.map((option, index) => {
+              const checked = selected.includes(option.value);
+              return (
+                <label
+                  key={String(option.value)}
+                  className={`fi-filter-option ${checked ? "checked" : ""} ${option.tone ? `tone-${option.tone}` : ""}`}
+                >
+                  <input
+                    ref={index === 0 ? firstOptionRef : undefined}
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggle(option.value)}
+                  />
+                  <span className="fi-filter-option-mark" aria-hidden="true" />
+                  <span className="fi-filter-option-label">{option.label}</span>
+                  {option.count !== undefined && (
+                    <small className="fi-filter-option-count">{option.count}</small>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function FIWorkspace({
   role,
   currentUserId,
@@ -829,6 +1002,9 @@ export function FIWorkspace({
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [historyTeam, setHistoryTeam] = useState(defaultHistoryTeam);
   const [historyMonths, setHistoryMonths] = useState<number[]>([]);
+  const [historyDecisions, setHistoryDecisions] = useState<HistoryDecisionFilter[]>([]);
+  const [historyKhmt, setHistoryKhmt] = useState<HistoryKhmtFilter[]>([]);
+  const [historyCompletion, setHistoryCompletion] = useState<HistoryCompletionFilter[]>([]);
   const [activeTab, setActiveTab] = useState<FITab>(defaultTab);
   const [reviewFilter, setReviewFilter] = useState<ReviewQueueFilter>("pending");
   const [form, setForm] = useState(() => {
@@ -1010,15 +1186,37 @@ export function FIWorkspace({
   const selectHistoryTeam = (team: string) => {
     setHistoryTeam(team);
     setHistoryMonths([]);
+    setHistoryDecisions([]);
+    setHistoryKhmt([]);
+    setHistoryCompletion([]);
     setSelectedItem(null);
   };
 
-  const toggleHistoryMonth = (month: number) => {
-    setHistoryMonths((current) =>
-      current.includes(month)
-        ? current.filter((value) => value !== month)
-        : [...current, month].sort((a, b) => b - a)
-    );
+  const changeHistoryMonths = (next: number[]) => {
+    setHistoryMonths([...next].sort((a, b) => b - a));
+    setSelectedItem(null);
+  };
+
+  const changeHistoryDecisions = (next: HistoryDecisionFilter[]) => {
+    setHistoryDecisions(next);
+    setSelectedItem(null);
+  };
+
+  const changeHistoryKhmt = (next: HistoryKhmtFilter[]) => {
+    setHistoryKhmt(next);
+    setSelectedItem(null);
+  };
+
+  const changeHistoryCompletion = (next: HistoryCompletionFilter[]) => {
+    setHistoryCompletion(next);
+    setSelectedItem(null);
+  };
+
+  const resetHistoryFilters = () => {
+    setHistoryMonths([]);
+    setHistoryDecisions([]);
+    setHistoryKhmt([]);
+    setHistoryCompletion([]);
     setSelectedItem(null);
   };
 
@@ -1266,8 +1464,38 @@ export function FIWorkspace({
   }, new Map<number, number>());
   const historyMonthOptions = Array.from(historyMonthCounts.entries()).sort((a, b) => b[0] - a[0]);
   const selectedHistoryMonthSet = new Set(historyMonths);
+  const selectedHistoryDecisionSet = new Set(historyDecisions);
+  const selectedHistoryKhmtSet = new Set(historyKhmt);
+  const selectedHistoryCompletionSet = new Set(historyCompletion);
+  const historyDecisionCounts = historyItems.reduce<Record<HistoryDecisionFilter, number>>(
+    (acc, item) => {
+      const key = decisionFilterForItem(item);
+      acc[key] += 1;
+      return acc;
+    },
+    { approved: 0, rejected: 0, deferred: 0, pending: 0 },
+  );
+  const historyKhmtCounts = historyItems.reduce<Record<HistoryKhmtFilter, number>>(
+    (acc, item) => {
+      acc[khmtFilterForItem(item)] += 1;
+      return acc;
+    },
+    { in: 0, out: 0 },
+  );
+  const historyCompletionCounts = historyItems.reduce<Record<HistoryCompletionFilter, number>>(
+    (acc, item) => {
+      acc[completionFilterForItem(item)] += 1;
+      return acc;
+    },
+    { done: 0, pending: 0 },
+  );
+  const historyActiveFilterCount =
+    historyMonths.length + historyDecisions.length + historyKhmt.length + historyCompletion.length;
   const filteredHistoryItems = historyItems
     .filter((item) => historyMonths.length === 0 || selectedHistoryMonthSet.has(registrationMonthValue(item) ?? -1))
+    .filter((item) => historyDecisions.length === 0 || selectedHistoryDecisionSet.has(decisionFilterForItem(item)))
+    .filter((item) => historyKhmt.length === 0 || selectedHistoryKhmtSet.has(khmtFilterForItem(item)))
+    .filter((item) => historyCompletion.length === 0 || selectedHistoryCompletionSet.has(completionFilterForItem(item)))
     .sort((a, b) =>
       (registrationMonthValue(b) ?? 0) - (registrationMonthValue(a) ?? 0) ||
       (a.bm01_source_row ?? 0) - (b.bm01_source_row ?? 0)
@@ -1433,8 +1661,13 @@ export function FIWorkspace({
     );
   };
 
+  const fiSnapshotName = fiSnapshotNames[activeTab];
   return (
-    <div className="content-grid">
+    <div
+      className="content-grid"
+      data-snapshot-target="true"
+      data-snapshot-name={fiSnapshotName}
+    >
       <input
         ref={draftFileInputRef}
         type="file"
@@ -2313,14 +2546,26 @@ export function FIWorkspace({
       )}
 
       {activeTab === "history" && (
-      <section className="panel wide legacy-sk-panel">
-        <div className="legacy-sticky-controls">
-          <div className="panel-header">
-            <div>
+      <section className="panel wide legacy-sk-panel fi-history-panel">
+        <div className="legacy-sticky-controls fi-history-controls">
+          <div className="panel-header fi-history-header">
+            <div className="fi-history-headline">
               <h2>Lịch sử FI</h2>
-              <p className="muted">{historyTeam} · {historyItems.length} SK-CTKT đã ghi nhận</p>
+              <p className="muted">
+                <strong>{historyTeam}</strong>
+                <span aria-hidden="true"> · </span>
+                {historyActiveFilterCount > 0 ? (
+                  <>
+                    Hiển thị <strong>{filteredHistoryItems.length}</strong>/{historyItems.length} SK-CTKT
+                  </>
+                ) : (
+                  <>
+                    <strong>{historyItems.length}</strong> SK-CTKT đã ghi nhận
+                  </>
+                )}
+              </p>
             </div>
-            <div className="toolbar">
+            <div className="toolbar fi-history-actions">
               <div className="segmented-control legacy-team-picker" aria-label="Chọn đội/tổ">
                 {historyTeamOptions.map((team) => (
                   <button
@@ -2333,98 +2578,125 @@ export function FIWorkspace({
                   </button>
                 ))}
               </div>
-              <button onClick={reload} title="Tải lại lịch sử FI">
+              <button
+                className="fi-history-reload"
+                onClick={reload}
+                title="Tải lại lịch sử FI"
+                type="button"
+              >
                 <RefreshCw size={17} />
               </button>
             </div>
           </div>
-          <div className="legacy-filter-tier" aria-label="Lọc lịch sử FI">
-            <div className="legacy-filter-controls">
-              <div className="legacy-filter-line">
-                <span className="filter-label">Đội/tổ</span>
-                <strong>{historyTeam}</strong>
-              </div>
-              <div className="legacy-filter-line">
-                <span className="filter-label">Tháng</span>
-                <div className="legacy-month-ticks">
-                  <button
-                    className={historyMonths.length === 0 ? "active" : ""}
-                    onClick={() => {
-                      setHistoryMonths([]);
-                      setSelectedItem(null);
-                    }}
-                    type="button"
-                  >
-                    <span className="tick-box" aria-hidden="true">{historyMonths.length === 0 ? "✓" : ""}</span>
-                    Tất cả
-                    <small>{historyItems.length}</small>
-                  </button>
-                  {historyMonthOptions.map(([month, count]) => {
-                    const active = historyMonths.includes(month);
-                    return (
-                      <button
-                        className={active ? "active" : ""}
-                        key={month}
-                        onClick={() => toggleHistoryMonth(month)}
-                        type="button"
-                      >
-                        <span className="tick-box" aria-hidden="true">{active ? "✓" : ""}</span>
-                        T{month}
-                        <small>{count}</small>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-	            {historyTeamSummary && (
-	              <div className="legacy-team-summary">
-	                <table className="fi-dashboard-table compact">
-	                  <thead>
-	                    <tr>
-	                      <th>Đội/tổ</th>
-	                      <th>Tổng</th>
-	                      <th>Đã xét đạt</th>
-	                      <th>Đã xét không đạt</th>
-	                      <th>Xem xét sau</th>
-	                      <th>Chưa duyệt</th>
-	                      <th>Đã vào KHMT</th>
-	                      <th>Chưa vào KHMT</th>
-                      <th>Hoàn thành</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-		                    <tr>
-		                      {(() => {
-		                        const passed = reviewPassedCount(historyTeamSummary);
-		                        const failed = reviewFailedCount(historyTeamSummary);
-		                        return (
-	                          <>
-	                            <td>
-	                              <strong>{historyTeamSummary.team}</strong>
-	                              <small>{formatCount(historyTeamSummary.current)} hiện hành · {formatCount(historyTeamSummary.historical)} lịch sử</small>
-	                            </td>
-	                            <td>{formatCount(historyTeamSummary.total)}</td>
-	                            <td>{renderMetricPair(passed, `(${percent(passed, historyTeamSummary.total)}%)`, "cell-approved")}</td>
-	                            <td>{formatCount(failed)}</td>
-	                            <td>{formatCount(historyTeamSummary.deferred)}</td>
-	                            <td>{formatCount(historyTeamSummary.pending)}</td>
-	                            <td>{renderKhmtMetric(historyTeamSummary.khmt_considered)}</td>
-	                            <td>{renderKhmtMissing(khmtMissingCount(historyTeamSummary))}</td>
-	                            <td>{renderMetricPair(historyTeamSummary.completed_count ?? historyTeamSummary.completed, `/ ${formatCount(historyTeamSummary.not_completed)} chưa xong`)}</td>
-	                          </>
-	                        );
-		                      })()}
-	                    </tr>
-                  </tbody>
-                </table>
-              </div>
+
+          <div className="fi-history-toolbar" role="group" aria-label="Bộ lọc lịch sử FI">
+            <span className="fi-history-toolbar-lead" aria-hidden="true">
+              <SlidersHorizontal size={14} />
+              <span>Bộ lọc</span>
+            </span>
+            <FilterChip<number>
+              label="Tháng"
+              icon={<CalendarDays size={14} />}
+              options={historyMonthOptions.map(([month, count]) => ({
+                value: month,
+                label: `T${month}`,
+                count,
+              }))}
+              selected={historyMonths}
+              onChange={changeHistoryMonths}
+              emptyLabel="Tất cả"
+            />
+            <FilterChip<HistoryDecisionFilter>
+              label="Kết luận LĐX"
+              icon={<ClipboardCheck size={14} />}
+              options={historyDecisionFilterOptions.map((option) => ({
+                ...option,
+                count: historyDecisionCounts[option.value],
+              }))}
+              selected={historyDecisions}
+              onChange={changeHistoryDecisions}
+              emptyLabel="Tất cả"
+            />
+            <FilterChip<HistoryKhmtFilter>
+              label="KHMT"
+              icon={<Flag size={14} />}
+              options={historyKhmtFilterOptions.map((option) => ({
+                ...option,
+                count: historyKhmtCounts[option.value],
+              }))}
+              selected={historyKhmt}
+              onChange={changeHistoryKhmt}
+              emptyLabel="Tất cả"
+            />
+            <FilterChip<HistoryCompletionFilter>
+              label="Hoàn thành"
+              icon={<CheckCircle2 size={14} />}
+              options={historyCompletionFilterOptions.map((option) => ({
+                ...option,
+                count: historyCompletionCounts[option.value],
+              }))}
+              selected={historyCompletion}
+              onChange={changeHistoryCompletion}
+              emptyLabel="Tất cả"
+            />
+            {historyActiveFilterCount > 0 && (
+              <button
+                type="button"
+                className="fi-history-filter-reset"
+                onClick={resetHistoryFilters}
+                title="Xóa toàn bộ bộ lọc"
+              >
+                <X size={13} />
+                Xóa bộ lọc
+                <span className="fi-history-filter-reset-count">{historyActiveFilterCount}</span>
+              </button>
             )}
           </div>
-          <div className="legacy-column-heading" aria-hidden="true">
-            <span>Kết luận LĐX</span>
-            <span>KHMT</span>
-          </div>
+
+          {historyTeamSummary && (() => {
+            const passed = reviewPassedCount(historyTeamSummary);
+            const failed = reviewFailedCount(historyTeamSummary);
+            const missing = khmtMissingCount(historyTeamSummary);
+            const completed = historyTeamSummary.completed_count ?? historyTeamSummary.completed ?? 0;
+            const notCompleted = historyTeamSummary.not_completed ?? 0;
+            const totalForRate = historyTeamSummary.total ?? 0;
+            return (
+              <div className="fi-history-summary" aria-label="Tóm tắt theo đội/tổ">
+                <div className="fi-history-stat tone-total">
+                  <span>Tổng SK</span>
+                  <strong>{formatCount(totalForRate)}</strong>
+                  <small>{formatCount(historyTeamSummary.current ?? 0)} hiện hành · {formatCount(historyTeamSummary.historical ?? 0)} lịch sử</small>
+                </div>
+                <div className="fi-history-stat tone-success">
+                  <span>Đã xét đạt</span>
+                  <strong>{formatCount(passed)}</strong>
+                  <small>{percent(passed, totalForRate)}%</small>
+                </div>
+                <div className="fi-history-stat tone-danger">
+                  <span>Không đạt</span>
+                  <strong>{formatCount(failed)}</strong>
+                </div>
+                <div className="fi-history-stat tone-warning">
+                  <span>Xem xét sau</span>
+                  <strong>{formatCount(historyTeamSummary.deferred ?? 0)}</strong>
+                </div>
+                <div className="fi-history-stat tone-neutral">
+                  <span>Chưa duyệt</span>
+                  <strong>{formatCount(historyTeamSummary.pending ?? 0)}</strong>
+                </div>
+                <div className="fi-history-stat tone-info">
+                  <span>Đã vào KHMT</span>
+                  <strong>{formatCount(historyTeamSummary.khmt_considered ?? 0)}</strong>
+                  <small>{formatCount(missing)} chưa vào</small>
+                </div>
+                <div className="fi-history-stat tone-completion">
+                  <span>Hoàn thành</span>
+                  <strong>{formatCount(completed)}</strong>
+                  <small>/ {formatCount(notCompleted)} chưa xong</small>
+                </div>
+              </div>
+            );
+          })()}
         </div>
         <div className="legacy-list">
           {groupedHistoryItems.map((group) => (

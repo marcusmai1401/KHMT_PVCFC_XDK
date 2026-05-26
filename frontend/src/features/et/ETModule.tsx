@@ -87,8 +87,13 @@ export function ETModule({ role, currentUserId }: Props) {
     }
   }, [tab, visibleTabs]);
 
+  const snapshotName = etSnapshotNames[tab];
   return (
-    <section className="et-shell">
+    <section
+      className="et-shell"
+      data-snapshot-target="true"
+      data-snapshot-name={snapshotName}
+    >
       <div className="segmented-control">
         {visibleTabs.includes("dashboard") && (
           <button className={tab === "dashboard" ? "active" : ""} onClick={() => setTab("dashboard")}>Dashboard</button>
@@ -115,6 +120,14 @@ export function ETModule({ role, currentUserId }: Props) {
     </section>
   );
 }
+
+const etSnapshotNames: Record<EtTab, string> = {
+  dashboard: "et-dashboard",
+  frameworks: "et-khung-nang-luc",
+  personnel: "et-nhan-su",
+  assessments: "et-danh-gia",
+  plans: "et-ke-hoach-hoc-tap",
+};
 
 function FrameworkView({ role, setError }: { role: string; setError: (value: string) => void }) {
   const [frameworks, setFrameworks] = useState<any[]>([]);

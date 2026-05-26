@@ -14,6 +14,13 @@ const okrTabs: Array<{ id: OKRTab; label: string; icon: LucideIcon }> = [
   { id: "principles", label: "Nguyên tắc đánh giá", icon: Scale },
 ];
 
+const snapshotNames: Record<OKRTab, string> = {
+  dashboard: "okr-dashboard",
+  "web-input": "okr-nhap-lieu",
+  criteria: "okr-tieu-chi-danh-gia",
+  principles: "okr-nguyen-tac-danh-gia",
+};
+
 export function OKRModule({
   role,
   currentUserId,
@@ -28,7 +35,11 @@ export function OKRModule({
   const visibleTabs = okrTabs.filter((tab) => !(role === "Staff" && tab.id === "web-input"));
 
   return (
-    <div className="okr-module-shell">
+    <div
+      className="okr-module-shell"
+      data-snapshot-target="true"
+      data-snapshot-name={snapshotNames[activeTab]}
+    >
       <div className="okr-module-tabs" role="tablist" aria-label="OKR">
         <div className="segmented-control">
           {visibleTabs.map((tab) => {

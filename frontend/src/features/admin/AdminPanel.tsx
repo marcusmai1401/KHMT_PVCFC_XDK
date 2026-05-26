@@ -51,7 +51,11 @@ export function AdminPanel() {
   );
 
   return (
-    <div className="content-grid">
+    <div
+      className="content-grid"
+      data-snapshot-target="true"
+      data-snapshot-name="quan-tri-kr-mapping"
+    >
       {error && <p className="error">{error}</p>}
       <section className="panel wide">
         <div className="panel-header">

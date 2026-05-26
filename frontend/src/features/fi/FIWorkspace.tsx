@@ -2838,9 +2838,9 @@ export function FIWorkspace({
               <div className="legacy-row-column-labels" aria-hidden="true">
                 <span />
                 <div className="legacy-row-column-label-side">
-                  <span>Tháng đăng ký</span>
-                  <span>Kết luận LĐX</span>
-                  <span>KHMT</span>
+                  <span className="tone-period">Thời gian ĐK</span>
+                  <span className="tone-decision">Kết luận LĐX</span>
+                  <span className="tone-khmt">KHMT</span>
                   <span />
                 </div>
               </div>

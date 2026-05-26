@@ -4097,7 +4097,7 @@ th {
 .legacy-sk-panel {
   --legacy-action-col: 230px;
   --legacy-khmt-col: 150px;
-  --legacy-period-col: 72px;
+  --legacy-period-col: 102px;
   --legacy-row-padding-x: 16px;
   --legacy-side-gap: 10px;
   --legacy-status-col: 126px;
@@ -4678,7 +4678,7 @@ th {
   display: grid;
   gap: 18px;
   grid-template-columns: minmax(0, 1fr) max-content;
-  margin: -2px 0 -4px;
+  margin: 2px 0 -2px;
   padding: 0 var(--legacy-row-padding-x);
 }
 
@@ -4692,13 +4692,37 @@ th {
 }
 
 .legacy-row-column-label-side span {
-  color: #64748b;
-  font-size: 10px;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 10.5px;
   font-weight: 800;
+  height: 22px;
+  justify-content: center;
   letter-spacing: 0;
-  line-height: 1.2;
+  line-height: 1;
+  padding: 0 8px;
   text-align: center;
-  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.legacy-row-column-label-side .tone-period {
+  background: #eaf3ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.legacy-row-column-label-side .tone-decision {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #047857;
+}
+
+.legacy-row-column-label-side .tone-khmt {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
 }
 
 .legacy-record {

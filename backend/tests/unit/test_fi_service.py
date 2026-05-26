@@ -71,7 +71,7 @@ def test_create_sk_stores_registration_period_in_history(db_session):
     assert history["comments"]["source"] == "web"
 
 
-def test_create_sk_can_mark_actual_completion_without_review_status(db_session):
+def test_draft_completion_is_not_counted_until_submitted(db_session):
     record = create_sk_ctkt(
         db_session,
         {
@@ -91,8 +91,14 @@ def test_create_sk_can_mark_actual_completion_without_review_status(db_session):
     assert record.status == "Draft"
     assert record.completed_at is not None
     payload = fi_dashboard(db_session, {"user_id": "admin", "role": "Admin"})
-    assert payload["totals"]["completed_count"] == 1
+    assert payload["totals"]["total"] == 0
+    assert payload["totals"]["completed_count"] == 0
     assert payload["totals"]["not_completed"] == 0
+
+    transition_sk_ctkt(db_session, record.id, "submit", "u1", "Team_Account")
+    payload = fi_dashboard(db_session, {"user_id": "admin", "role": "Admin"})
+    assert payload["totals"]["total"] == 1
+    assert payload["totals"]["completed_count"] == 1
 
 
 def test_create_sk_keeps_future_completion_plan_not_completed(db_session):
@@ -114,8 +120,9 @@ def test_create_sk_keeps_future_completion_plan_not_completed(db_session):
 
     assert record.completed_at is None
     payload = fi_dashboard(db_session, {"user_id": "admin", "role": "Admin"})
+    assert payload["totals"]["total"] == 0
     assert payload["totals"]["completed_count"] == 0
-    assert payload["totals"]["not_completed"] == 1
+    assert payload["totals"]["not_completed"] == 0
 
 
 def test_khmt_count_only_approved_with_month_year(db_session):

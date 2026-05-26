@@ -436,10 +436,13 @@ def reports(
     status: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    include_drafts: bool = False,
     _: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER)),
     db: Session = Depends(get_db),
 ):
     query = select(SKCTKTModel)
+    if not include_drafts:
+        query = query.where(SKCTKTModel.status != SKStatus.DRAFT.value)
     if team:
         query = query.where(SKCTKTModel.team == team)
     if status:

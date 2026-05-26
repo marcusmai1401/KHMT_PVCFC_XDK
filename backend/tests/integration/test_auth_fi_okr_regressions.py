@@ -156,6 +156,9 @@ def test_fi_team_draft_is_private_until_submitted(client, admin_headers):
     admin_list = client.get("/api/v1/fi/sk-ctkt", headers=admin_headers)
     assert admin_list.status_code == 200, admin_list.text
     assert record_id not in {item["id"] for item in admin_list.json()}
+    admin_reports = client.get("/api/v1/fi/reports", headers=admin_headers)
+    assert admin_reports.status_code == 200, admin_reports.text
+    assert record_id not in {item["id"] for item in admin_reports.json()}
     assert client.get(f"/api/v1/fi/sk-ctkt/{record_id}", headers=admin_headers).status_code == 403
     public_draft = client.get("/api/v1/fi/sk-ctkt/public", headers=team_headers)
     assert public_draft.status_code == 200
@@ -168,6 +171,8 @@ def test_fi_team_draft_is_private_until_submitted(client, admin_headers):
 
     admin_list_after_submit = client.get("/api/v1/fi/sk-ctkt", headers=admin_headers)
     assert record_id in {item["id"] for item in admin_list_after_submit.json()}
+    admin_reports_after_submit = client.get("/api/v1/fi/reports", headers=admin_headers)
+    assert record_id in {item["id"] for item in admin_reports_after_submit.json()}
     fi_list_after_submit = client.get("/api/v1/fi/sk-ctkt", headers=fi_headers)
     assert record_id in {item["id"] for item in fi_list_after_submit.json()}
     leader_list_before_approve = client.get("/api/v1/fi/sk-ctkt", headers=leader_headers)

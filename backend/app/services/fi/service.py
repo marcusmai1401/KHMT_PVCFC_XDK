@@ -402,6 +402,12 @@ PENDING_STATUSES = {
     SKStatus.NEED_MORE_INFO.value,
     SKStatus.REVIEWED.value,
 }
+FI_REPORTABLE_STATUSES = {status for status in FI_DASHBOARD_STATUSES if status != SKStatus.DRAFT.value}
+
+
+def is_fi_reportable(record: SKCTKTModel) -> bool:
+    """FI dashboards/reports only count records that have been sent to FI."""
+    return record.status != SKStatus.DRAFT.value
 
 
 def _empty_fi_dashboard_bucket(team: str | None = None) -> dict[str, Any]:
@@ -479,7 +485,9 @@ def fi_dashboard(db: Session, principal: dict[str, str]) -> dict[str, Any]:
     # phụ thuộc người dùng nên không lọc theo can_view_sk. Mọi role có quyền
     # vào dashboard đều thấy số liệu giống nhau.
     _ = principal  # principal được giữ lại cho audit, không dùng để filter dữ liệu.
-    visible_records = db.execute(select(SKCTKTModel)).scalars().all()
+    visible_records = db.execute(
+        select(SKCTKTModel).where(SKCTKTModel.status.in_(FI_REPORTABLE_STATUSES))
+    ).scalars().all()
     by_team = {team: _empty_fi_dashboard_bucket(team) for team in FI_DASHBOARD_TEAMS}
     totals = _empty_fi_dashboard_bucket()
     khmt_by_month: dict[tuple[int, int], int] = {}

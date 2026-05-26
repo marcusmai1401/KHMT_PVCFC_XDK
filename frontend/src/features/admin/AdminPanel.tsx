@@ -109,7 +109,7 @@ export function AdminPanel() {
 
   const reload = () => {
     setLoading(true);
-    Promise.all([api.listSk({ include_historical: true }), api.fiDashboard()])
+    Promise.all([api.fiReports(), api.fiDashboard()])
       .then(([rows, dashboardData]) => {
         setFiRows([...rows].sort(compareFiRows));
         setDashboard(dashboardData);

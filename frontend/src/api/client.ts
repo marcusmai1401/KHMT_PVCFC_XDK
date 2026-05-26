@@ -121,7 +121,8 @@ export const api = {
   sandboxReset: () => request<any>("/auth/sandbox/reset", { method: "POST" }),
   krMapping: () => request<any[]>("/okr/kr-mapping"),
   headcount: () => request<any>("/admin/headcount"),
-  auditLog: () => request<any[]>("/admin/audit-log"),
+  adminUsers: () => request<any[]>("/admin/users"),
+  auditLog: (filters: QueryParams = {}) => request<any[]>(`/admin/audit-log${toQuery(filters)}`),
   reports: () => request<any[]>("/okr/reports"),
   previewReport: (id: string) => request<any>(`/okr/reports/${id}/preview`),
   warnings: (month?: number, year?: number) => {

@@ -20,6 +20,7 @@ import {
   Pencil,
   PieChart,
   RefreshCw,
+  Save,
   Send,
   SlidersHorizontal,
   Sparkles,
@@ -321,7 +322,6 @@ function khmtAssignmentYear(item: any) {
 
 export function canSelectKhmtMonth(role: string, currentUserId: string, item: any, currentTeam?: string | null) {
   if (!KHMT_ASSIGNABLE_STATUSES.includes(item?.status)) return false;
-  if (role === "Admin") return true;
   if (role !== TEAM_ROLE) return false;
   const ownerTeam = currentTeam ?? currentUserId;
   return FI_TEAMS.includes(ownerTeam) && item?.team === ownerTeam;
@@ -371,7 +371,8 @@ export function visibleActionsForSk(role: string, currentUserId: string, item: a
     !(role === FI_COORDINATOR_ROLE && item.author_user_id === currentUserId);
   const canAssign =
     !item.is_historical_import &&
-    role === ADMIN_ROLE &&
+    role === TEAM_ROLE &&
+    item.team === currentUserId &&
     ["Approved", "Completed"].includes(item.status);
   const canDelete =
     !item.is_historical_import &&
@@ -1096,6 +1097,7 @@ export function FIWorkspace({
   const [savingEdit, setSavingEdit] = useState(false);
   const [khmtTarget, setKhmtTarget] = useState<{ id: string; label: string; month: number; year: number } | null>(null);
   const [assigningKhmt, setAssigningKhmt] = useState(false);
+  const [pendingKhmtMonths, setPendingKhmtMonths] = useState<Record<string, string>>({});
   const draftFileInputRef = useRef<HTMLInputElement>(null);
   const detailFileInputRef = useRef<HTMLInputElement>(null);
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
@@ -1424,6 +1426,11 @@ export function FIWorkspace({
       const updated = await api.assignKhmt(item.id, month, year);
       setNotice(`Đã ghi nhận ${updated.sk_code || item.title} vào KHMT T${month}/${year}.`);
       setKhmtTarget(null);
+      setPendingKhmtMonths((current) => {
+        const next = { ...current };
+        delete next[item.id];
+        return next;
+      });
       reload();
       if (selectedItem?.id === item.id) reloadDetail(item.id);
     } catch (err: any) {
@@ -1651,24 +1658,43 @@ export function FIWorkspace({
     }
 
     const year = khmtAssignmentYear(item);
+    const currentValue = considered && item.khmt_month ? String(item.khmt_month) : "";
+    const selectedValue = pendingKhmtMonths[item.id] ?? currentValue;
+    const hasPendingChange = Boolean(selectedValue) && selectedValue !== currentValue;
     return (
-      <select
-        aria-label={`Chọn tháng KHMT cho ${item.title}`}
-        className={`legacy-khmt-select ${considered ? "success" : "empty"}`}
-        disabled={assigningKhmt}
-        onChange={(event) => handleKhmtMonthSelect(item, event.target.value)}
-        title={`Chọn tháng KHMT năm ${year}`}
-        value={considered && item.khmt_month ? String(item.khmt_month) : ""}
-      >
-        <option value="" disabled>
-          Chưa vào KHMT
-        </option>
-        {KHMT_MONTHS.map((month) => (
-          <option key={month} value={month}>
-            {`T${month}/${year}`}
+      <span className="legacy-khmt-control">
+        <select
+          aria-label={`Chọn tháng KHMT cho ${item.title}`}
+          className={`legacy-khmt-select ${considered ? "success" : "empty"}`}
+          disabled={assigningKhmt}
+          onChange={(event) => {
+            const value = event.target.value;
+            setPendingKhmtMonths((current) => ({ ...current, [item.id]: value }));
+          }}
+          title={`Chọn tháng KHMT năm ${year}`}
+          value={selectedValue}
+        >
+          <option value="" disabled>
+            Chưa vào KHMT
           </option>
-        ))}
-      </select>
+          {KHMT_MONTHS.map((month) => (
+            <option key={month} value={month}>
+              {`T${month}/${year}`}
+            </option>
+          ))}
+        </select>
+        <button
+          aria-label={`Lưu tháng KHMT cho ${item.title}`}
+          className="legacy-khmt-save"
+          disabled={assigningKhmt || !hasPendingChange}
+          onClick={() => handleKhmtMonthSelect(item, selectedValue)}
+          title={hasPendingChange ? "Lưu tháng KHMT" : "Chưa có thay đổi"}
+          type="button"
+        >
+          <Save size={13} />
+          <span>Lưu</span>
+        </button>
+      </span>
     );
   };
 

@@ -318,7 +318,7 @@ def complete(record_id: str, payload: TransitionRequest = TransitionRequest(), p
 def assign(
     record_id: str,
     payload: KHMTAssignRequest,
-    principal: dict = Depends(require_role(Role.ADMIN, Role.TEAM_ACCOUNT, Role.FI_COORDINATOR)),
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT)),
     db: Session = Depends(get_db),
 ):
     try:

@@ -69,6 +69,8 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
     user = db.get(User, payload.user_id)
     if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sai tài khoản hoặc mật khẩu")
+    audit(db, user.id, "Account", user.id, "login", {"sandbox": False})
+    db.commit()
     return _token_response_from_user(user)
 
 

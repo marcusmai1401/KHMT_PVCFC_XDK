@@ -23,7 +23,7 @@ import { api, decodeToken, setToken, type LoginResponse } from "../api/client";
 import { AdminPanel } from "../features/admin/AdminPanel";
 import { ChangePasswordForm } from "../features/auth/ChangePasswordForm";
 import { ETModule } from "../features/et/ETModule";
-import { FIWorkspace } from "../features/fi/FIWorkspace";
+import { FIWorkspace, displayTeam } from "../features/fi/FIWorkspace";
 import { OKRModule } from "../features/okr/OKRModule";
 import { captureElementAsPng, findActiveSnapshotTarget, snapshotFilename } from "../utils/pngSnapshot";
 
@@ -585,8 +585,8 @@ export function App() {
           <strong>{currentDisplayName ?? currentUserId}</strong>
           <small>
             {sandbox
-              ? `Kiểm thử · ${displayRole(role)}${currentTeam ? ` · ${currentTeam}` : ""}`
-              : `${displayRole(role)}${currentTeam ? ` · ${currentTeam}` : ""}`}
+              ? `Kiểm thử · ${displayRole(role)}${currentTeam ? ` · ${displayTeam(currentTeam)}` : ""}`
+              : `${displayRole(role)}${currentTeam ? ` · ${displayTeam(currentTeam)}` : ""}`}
           </small>
           <div className="account-actions">
             {!sandbox && (
@@ -660,7 +660,7 @@ export function App() {
         <header className="topbar">
           <div>
             <h1>{tabTitles[tab]}</h1>
-            <p>Vai trò: {displayRole(role)}{currentTeam ? ` · ${currentTeam}` : ""}</p>
+            <p>Vai trò: {displayRole(role)}{currentTeam ? ` · ${displayTeam(currentTeam)}` : ""}</p>
           </div>
           <div className="topbar-tools">
             {sandbox && (
@@ -713,7 +713,7 @@ export function App() {
                   {notifications.slice(0, 4).map((item) => (
                     <button key={item.id} className={item.read ? "read" : ""} onClick={() => markRead(item.id)}>
                       <strong>{displayNotification(item.event)}</strong>
-                      <span>{item.payload?.sk_code ?? item.payload?.id ?? item.payload?.team}</span>
+                      <span>{item.payload?.sk_code ?? item.payload?.id ?? displayTeam(item.payload?.team)}</span>
                     </button>
                   ))}
                 </div>

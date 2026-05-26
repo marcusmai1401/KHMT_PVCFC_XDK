@@ -352,12 +352,11 @@ def assign_khmt(
         raise ValueError("Tháng KHMT phải nằm trong khoảng 1-12")
     if year < 2020 or year > 2100:
         raise ValueError("Năm KHMT không hợp lệ")
-    if role not in {Role.ADMIN.value, Role.TEAM_ACCOUNT.value, Role.FI_COORDINATOR.value}:
-        raise PermissionError("Tài khoản không có quyền ghi nhận KHMT")
-    if role in {Role.TEAM_ACCOUNT.value, Role.FI_COORDINATOR.value}:
-        team_code = principal_team or actor
-        if record.team != team_code:
-            raise PermissionError("Tài khoản đội/tổ chỉ được ghi nhận KHMT cho đội/tổ của mình")
+    if role != Role.TEAM_ACCOUNT.value:
+        raise PermissionError("Chỉ tài khoản đội/tổ được ghi nhận tháng KHMT")
+    team_code = principal_team or actor
+    if record.team != team_code:
+        raise PermissionError("Tài khoản đội/tổ chỉ được ghi nhận KHMT cho đội/tổ của mình")
     if record.status not in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}:
         raise ValueError("Only Approved or Completed SK-CTKT can be assigned to KHMT")
     record.khmt_month = month

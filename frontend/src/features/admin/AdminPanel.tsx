@@ -1,25 +1,47 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import {
+  BarChart3,
+  CalendarDays,
   CheckCircle2,
   Clock3,
   Database,
   FileText,
   History,
+  KeyRound,
   RefreshCw,
   Search,
+  Send,
   ShieldCheck,
   UserRound,
+  Users2,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { displayTeam, isKhmtConsidered, khmtLabel } from "../fi/FIWorkspace";
 
+type AdminTab = "fi" | "accounts" | "okr";
 type FiScope = "current" | "all" | "historical";
+
+const adminTabs: Array<{ value: AdminTab; label: string; icon: typeof FileText; helper: string }> = [
+  { value: "fi", label: "FI", icon: FileText, helper: "SK-CTKT" },
+  { value: "accounts", label: "Tài khoản", icon: Users2, helper: "Login & pass" },
+  { value: "okr", label: "OKR", icon: BarChart3, helper: "Tiến độ tháng" },
+];
 
 const fiScopes: Array<{ value: FiScope; label: string }> = [
   { value: "current", label: "Hiện hành" },
   { value: "all", label: "Tất cả" },
   { value: "historical", label: "Lịch sử" },
 ];
+
+const okrTeams = ["TBCH", "TBĐL", "TBHTĐK", "TCĐK"];
+
+const roleLabels: Record<string, string> = {
+  Admin: "Quản trị",
+  Workshop_Leader: "Lãnh đạo Xưởng",
+  FI_Coordinator: "Đầu mối FI",
+  Team_Account: "Tài khoản đội/tổ",
+  Staff: "Nhân viên",
+};
 
 const statusLabels: Record<string, string> = {
   Draft: "Bản nháp",
@@ -35,6 +57,11 @@ const statusLabels: Record<string, string> = {
 
 const statusOrder = ["Draft", "Submitted", "NeedMoreInfo", "Reviewed", "Approved", "Deferred", "Rejected", "Cancelled", "Completed"];
 
+function displayRole(value: string | null | undefined) {
+  if (!value) return "Chưa rõ";
+  return roleLabels[value] ?? value;
+}
+
 function displayStatus(value: string | null | undefined) {
   if (!value) return "Chưa rõ";
   return statusLabels[value] ?? value;
@@ -46,6 +73,26 @@ function statusTone(value: string | null | undefined) {
   if (value === "Deferred" || value === "NeedMoreInfo") return "warning";
   if (value === "Submitted" || value === "Reviewed") return "info";
   return "neutral";
+}
+
+function okrStatusTone(value: string | null | undefined) {
+  if (value === "Đã gửi" || value === "Đã chốt") return "success";
+  if (value === "Đang nhập") return "warning";
+  if (value === "Chưa nhập") return "danger";
+  return "neutral";
+}
+
+function actionLabel(value: string | null | undefined) {
+  const labels: Record<string, string> = {
+    login: "Đăng nhập",
+    change_password: "Đổi mật khẩu",
+    create: "Tạo tài khoản",
+    update_role: "Cập nhật quyền",
+    save_draft: "Lưu nháp OKR",
+    submit: "Gửi OKR",
+    upload: "Upload báo cáo",
+  };
+  return value ? labels[value] ?? value : "Chưa có";
 }
 
 function formatDateTime(value: string | null | undefined) {
@@ -96,23 +143,56 @@ function historyActionLabel(entry: any) {
   return `${displayStatus(entry.from_status)} -> ${displayStatus(entry.to_status)}`;
 }
 
+function latestByTime(rows: any[]) {
+  return [...rows].sort((a, b) => {
+    const left = new Date(String(a?.created_at ?? "").replace(" ", "T")).getTime() || 0;
+    const right = new Date(String(b?.created_at ?? "").replace(" ", "T")).getTime() || 0;
+    return right - left;
+  })[0];
+}
+
+function okrActionHint(status: string | null | undefined) {
+  if (status === "Chưa nhập") return "Chưa có bản lưu, cần đội/tổ nhập OKR";
+  if (status === "Đang nhập") return "Đang có nháp, cần gửi chính thức";
+  if (status === "Đã gửi") return "Đã gửi, sẵn sàng kiểm tra/chốt";
+  if (status === "Đã chốt") return "Đã khóa dữ liệu kỳ này";
+  return "Cần kiểm tra lại trạng thái";
+}
+
 export function AdminPanel() {
+  const today = new Date();
+  const [activeTab, setActiveTab] = useState<AdminTab>("fi");
   const [fiRows, setFiRows] = useState<any[]>([]);
   const [dashboard, setDashboard] = useState<any>(null);
+  const [users, setUsers] = useState<any[]>([]);
+  const [auditRows, setAuditRows] = useState<any[]>([]);
+  const [okrRows, setOkrRows] = useState<any[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [scope, setScope] = useState<FiScope>("current");
   const [teamFilter, setTeamFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [accountSearch, setAccountSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [okrMonth, setOkrMonth] = useState(today.getMonth() + 1);
+  const [okrYear, setOkrYear] = useState(today.getFullYear());
 
   const reload = () => {
     setLoading(true);
-    Promise.all([api.fiReports(), api.fiDashboard()])
-      .then(([rows, dashboardData]) => {
+    Promise.all([
+      api.fiReports(),
+      api.fiDashboard(),
+      api.adminUsers(),
+      api.auditLog({ entity_type: "Account" }),
+      api.getWebInputStatus(okrMonth, okrYear),
+    ])
+      .then(([rows, dashboardData, userRows, logs, statusRows]) => {
         setFiRows([...rows].sort(compareFiRows));
         setDashboard(dashboardData);
+        setUsers([...userRows].sort((a, b) => String(a.id).localeCompare(String(b.id), "vi")));
+        setAuditRows(logs);
+        setOkrRows(statusRows);
         setError("");
       })
       .catch((err) => setError(err.message))
@@ -121,7 +201,7 @@ export function AdminPanel() {
 
   useEffect(() => {
     reload();
-  }, []);
+  }, [okrMonth, okrYear]);
 
   const teams = useMemo(
     () => Array.from(new Set(fiRows.map((row) => row.team).filter(Boolean))).sort((a, b) => displayTeam(a).localeCompare(displayTeam(b), "vi")),
@@ -161,23 +241,546 @@ export function AdminPanel() {
     });
   }, [fiRows, scope, search, teamFilter, statusFilter]);
 
+  const accountActivityRows = useMemo(() => {
+    return users
+      .map((user) => {
+        const relatedLogs = auditRows.filter((row) => row.actor === user.id || (row.entity_type === "Account" && row.entity_id === user.id));
+        const loginLog = latestByTime(relatedLogs.filter((row) => row.action === "login"));
+        const passwordLog = latestByTime(relatedLogs.filter((row) => row.action === "change_password"));
+        const latestLog = latestByTime(relatedLogs);
+        return { user, relatedLogs, loginLog, passwordLog, latestLog };
+      });
+  }, [users, auditRows]);
+
+  const accountRows = useMemo(() => {
+    const keyword = accountSearch.trim().toLowerCase();
+    if (!keyword) return accountActivityRows;
+    return accountActivityRows.filter(({ user }) => {
+      const haystack = [
+        user.id,
+        user.display_name,
+        user.full_name,
+        user.role,
+        user.team,
+      ].join(" ").toLowerCase();
+      return haystack.includes(keyword);
+    });
+  }, [accountActivityRows, accountSearch]);
+
   const totals = dashboard?.totals ?? {};
   const pendingCount = Number(totals.pending ?? fiRows.filter((row) => ["Submitted", "NeedMoreInfo", "Reviewed"].includes(row.status)).length);
   const khmtCount = Number(totals.khmt_considered ?? fiRows.filter(isKhmtConsidered).length);
+  const activeUsers = users.filter((user) => user.is_active).length;
+  const changedPasswordCount = users.filter((user) => !user.must_change_password).length;
+  const loggedInCount = accountActivityRows.filter((row) => Boolean(row.loginLog)).length;
+  const readyAccountCount = accountActivityRows.filter((row) => Boolean(row.loginLog) && !row.user.must_change_password).length;
+  const submittedOkrCount = okrRows.filter((row) => ["Đã gửi", "Đã chốt"].includes(row.status)).length;
+  const draftOkrCount = okrRows.filter((row) => row.status === "Đang nhập").length;
+  const missingOkrCount = okrRows.filter((row) => row.status === "Chưa nhập").length;
+
+  const renderFiTab = () => (
+    <>
+      <div className="admin-fi-kpis">
+        <div className="admin-fi-kpi">
+          <Database size={18} />
+          <span>Tổng SK</span>
+          <strong>{fiRows.length}</strong>
+          <small>{currentRows.length} hiện hành · {historicalRows.length} lịch sử</small>
+        </div>
+        <div className="admin-fi-kpi current">
+          <ShieldCheck size={18} />
+          <span>Hiện hành</span>
+          <strong>{currentRows.length}</strong>
+          <small>Đã gửi vào luồng FI, không tính bản nháp</small>
+        </div>
+        <div className="admin-fi-kpi">
+          <History size={18} />
+          <span>Lịch sử</span>
+          <strong>{historicalRows.length}</strong>
+          <small>Dữ liệu nhập từ Excel</small>
+        </div>
+        <div className="admin-fi-kpi">
+          <CheckCircle2 size={18} />
+          <span>Đã vào KHMT</span>
+          <strong>{khmtCount}</strong>
+          <small>{pendingCount} hồ sơ còn chờ xử lý</small>
+        </div>
+      </div>
+
+      {currentRows.length > 0 && (
+        <div className="admin-current-strip">
+          <div className="admin-current-strip-head">
+            <Clock3 size={17} />
+            <strong>Hồ sơ hiện hành đang có trên hệ thống</strong>
+          </div>
+          <div className="admin-current-list">
+            {currentRows.map((row) => (
+              <button
+                className="admin-current-item"
+                key={row.id}
+                onClick={() => {
+                  setScope("current");
+                  setTeamFilter("all");
+                  setStatusFilter("all");
+                  setSearch("");
+                  setExpandedId(expandedId === row.id ? null : row.id);
+                }}
+                type="button"
+              >
+                <span>{row.sk_code}</span>
+                <strong>{row.title}</strong>
+                <small>
+                  {row.author_name} ({row.author_user_id}) · {displayTeam(row.team)} · tạo {formatDateTime(row.created_at)}
+                </small>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="admin-fi-controls">
+        <div className="segmented-control" aria-label="Phạm vi dữ liệu FI">
+          {fiScopes.map((item) => (
+            <button
+              className={scope === item.value ? "active" : ""}
+              key={item.value}
+              onClick={() => {
+                setScope(item.value);
+                setExpandedId(null);
+              }}
+              type="button"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <label className="admin-filter-field">
+          Đội/tổ
+          <select value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)}>
+            <option value="all">Tất cả</option>
+            {teams.map((team) => (
+              <option key={team} value={team}>{displayTeam(team)}</option>
+            ))}
+          </select>
+        </label>
+        <label className="admin-filter-field">
+          Trạng thái
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="all">Tất cả</option>
+            {statuses.map((status) => (
+              <option key={status} value={status}>{displayStatus(status)}</option>
+            ))}
+          </select>
+        </label>
+        <label className="admin-search-field">
+          <Search size={15} />
+          <input
+            placeholder="Tìm mã, tên SK, người đăng ký, nội dung..."
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </label>
+      </div>
+
+      <div className="admin-fi-table-wrap">
+        <table className="admin-fi-table">
+          <thead>
+            <tr>
+              <th>Mã SK</th>
+              <th>Tên SK-CTKT</th>
+              <th>Người đăng ký</th>
+              <th>Đội/tổ</th>
+              <th>Tháng đăng ký</th>
+              <th>Thời điểm tạo</th>
+              <th>Kết luận</th>
+              <th>KHMT</th>
+              <th>Nguồn</th>
+              <th>Chi tiết</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredRows.map((row) => {
+              const expanded = expandedId === row.id;
+              const history = Array.isArray(row.status_history) ? row.status_history : [];
+              return (
+                <Fragment key={row.id}>
+                  <tr className={row.is_historical_import ? "" : "admin-current-row"}>
+                    <td><strong>{row.sk_code}</strong></td>
+                    <td className="admin-fi-title-cell">{row.title}</td>
+                    <td>
+                      <span className="admin-person">
+                        <UserRound size={14} />
+                        <span>
+                          <strong>{row.author_name}</strong>
+                          <small>{row.author_user_id}</small>
+                        </span>
+                      </span>
+                    </td>
+                    <td>{displayTeam(row.team)}</td>
+                    <td>{formatRegistration(row)}</td>
+                    <td>{formatDateTime(row.created_at)}</td>
+                    <td>
+                      <span className={`admin-status-pill ${statusTone(row.status)}`}>{displayStatus(row.status)}</span>
+                    </td>
+                    <td>
+                      <span className={`admin-khmt-pill ${isKhmtConsidered(row) ? "success" : "empty"}`}>
+                        {khmtLabel(row)}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`admin-source-pill ${row.is_historical_import ? "historical" : "current"}`}>
+                        {sourceLabel(row)}
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        className="admin-detail-button"
+                        onClick={() => setExpandedId(expanded ? null : row.id)}
+                        type="button"
+                      >
+                        <FileText size={15} />
+                        {expanded ? "Đóng" : "Mở"}
+                      </button>
+                    </td>
+                  </tr>
+                  {expanded && (
+                    <tr className="admin-detail-row">
+                      <td colSpan={10}>
+                        <div className="admin-fi-detail">
+                          <div className="admin-fi-detail-grid">
+                            <div>
+                              <span>ID</span>
+                              <strong>{row.id}</strong>
+                            </div>
+                            <div>
+                              <span>Người tạo</span>
+                              <strong>{row.author_user_id}</strong>
+                            </div>
+                            <div>
+                              <span>Gửi duyệt</span>
+                              <strong>{formatDateTime(row.submitted_at)}</strong>
+                            </div>
+                            <div>
+                              <span>Xét duyệt</span>
+                              <strong>{formatDateTime(row.reviewed_at || row.approved_at)}</strong>
+                            </div>
+                            <div>
+                              <span>Hoàn tất</span>
+                              <strong>{formatDateTime(row.completed_at)}</strong>
+                            </div>
+                            <div>
+                              <span>Cập nhật cuối</span>
+                              <strong>{formatDateTime(row.updated_at)}</strong>
+                            </div>
+                            <div>
+                              <span>Nguồn Excel</span>
+                              <strong>{row.bm01_source_sheet ? `${row.bm01_source_sheet}!${row.bm01_source_row ?? ""}` : "Không"}</strong>
+                            </div>
+                            <div>
+                              <span>File nguồn</span>
+                              <strong>{row.bm01_source_file || "Không"}</strong>
+                            </div>
+                            <div>
+                              <span>Xét KHMT</span>
+                              <strong>{row.consider_for_khmt ? "Có" : "Không"}</strong>
+                            </div>
+                            <div>
+                              <span>Tính OKR</span>
+                              <strong>{row.is_counted_for_okr ? "Có" : "Không"}</strong>
+                            </div>
+                            <div>
+                              <span>Công khai</span>
+                              <strong>{row.is_public ? "Có" : "Không"}</strong>
+                            </div>
+                            <div>
+                              <span>Dữ liệu lịch sử</span>
+                              <strong>{row.is_historical_import ? "Có" : "Không"}</strong>
+                            </div>
+                          </div>
+                          <div className="admin-fi-detail-section">
+                            <span>Nội dung đăng ký</span>
+                            <p>{row.content_description || "Chưa có nội dung."}</p>
+                          </div>
+                          <div className="admin-fi-detail-section">
+                            <span>Kế hoạch hoàn thành</span>
+                            <p>{row.completion_plan || "Chưa ghi"}</p>
+                          </div>
+                          {(row.fi_coordinator_comments || row.bm01_raw_conclusion || row.workshop_leader_conclusion || row.decision_note) && (
+                            <div className="admin-fi-detail-section">
+                              <span>Thông tin xét duyệt</span>
+                              <p>{row.fi_coordinator_comments || row.bm01_raw_conclusion || "Chưa ghi"}</p>
+                              {row.workshop_leader_conclusion && <p>Kết luận LĐX: {row.workshop_leader_conclusion}</p>}
+                              {row.decision_note && <p>Ghi chú: {row.decision_note}</p>}
+                            </div>
+                          )}
+                          <div className="admin-fi-detail-section">
+                            <span>Lịch sử xử lý</span>
+                            {history.length > 0 ? (
+                              <div className="admin-history-list">
+                                {history.map((entry: any, index: number) => (
+                                  <div className="admin-history-entry" key={`${row.id}-history-${index}`}>
+                                    <strong>{historyActionLabel(entry)}</strong>
+                                    <small>
+                                      {formatDateTime(entry.changed_at)} · bởi {entry.changed_by || "Hệ thống"}
+                                    </small>
+                                    {entry.reason && <em>{entry.reason}</em>}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p>Chưa có lịch sử xử lý.</p>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+            {filteredRows.length === 0 && (
+              <tr>
+                <td colSpan={10}>Không có SK-CTKT phù hợp với bộ lọc hiện tại.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+
+  const renderAccountsTab = () => (
+    <>
+      <div className="admin-fi-kpis admin-account-kpis">
+        <div className="admin-fi-kpi">
+          <Users2 size={18} />
+          <span>Tổng tài khoản</span>
+          <strong>{users.length}</strong>
+          <small>{activeUsers} đang hoạt động</small>
+        </div>
+        <div className="admin-fi-kpi current">
+          <KeyRound size={18} />
+          <span>Đã đổi pass</span>
+          <strong>{changedPasswordCount}</strong>
+          <small>{users.length - changedPasswordCount} còn bắt buộc đổi</small>
+        </div>
+        <div className="admin-fi-kpi">
+          <Clock3 size={18} />
+          <span>Có log login</span>
+          <strong>{loggedInCount}</strong>
+          <small>Áp dụng cho lần đăng nhập từ bản cập nhật này</small>
+        </div>
+        <div className="admin-fi-kpi">
+          <ShieldCheck size={18} />
+          <span>Sẵn sàng dùng</span>
+          <strong>{readyAccountCount}</strong>
+          <small>Đã login và không còn yêu cầu đổi pass</small>
+        </div>
+      </div>
+
+      <div className="admin-fi-controls">
+        <label className="admin-search-field admin-account-search">
+          <Search size={15} />
+          <input
+            placeholder="Tìm tài khoản, họ tên, vai trò, đội/tổ..."
+            value={accountSearch}
+            onChange={(event) => setAccountSearch(event.target.value)}
+          />
+        </label>
+      </div>
+
+      <div className="admin-fi-table-wrap">
+        <table className="admin-fi-table admin-account-table">
+          <thead>
+            <tr>
+              <th>Tài khoản</th>
+              <th>Người dùng</th>
+              <th>Vai trò</th>
+              <th>Đội/tổ</th>
+              <th>Trạng thái</th>
+              <th>Đổi mật khẩu</th>
+              <th>Lần login gần nhất</th>
+              <th>Hoạt động gần nhất</th>
+              <th>Ngày tạo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {accountRows.map(({ user, loginLog, passwordLog, latestLog }) => (
+              <tr key={user.id}>
+                <td><strong>{user.id}</strong></td>
+                <td>
+                  <span className="admin-person">
+                    <UserRound size={14} />
+                    <span>
+                      <strong>{user.display_name || user.full_name || user.id}</strong>
+                      <small>{user.full_name || "Chưa ghi họ tên đầy đủ"}</small>
+                    </span>
+                  </span>
+                </td>
+                <td>{displayRole(user.role)}</td>
+                <td>{displayTeam(user.team) || "Không gán"}</td>
+                <td>
+                  <span className={`admin-status-pill ${user.is_active ? "success" : "danger"}`}>
+                    {user.is_active ? "Đang hoạt động" : "Đã khóa"}
+                  </span>
+                </td>
+                <td>
+                  <span className={`admin-status-pill ${user.must_change_password ? "warning" : "success"}`}>
+                    {user.must_change_password ? "Chưa đổi" : "Đã đổi/không bắt buộc"}
+                  </span>
+                  {passwordLog && <small className="admin-cell-note">{formatDateTime(passwordLog.created_at)}</small>}
+                </td>
+                <td>{loginLog ? formatDateTime(loginLog.created_at) : "Chưa có log"}</td>
+                <td>
+                  {latestLog ? (
+                    <>
+                      <strong>{actionLabel(latestLog.action)}</strong>
+                      <small className="admin-cell-note">{formatDateTime(latestLog.created_at)}</small>
+                    </>
+                  ) : (
+                    "Chưa có hoạt động"
+                  )}
+                </td>
+                <td>{formatDateTime(user.created_at)}</td>
+              </tr>
+            ))}
+            {accountRows.length === 0 && (
+              <tr>
+                <td colSpan={9}>Không có tài khoản phù hợp với bộ lọc hiện tại.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+
+  const renderOkrTab = () => (
+    <>
+      <div className="admin-okr-toolbar">
+        <div className="admin-okr-period">
+          <CalendarDays size={17} />
+          <label>
+            Tháng
+            <select value={okrMonth} onChange={(event) => setOkrMonth(Number(event.target.value))}>
+              {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
+                <option key={month} value={month}>T{month}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Năm
+            <input
+              min={2020}
+              max={2100}
+              type="number"
+              value={okrYear}
+              onChange={(event) => setOkrYear(Number(event.target.value) || today.getFullYear())}
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="admin-fi-kpis admin-okr-kpis">
+        <div className="admin-fi-kpi">
+          <Database size={18} />
+          <span>Đội/tổ</span>
+          <strong>{okrRows.length || okrTeams.length}</strong>
+          <small>Kỳ T{okrMonth}/{okrYear}</small>
+        </div>
+        <div className="admin-fi-kpi current">
+          <Send size={18} />
+          <span>Đã gửi/chốt</span>
+          <strong>{submittedOkrCount}</strong>
+          <small>{Math.round((submittedOkrCount / Math.max(1, okrRows.length || okrTeams.length)) * 100)}% hoàn tất gửi</small>
+        </div>
+        <div className="admin-fi-kpi">
+          <Clock3 size={18} />
+          <span>Đang nhập</span>
+          <strong>{draftOkrCount}</strong>
+          <small>Có nháp nhưng chưa gửi</small>
+        </div>
+        <div className="admin-fi-kpi">
+          <History size={18} />
+          <span>Chưa nhập</span>
+          <strong>{missingOkrCount}</strong>
+          <small>Cần nhắc đội/tổ phụ trách</small>
+        </div>
+      </div>
+
+      <div className="admin-okr-grid">
+        {okrRows.map((row) => (
+          <div className="admin-okr-card" key={row.team}>
+            <div className="admin-okr-card-head">
+              <strong>{displayTeam(row.team)}</strong>
+              <span className={`admin-status-pill ${okrStatusTone(row.status)}`}>{row.status}</span>
+            </div>
+            <dl>
+              <div>
+                <dt>Lưu gần nhất</dt>
+                <dd>{formatDateTime(row.last_saved_at)}</dd>
+              </div>
+              <div>
+                <dt>Gửi chính thức</dt>
+                <dd>{formatDateTime(row.submitted_at)}</dd>
+              </div>
+              <div>
+                <dt>Phiên bản</dt>
+                <dd>{row.version ?? "Chưa có"}</dd>
+              </div>
+            </dl>
+            <small>{okrActionHint(row.status)}</small>
+          </div>
+        ))}
+      </div>
+
+      <div className="admin-fi-table-wrap">
+        <table className="admin-fi-table admin-okr-table">
+          <thead>
+            <tr>
+              <th>Đội/tổ</th>
+              <th>Trạng thái</th>
+              <th>Phiên bản</th>
+              <th>Lưu gần nhất</th>
+              <th>Gửi chính thức</th>
+              <th>Gợi ý hành động</th>
+            </tr>
+          </thead>
+          <tbody>
+            {okrRows.map((row) => (
+              <tr key={`${row.team}-${okrMonth}-${okrYear}`}>
+                <td><strong>{displayTeam(row.team)}</strong></td>
+                <td><span className={`admin-status-pill ${okrStatusTone(row.status)}`}>{row.status}</span></td>
+                <td>{row.version ?? "Chưa có"}</td>
+                <td>{formatDateTime(row.last_saved_at)}</td>
+                <td>{formatDateTime(row.submitted_at)}</td>
+                <td>{okrActionHint(row.status)}</td>
+              </tr>
+            ))}
+            {okrRows.length === 0 && (
+              <tr>
+                <td colSpan={6}>Chưa tải được trạng thái OKR kỳ này.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
 
   return (
     <div
       className="content-grid admin-fi-shell"
       data-snapshot-target="true"
-      data-snapshot-name="quan-tri-fi"
+      data-snapshot-name="quan-tri"
     >
       {error && <p className="error">{error}</p>}
-      <section className="panel wide admin-fi-panel">
+      <section className="panel wide admin-fi-panel admin-system-panel">
         <div className="panel-header admin-fi-header">
           <div>
-            <h2>Quản trị FI</h2>
+            <h2>Quản trị hệ thống</h2>
             <p className="muted">
-              Theo dõi toàn bộ SK-CTKT: người đăng ký, thời điểm, trạng thái, KHMT, nguồn dữ liệu và lịch sử xử lý.
+              Theo dõi dữ liệu vận hành: SK-CTKT, tài khoản đã sử dụng và tiến độ OKR theo tháng.
             </p>
           </div>
           <button onClick={reload} disabled={loading} type="button">
@@ -186,272 +789,29 @@ export function AdminPanel() {
           </button>
         </div>
 
-        <div className="admin-fi-kpis">
-          <div className="admin-fi-kpi">
-            <Database size={18} />
-            <span>Tổng SK</span>
-            <strong>{fiRows.length}</strong>
-            <small>{currentRows.length} hiện hành · {historicalRows.length} lịch sử</small>
-          </div>
-          <div className="admin-fi-kpi current">
-            <ShieldCheck size={18} />
-            <span>Hiện hành</span>
-            <strong>{currentRows.length}</strong>
-            <small>Đăng ký trực tiếp trên hệ thống</small>
-          </div>
-          <div className="admin-fi-kpi">
-            <History size={18} />
-            <span>Lịch sử</span>
-            <strong>{historicalRows.length}</strong>
-            <small>Dữ liệu nhập từ Excel</small>
-          </div>
-          <div className="admin-fi-kpi">
-            <CheckCircle2 size={18} />
-            <span>Đã vào KHMT</span>
-            <strong>{khmtCount}</strong>
-            <small>{pendingCount} hồ sơ còn chờ xử lý</small>
-          </div>
-        </div>
-
-        {currentRows.length > 0 && (
-          <div className="admin-current-strip">
-            <div className="admin-current-strip-head">
-              <Clock3 size={17} />
-              <strong>Hồ sơ hiện hành đang có trên hệ thống</strong>
-            </div>
-            <div className="admin-current-list">
-              {currentRows.map((row) => (
-                <button
-                  className="admin-current-item"
-                  key={row.id}
-                  onClick={() => {
-                    setScope("current");
-                    setTeamFilter("all");
-                    setStatusFilter("all");
-                    setSearch("");
-                    setExpandedId(expandedId === row.id ? null : row.id);
-                  }}
-                  type="button"
-                >
-                  <span>{row.sk_code}</span>
-                  <strong>{row.title}</strong>
-                  <small>
-                    {row.author_name} ({row.author_user_id}) · {displayTeam(row.team)} · tạo {formatDateTime(row.created_at)}
-                  </small>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="admin-fi-controls">
-          <div className="segmented-control" aria-label="Phạm vi dữ liệu FI">
-            {fiScopes.map((item) => (
+        <div className="admin-tabs" role="tablist" aria-label="Nhóm quản trị">
+          {adminTabs.map((item) => {
+            const Icon = item.icon;
+            return (
               <button
-                className={scope === item.value ? "active" : ""}
+                aria-selected={activeTab === item.value}
+                className={activeTab === item.value ? "active" : ""}
                 key={item.value}
-                onClick={() => {
-                  setScope(item.value);
-                  setExpandedId(null);
-                }}
+                onClick={() => setActiveTab(item.value)}
+                role="tab"
                 type="button"
               >
-                {item.label}
+                <Icon size={16} />
+                <span>{item.label}</span>
+                <small>{item.helper}</small>
               </button>
-            ))}
-          </div>
-          <label className="admin-filter-field">
-            Đội/tổ
-            <select value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)}>
-              <option value="all">Tất cả</option>
-              {teams.map((team) => (
-                <option key={team} value={team}>{displayTeam(team)}</option>
-              ))}
-            </select>
-          </label>
-          <label className="admin-filter-field">
-            Trạng thái
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="all">Tất cả</option>
-              {statuses.map((status) => (
-                <option key={status} value={status}>{displayStatus(status)}</option>
-              ))}
-            </select>
-          </label>
-          <label className="admin-search-field">
-            <Search size={15} />
-            <input
-              placeholder="Tìm mã, tên SK, người đăng ký, nội dung..."
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </label>
+            );
+          })}
         </div>
 
-        <div className="admin-fi-table-wrap">
-          <table className="admin-fi-table">
-            <thead>
-              <tr>
-                <th>Mã SK</th>
-                <th>Tên SK-CTKT</th>
-                <th>Người đăng ký</th>
-                <th>Đội/tổ</th>
-                <th>Tháng đăng ký</th>
-                <th>Thời điểm tạo</th>
-                <th>Kết luận</th>
-                <th>KHMT</th>
-                <th>Nguồn</th>
-                <th>Chi tiết</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.map((row) => {
-                const expanded = expandedId === row.id;
-                const history = Array.isArray(row.status_history) ? row.status_history : [];
-                return (
-                  <Fragment key={row.id}>
-                    <tr key={row.id} className={row.is_historical_import ? "" : "admin-current-row"}>
-                      <td><strong>{row.sk_code}</strong></td>
-                      <td className="admin-fi-title-cell">{row.title}</td>
-                      <td>
-                        <span className="admin-person">
-                          <UserRound size={14} />
-                          <span>
-                            <strong>{row.author_name}</strong>
-                            <small>{row.author_user_id}</small>
-                          </span>
-                        </span>
-                      </td>
-                      <td>{displayTeam(row.team)}</td>
-                      <td>{formatRegistration(row)}</td>
-                      <td>{formatDateTime(row.created_at)}</td>
-                      <td>
-                        <span className={`admin-status-pill ${statusTone(row.status)}`}>{displayStatus(row.status)}</span>
-                      </td>
-                      <td>
-                        <span className={`admin-khmt-pill ${isKhmtConsidered(row) ? "success" : "empty"}`}>
-                          {khmtLabel(row)}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`admin-source-pill ${row.is_historical_import ? "historical" : "current"}`}>
-                          {sourceLabel(row)}
-                        </span>
-                      </td>
-                      <td>
-                        <button
-                          className="admin-detail-button"
-                          onClick={() => setExpandedId(expanded ? null : row.id)}
-                          type="button"
-                        >
-                          <FileText size={15} />
-                          {expanded ? "Đóng" : "Mở"}
-                        </button>
-                      </td>
-                    </tr>
-                    {expanded && (
-                      <tr className="admin-detail-row" key={`${row.id}-detail`}>
-                        <td colSpan={10}>
-                          <div className="admin-fi-detail">
-                            <div className="admin-fi-detail-grid">
-                              <div>
-                                <span>ID</span>
-                                <strong>{row.id}</strong>
-                              </div>
-                              <div>
-                                <span>Người tạo</span>
-                                <strong>{row.author_user_id}</strong>
-                              </div>
-                              <div>
-                                <span>Gửi duyệt</span>
-                                <strong>{formatDateTime(row.submitted_at)}</strong>
-                              </div>
-                              <div>
-                                <span>Xét duyệt</span>
-                                <strong>{formatDateTime(row.reviewed_at || row.approved_at)}</strong>
-                              </div>
-                              <div>
-                                <span>Hoàn tất</span>
-                                <strong>{formatDateTime(row.completed_at)}</strong>
-                              </div>
-                              <div>
-                                <span>Cập nhật cuối</span>
-                                <strong>{formatDateTime(row.updated_at)}</strong>
-                              </div>
-                              <div>
-                                <span>Nguồn Excel</span>
-                                <strong>{row.bm01_source_sheet ? `${row.bm01_source_sheet}!${row.bm01_source_row ?? ""}` : "Không"}</strong>
-                              </div>
-                              <div>
-                                <span>File nguồn</span>
-                                <strong>{row.bm01_source_file || "Không"}</strong>
-                              </div>
-                              <div>
-                                <span>Xét KHMT</span>
-                                <strong>{row.consider_for_khmt ? "Có" : "Không"}</strong>
-                              </div>
-                              <div>
-                                <span>Tính OKR</span>
-                                <strong>{row.is_counted_for_okr ? "Có" : "Không"}</strong>
-                              </div>
-                              <div>
-                                <span>Công khai</span>
-                                <strong>{row.is_public ? "Có" : "Không"}</strong>
-                              </div>
-                              <div>
-                                <span>Dữ liệu lịch sử</span>
-                                <strong>{row.is_historical_import ? "Có" : "Không"}</strong>
-                              </div>
-                            </div>
-                            <div className="admin-fi-detail-section">
-                              <span>Nội dung đăng ký</span>
-                              <p>{row.content_description || "Chưa có nội dung."}</p>
-                            </div>
-                            <div className="admin-fi-detail-section">
-                              <span>Kế hoạch hoàn thành</span>
-                              <p>{row.completion_plan || "Chưa ghi"}</p>
-                            </div>
-                            {(row.fi_coordinator_comments || row.bm01_raw_conclusion || row.workshop_leader_conclusion || row.decision_note) && (
-                              <div className="admin-fi-detail-section">
-                                <span>Thông tin xét duyệt</span>
-                                <p>{row.fi_coordinator_comments || row.bm01_raw_conclusion || "Chưa ghi"}</p>
-                                {row.workshop_leader_conclusion && <p>Kết luận LĐX: {row.workshop_leader_conclusion}</p>}
-                                {row.decision_note && <p>Ghi chú: {row.decision_note}</p>}
-                              </div>
-                            )}
-                            <div className="admin-fi-detail-section">
-                              <span>Lịch sử xử lý</span>
-                              {history.length > 0 ? (
-                                <div className="admin-history-list">
-                                  {history.map((entry: any, index: number) => (
-                                    <div className="admin-history-entry" key={`${row.id}-history-${index}`}>
-                                      <strong>{historyActionLabel(entry)}</strong>
-                                      <small>
-                                        {formatDateTime(entry.changed_at)} · bởi {entry.changed_by || "Hệ thống"}
-                                      </small>
-                                      {entry.reason && <em>{entry.reason}</em>}
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p>Chưa có lịch sử xử lý.</p>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-              {filteredRows.length === 0 && (
-                <tr>
-                  <td colSpan={10}>Không có SK-CTKT phù hợp với bộ lọc hiện tại.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        {activeTab === "fi" && renderFiTab()}
+        {activeTab === "accounts" && renderAccountsTab()}
+        {activeTab === "okr" && renderOkrTab()}
       </section>
     </div>
   );

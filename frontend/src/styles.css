@@ -2698,6 +2698,62 @@ tr:hover td {
   margin-bottom: 4px;
 }
 
+.admin-tabs {
+  align-items: stretch;
+  background: #f8fafc;
+  border: 1px solid #dbe4ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 6px;
+}
+
+.admin-tabs button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: #475569;
+  display: grid;
+  gap: 2px 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+  justify-content: start;
+  min-height: 48px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.admin-tabs button svg {
+  color: #64748b;
+  grid-row: 1 / span 2;
+}
+
+.admin-tabs button span {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.admin-tabs button small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.admin-tabs button.active {
+  background: #ffffff;
+  border-color: #bfdbfe;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.admin-tabs button.active svg,
+.admin-tabs button.active span {
+  color: #1d4ed8;
+}
+
 .admin-fi-kpis {
   display: grid;
   gap: 12px;
@@ -2878,6 +2934,14 @@ tr:hover td {
   min-width: 1280px;
 }
 
+.admin-account-table {
+  min-width: 1180px;
+}
+
+.admin-okr-table {
+  min-width: 920px;
+}
+
 .admin-fi-table th {
   background: #f8fafc;
   color: #475569;
@@ -2921,6 +2985,13 @@ tr:hover td {
 .admin-person small {
   color: #64748b;
   margin-top: 2px;
+}
+
+.admin-cell-note {
+  color: #64748b;
+  display: block;
+  font-size: 11px;
+  margin-top: 4px;
 }
 
 .admin-status-pill,
@@ -3047,6 +3118,111 @@ tr:hover td {
 .admin-history-entry em {
   color: #64748b;
   font-size: 12px;
+}
+
+.admin-account-search {
+  max-width: 620px;
+}
+
+.admin-okr-toolbar {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.admin-okr-period {
+  align-items: end;
+  background: #f8fafc;
+  border: 1px solid #dbe4ee;
+  border-radius: 8px;
+  display: inline-flex;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.admin-okr-period > svg {
+  color: #2563eb;
+  margin-bottom: 8px;
+}
+
+.admin-okr-period label {
+  color: #64748b;
+  display: grid;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 4px;
+}
+
+.admin-okr-period select,
+.admin-okr-period input {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  color: #0f172a;
+  height: 34px;
+  min-width: 88px;
+  padding: 6px 9px;
+}
+
+.admin-okr-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.admin-okr-card {
+  background: #ffffff;
+  border: 1px solid #dbe4ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.admin-okr-card-head {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.admin-okr-card-head strong {
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.admin-okr-card dl {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.admin-okr-card dl div {
+  display: grid;
+  gap: 2px;
+}
+
+.admin-okr-card dt {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.admin-okr-card dd {
+  color: #0f172a;
+  font-size: 13px;
+  margin: 0;
+}
+
+.admin-okr-card > small {
+  background: #f8fafc;
+  border-radius: 6px;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 7px 8px;
 }
 
 .reference-notes {
@@ -4096,7 +4272,7 @@ th {
 
 .legacy-sk-panel {
   --legacy-action-col: 230px;
-  --legacy-khmt-col: 150px;
+  --legacy-khmt-col: 190px;
   --legacy-period-col: 102px;
   --legacy-row-padding-x: 16px;
   --legacy-side-gap: 10px;
@@ -4694,14 +4870,14 @@ th {
 .legacy-row-column-label-side span {
   align-items: center;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: 7px;
   display: inline-flex;
   font-size: 10.5px;
   font-weight: 800;
-  height: 22px;
+  min-height: 24px;
   justify-content: center;
   letter-spacing: 0;
-  line-height: 1;
+  line-height: 1.05;
   padding: 0 8px;
   text-align: center;
   white-space: nowrap;
@@ -4714,9 +4890,9 @@ th {
 }
 
 .legacy-row-column-label-side .tone-decision {
-  background: #ecfdf5;
-  border-color: #a7f3d0;
-  color: #047857;
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #c2410c;
 }
 
 .legacy-row-column-label-side .tone-khmt {
@@ -4950,6 +5126,46 @@ th {
   background: #f8fafc;
 }
 
+.legacy-khmt-control {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: var(--legacy-khmt-col);
+}
+
+.legacy-khmt-control .legacy-khmt-select {
+  width: 100%;
+}
+
+.legacy-khmt-save {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #93c5fd;
+  border-radius: 6px;
+  color: #1d4ed8;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 800;
+  gap: 4px;
+  height: 34px;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 8px;
+}
+
+.legacy-khmt-save:hover:not(:disabled) {
+  background: #eff6ff;
+  border-color: #60a5fa;
+}
+
+.legacy-khmt-save:disabled {
+  background: #f8fafc;
+  border-color: #dbe4ee;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
 .legacy-row-action {
   align-items: center;
   background: transparent;
@@ -5085,7 +5301,7 @@ th {
   .legacy-row-side {
     align-items: center;
     grid-template-columns:
-      var(--legacy-period-col) var(--legacy-status-col) minmax(120px, 1fr);
+      var(--legacy-period-col) var(--legacy-status-col) minmax(180px, 1fr);
     grid-template-rows: auto auto;
     justify-content: start;
     justify-items: stretch;
@@ -5094,7 +5310,8 @@ th {
   }
 
   .legacy-row-side .legacy-khmt-pill,
-  .legacy-row-side .legacy-khmt-select {
+  .legacy-row-side .legacy-khmt-select,
+  .legacy-row-side .legacy-khmt-control {
     width: 100%;
   }
 
@@ -5113,7 +5330,8 @@ th {
   .legacy-row-side .legacy-period-pill,
   .legacy-row-side .legacy-status-pill,
   .legacy-row-side .legacy-khmt-pill,
-  .legacy-row-side .legacy-khmt-select {
+  .legacy-row-side .legacy-khmt-select,
+  .legacy-row-side .legacy-khmt-control {
     width: 100%;
   }
 
@@ -5123,6 +5341,11 @@ th {
 }
 
 @media (max-width: 900px) {
+  .admin-tabs,
+  .admin-okr-grid {
+    grid-template-columns: 1fr;
+  }
+
   .admin-fi-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -5138,6 +5361,13 @@ th {
   .admin-filter-field,
   .admin-search-field,
   .admin-fi-controls .segmented-control {
+    width: 100%;
+  }
+
+  .admin-okr-toolbar,
+  .admin-okr-period {
+    align-items: stretch;
+    flex-direction: column;
     width: 100%;
   }
 

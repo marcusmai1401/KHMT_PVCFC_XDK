@@ -141,7 +141,7 @@ def test_khmt_count_only_approved_with_month_year(db_session):
     transition_sk_ctkt(db_session, record.id, "submit", "u1", "Team_Account")
     transition_sk_ctkt(db_session, record.id, "approve", "fi1", "FI_Coordinator")
     assert count_for_okr(db_session, 4, 2026)["TBĐL"] == 0
-    assign_khmt(db_session, record.id, 4, 2026, "admin")
+    assign_khmt(db_session, record.id, 4, 2026, "u1", "Team_Account", principal_team="TBĐL")
     assert count_for_okr(db_session, 4, 2026)["TBĐL"] == 1
 
 
@@ -161,7 +161,7 @@ def test_assign_khmt_records_history_note(db_session):
     transition_sk_ctkt(db_session, record.id, "submit", "u1", "Team_Account")
     transition_sk_ctkt(db_session, record.id, "approve", "fi1", "FI_Coordinator")
 
-    updated = assign_khmt(db_session, record.id, 5, 2026, "admin")
+    updated = assign_khmt(db_session, record.id, 5, 2026, "u1", "Team_Account", principal_team="TBCH")
 
     assert updated.consider_for_khmt is True
     assert updated.status_history[-1]["reason"] == "khmt_assignment"
@@ -187,7 +187,7 @@ def test_assign_khmt_allows_historical_approved_records(db_session):
     db_session.add(record)
     db_session.commit()
 
-    updated = assign_khmt(db_session, record.id, 4, 2026, "admin")
+    updated = assign_khmt(db_session, record.id, 4, 2026, "TBCH", "Team_Account")
 
     assert updated.consider_for_khmt is True
     assert updated.is_counted_for_okr is True
@@ -214,7 +214,7 @@ def test_assign_khmt_rejects_historical_records_before_approval(db_session):
     db_session.commit()
 
     with pytest.raises(ValueError, match="Only Approved"):
-        assign_khmt(db_session, record.id, 4, 2026, "admin")
+        assign_khmt(db_session, record.id, 4, 2026, "TBCH", "Team_Account")
 
 
 def test_team_account_assign_khmt_is_limited_to_own_team(db_session):
@@ -232,6 +232,9 @@ def test_team_account_assign_khmt_is_limited_to_own_team(db_session):
     )
     transition_sk_ctkt(db_session, record.id, "submit", "TBCH", "Team_Account")
     transition_sk_ctkt(db_session, record.id, "approve", "fi1", "FI_Coordinator")
+
+    with pytest.raises(PermissionError, match="Chỉ tài khoản đội/tổ"):
+        assign_khmt(db_session, record.id, 6, 2026, "admin", "Admin")
 
     with pytest.raises(PermissionError, match="đội/tổ của mình"):
         assign_khmt(db_session, record.id, 6, 2026, "TBĐL", "Team_Account")
@@ -257,7 +260,7 @@ def test_fi_dashboard_aggregates_status_and_khmt(db_session):
     )
     transition_sk_ctkt(db_session, record.id, "submit", "u1", "Team_Account")
     transition_sk_ctkt(db_session, record.id, "approve", "fi1", "FI_Coordinator")
-    assign_khmt(db_session, record.id, 4, 2026, "admin")
+    assign_khmt(db_session, record.id, 4, 2026, "u1", "Team_Account", principal_team="TCĐK")
 
     payload = fi_dashboard(db_session, {"user_id": "admin", "role": "Admin"})
     team = next(item for item in payload["teams"] if item["team"] == "TCĐK")
@@ -319,7 +322,7 @@ def test_fi_dashboard_mixes_historical_and_current_records(db_session):
     )
     transition_sk_ctkt(db_session, current.id, "submit", "u1", "Team_Account")
     transition_sk_ctkt(db_session, current.id, "approve", "fi1", "FI_Coordinator")
-    assign_khmt(db_session, current.id, 5, 2026, "admin")
+    assign_khmt(db_session, current.id, 5, 2026, "u1", "Team_Account", principal_team="TBCH")
     historical = SKCTKTModel(
         id="sk-legacy-deferred-dashboard",
         sk_code="HIST-TBCH-TBCH-07",

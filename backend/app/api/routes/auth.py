@@ -53,6 +53,19 @@ def _token_response_from_user(user: User, *, sandbox: bool = False) -> TokenResp
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+    if payload.user_id.strip() == SANDBOX_LOGIN_ID and payload.password == SANDBOX_PASSWORD:
+        ensure_sandbox_data()
+        identity = sandbox_identity(SANDBOX_LOGIN_ID)
+        if identity is None:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Sandbox is not configured")
+        return TokenResponse(
+            access_token=create_access_token(identity.id, identity.role, sandbox=True),
+            must_change_password=False,
+            display_name=identity.display_name,
+            role=identity.role.value,
+            team=None,
+        )
+
     user = db.get(User, payload.user_id)
     if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sai tài khoản hoặc mật khẩu")

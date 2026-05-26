@@ -59,6 +59,40 @@ def test_auth_rejects_no_token_and_invalid_login(client):
     assert response.status_code == 401
 
 
+def test_guest_test_login_is_admin_sandbox_and_does_not_write_production(client):
+    response = client.post("/api/v1/auth/login", json={"user_id": "test", "password": "PVCFC@123"})
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["role"] == "Admin"
+    assert payload["display_name"] == "Khách kiểm thử - Quản trị"
+    headers = {"Authorization": f"Bearer {payload['access_token']}"}
+
+    profile = client.get("/api/v1/auth/me", headers=headers)
+    assert profile.status_code == 200, profile.text
+    assert profile.json()["sandbox"] is True
+    assert profile.json()["user_id"] == "test"
+
+    with create_session() as db:
+        before_count = db.query(SKCTKTModel).count()
+
+    created = client.post(
+        "/api/v1/fi/sk-ctkt",
+        headers=headers,
+        json={
+            "author_name": "Khách kiểm thử",
+            "team": "TBCH",
+            "title": "Sandbox only",
+            "content_description": "Không ghi vào production",
+            "completion_plan": "T6/2026",
+        },
+    )
+    assert created.status_code == 200, created.text
+
+    with create_session() as db:
+        assert db.query(SKCTKTModel).count() == before_count
+        assert db.get(SKCTKTModel, created.json()["id"]) is None
+
+
 def test_user_cannot_submit_another_users_sk(client, admin_headers):
     user_one = _create_user(client, admin_headers, "u1")
     user_two = _create_user(client, admin_headers, "u2")

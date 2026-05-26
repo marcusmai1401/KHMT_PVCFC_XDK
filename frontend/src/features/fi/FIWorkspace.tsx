@@ -2835,6 +2835,15 @@ export function FIWorkspace({
                 <h3>{group.month ? `T${group.month}/${group.year}` : "Chưa rõ tháng"}</h3>
                 <span>{group.items.length} SK-CTKT</span>
               </div>
+              <div className="legacy-row-column-labels" aria-hidden="true">
+                <span />
+                <div className="legacy-row-column-label-side">
+                  <span>Tháng đăng ký</span>
+                  <span>Kết luận LĐX</span>
+                  <span>KHMT</span>
+                  <span />
+                </div>
+              </div>
               {group.items.map((item) => {
                 const isOpen = selectedItem?.id === item.id;
                 const actions = visibleActionsForSk(role, currentUserId, item);

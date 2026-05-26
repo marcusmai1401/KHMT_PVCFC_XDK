@@ -16,7 +16,7 @@ from app.services.cache import cache_delete_prefix
 
 
 SANDBOX_LOGIN_ID = "test"
-SANDBOX_PASSWORD = "PVCFC-KHMT-Test-2026!r7Qp"
+SANDBOX_PASSWORD = "PVCFC@123"
 SANDBOX_INITIALIZED_KEY = "sandbox_initialized_from_production"
 
 
@@ -28,6 +28,7 @@ class SandboxIdentity:
 
 
 SANDBOX_IDENTITIES = {
+    "test": SandboxIdentity("test", "Khách kiểm thử - Quản trị", Role.ADMIN),
     "admin": SandboxIdentity("admin", "Kiểm thử - Quản trị", Role.ADMIN),
     "leader": SandboxIdentity("leader", "Kiểm thử - Lãnh đạo Xưởng", Role.WORKSHOP_LEADER),
     "fi": SandboxIdentity("fi", "Kiểm thử - Đầu mối SK", Role.FI_COORDINATOR),
@@ -106,6 +107,16 @@ def ensure_sandbox_data() -> None:
     if "users" not in inspector.get_table_names():
         reset_sandbox_data()
         return
+    user_columns = {column["name"] for column in inspector.get_columns("users")}
+    required_user_columns = {"full_name", "team", "must_change_password"}
+    if not required_user_columns.issubset(user_columns):
+        reset_sandbox_data()
+        return
+    if "sk_ctkt" in inspector.get_table_names():
+        sk_columns = {column["name"] for column in inspector.get_columns("sk_ctkt")}
+        if "completed_at" not in sk_columns:
+            reset_sandbox_data()
+            return
     with create_session(sandbox=True) as db:
         needs_reset = db.get(SystemConfigModel, SANDBOX_INITIALIZED_KEY) is None
     if needs_reset:

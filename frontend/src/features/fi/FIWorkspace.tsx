@@ -861,6 +861,8 @@ function FilterChip<T extends string | number>({
   selected,
   onChange,
   emptyLabel = "Tất cả",
+  single = false,
+  prominent = false,
 }: {
   label: string;
   icon?: React.ReactNode;
@@ -868,6 +870,8 @@ function FilterChip<T extends string | number>({
   selected: T[];
   onChange: (next: T[]) => void;
   emptyLabel?: string;
+  single?: boolean;
+  prominent?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -883,7 +887,6 @@ function FilterChip<T extends string | number>({
     };
     document.addEventListener("mousedown", handleClick);
     document.addEventListener("keydown", handleKey);
-    // Auto-focus first checkbox for keyboard users.
     const id = window.setTimeout(() => firstOptionRef.current?.focus(), 30);
     return () => {
       document.removeEventListener("mousedown", handleClick);
@@ -893,6 +896,12 @@ function FilterChip<T extends string | number>({
   }, [open]);
 
   const toggle = (value: T) => {
+    if (single) {
+      // Single-select: replace selection and close.
+      if (!selected.includes(value)) onChange([value]);
+      setOpen(false);
+      return;
+    }
     if (selected.includes(value)) onChange(selected.filter((entry) => entry !== value));
     else onChange([...selected, value]);
   };
@@ -904,11 +913,21 @@ function FilterChip<T extends string | number>({
       ? selectedOptions[0].label
       : `${selectedOptions.length} mục`;
 
+  // In single mode the chip is always "active" because there's always exactly one value;
+  // we keep the visual neutral so it looks like a primary selector rather than an active filter.
+  const isActive = single ? false : selected.length > 0;
+  const chipClass = [
+    "fi-filter-chip",
+    isActive ? "active" : "",
+    single ? "single" : "",
+    prominent ? "prominent" : "",
+  ].filter(Boolean).join(" ");
+
   return (
     <div ref={containerRef} className={`fi-filter-chip-wrap ${open ? "open" : ""}`}>
       <button
         type="button"
-        className={`fi-filter-chip ${selected.length > 0 ? "active" : ""}`}
+        className={chipClass}
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
@@ -921,14 +940,14 @@ function FilterChip<T extends string | number>({
       </button>
       {open && (
         <div
-          className="fi-filter-popover"
+          className={`fi-filter-popover ${single ? "single" : ""}`}
           role="listbox"
-          aria-multiselectable="true"
+          aria-multiselectable={!single}
           aria-label={label}
         >
           <div className="fi-filter-popover-head">
             <span>{label}</span>
-            {selected.length > 0 ? (
+            {!single && selected.length > 0 ? (
               <button
                 type="button"
                 className="fi-filter-popover-clear"
@@ -937,7 +956,7 @@ function FilterChip<T extends string | number>({
                 Bỏ chọn
               </button>
             ) : (
-              <small className="fi-filter-popover-hint">Chọn để lọc</small>
+              <small className="fi-filter-popover-hint">{single ? "Chọn một" : "Chọn để lọc"}</small>
             )}
           </div>
           <div className="fi-filter-popover-body">
@@ -949,11 +968,12 @@ function FilterChip<T extends string | number>({
               return (
                 <label
                   key={String(option.value)}
-                  className={`fi-filter-option ${checked ? "checked" : ""} ${option.tone ? `tone-${option.tone}` : ""}`}
+                  className={`fi-filter-option ${checked ? "checked" : ""} ${single ? "is-radio" : ""} ${option.tone ? `tone-${option.tone}` : ""}`}
                 >
                   <input
                     ref={index === 0 ? firstOptionRef : undefined}
-                    type="checkbox"
+                    type={single ? "radio" : "checkbox"}
+                    name={single ? `fi-filter-${label}` : undefined}
                     checked={checked}
                     onChange={() => toggle(option.value)}
                   />
@@ -2445,99 +2465,147 @@ export function FIWorkspace({
             <MonthlyTrendChart months={monthlyTrend} />
           </div>
 
-          <div className="fi-dashboard-main">
-            <div className="fi-dashboard-table-wrap">
-              <div className="fi-dashboard-section-title">
-                <ListChecks size={17} />
-                <h3>Chi tiết theo đội/tổ</h3>
-              </div>
-              <table className="fi-dashboard-table">
-                <thead>
-                  <tr>
-                    <th>Đội/tổ</th>
-                    <th>Tổng</th>
-                    <th>Đã xét đạt</th>
-                    <th>Đã xét không đạt</th>
-                    <th>Xem xét sau</th>
-                    <th>Chưa duyệt</th>
-                    <th>Đã vào KHMT</th>
-                    <th>Chưa vào KHMT</th>
-                    <th>Hoàn thành</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dashboardTeams.map((team: any) => {
-                    const teamPassed = reviewPassedCount(team);
-                    const teamFailed = reviewFailedCount(team);
-                    const teamApprovalRate = team.total ? Math.round((teamPassed / team.total) * 100) : 0;
-                    return (
-                      <tr key={team.team}>
-                        <td>
-                          <strong>{team.team}</strong>
-                          <small>{formatCount(team.current)} hiện hành · {formatCount(team.historical)} lịch sử</small>
-                        </td>
-                        <td>{formatCount(team.total)}</td>
-                        <td>
-                          {renderMetricPair(teamPassed, `(${teamApprovalRate}%)`, "cell-approved")}
-                        </td>
-                        <td>{formatCount(teamFailed)}</td>
-                        <td>{formatCount(team.deferred)}</td>
-                        <td>{formatCount(team.pending)}</td>
-                        <td>{renderKhmtMetric(team.khmt_considered)}</td>
-                        <td>{renderKhmtMissing(khmtMissingCount(team))}</td>
-                        <td>
-                          {renderMetricPair(team.completed_count ?? team.completed, `/ ${formatCount(team.not_completed)} chưa xong`)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {dashboardTeams.length === 0 && (
-                    <tr>
-                      <td colSpan={9}>Chưa có dữ liệu FI.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+          <div className="fi-dashboard-team-section">
+            <div className="fi-dashboard-section-title">
+              <ListChecks size={17} />
+              <h3>Chi tiết theo đội/tổ</h3>
+              <small className="muted">tỉ lệ phê duyệt, KHMT và hoàn thành cho từng đội</small>
             </div>
+            {dashboardTeams.length === 0 ? (
+              <p className="muted">Chưa có dữ liệu FI.</p>
+            ) : (
+              <div className="fi-dashboard-team-grid">
+                {dashboardTeams.map((team: any) => {
+                  const teamTotal = Number(team.total ?? 0);
+                  const teamPassed = reviewPassedCount(team);
+                  const teamFailed = reviewFailedCount(team);
+                  const teamDeferred = Number(team.deferred ?? 0);
+                  const teamPending = Number(team.pending ?? 0);
+                  const teamKhmt = Number(team.khmt_considered ?? 0);
+                  const teamKhmtMissing = khmtMissingCount(team);
+                  const teamCompleted = Number(team.completed_count ?? team.completed ?? 0);
+                  const teamNotCompleted = Number(team.not_completed ?? 0);
+                  const teamApprovalRate = teamTotal ? Math.round((teamPassed / teamTotal) * 100) : 0;
+                  const teamKhmtRate = teamPassed ? Math.round((teamKhmt / teamPassed) * 100) : 0;
+                  const teamCompletionRate = teamTotal ? Math.round((teamCompleted / teamTotal) * 100) : 0;
+                  return (
+                    <article className="fi-team-detail-card" key={team.team}>
+                      <header className="fi-team-detail-head">
+                        <div>
+                          <span className="fi-team-detail-name">{team.team}</span>
+                          <small>{formatCount(team.current)} hiện hành · {formatCount(team.historical)} lịch sử</small>
+                        </div>
+                        <div className="fi-team-detail-total">
+                          <span>Tổng SK</span>
+                          <strong>{formatCount(teamTotal)}</strong>
+                        </div>
+                      </header>
 
-            <div className="fi-dashboard-side">
-              <div className="fi-dashboard-block">
-                <div className="fi-dashboard-section-title">
-                  <CalendarDays size={17} />
-                  <h3>KHMT theo tháng</h3>
-                </div>
-                <div className="fi-khmt-month-grid">
-                  {dashboardKhmtMonths.map((month: any) => (
-                    <div className="fi-khmt-month" key={`${month.year}-${month.month}`}>
-                      <span>T{month.month}/{month.year}</span>
-                      <strong>{formatCount(month.count)}</strong>
-                    </div>
-                  ))}
-                  {dashboardKhmtMonths.length === 0 && <p className="muted">Chưa có SK nào được xét vào KHMT.</p>}
-                </div>
+                      <div className="fi-team-detail-rates">
+                        <div className="fi-team-rate tone-success">
+                          <div className="fi-team-rate-head">
+                            <span>Tỉ lệ phê duyệt</span>
+                            <strong>{teamApprovalRate}%</strong>
+                          </div>
+                          <div className="fi-team-rate-bar" aria-hidden="true">
+                            <div className="fi-team-rate-bar-fill" style={{ width: `${teamApprovalRate}%` }} />
+                          </div>
+                          <small>{formatCount(teamPassed)}/{formatCount(teamTotal)} SK đã xét đạt</small>
+                        </div>
+
+                        <div className="fi-team-rate tone-info">
+                          <div className="fi-team-rate-head">
+                            <span>Đã vào KHMT</span>
+                            <strong>{teamKhmtRate}%</strong>
+                          </div>
+                          <div className="fi-team-rate-bar" aria-hidden="true">
+                            <div className="fi-team-rate-bar-fill" style={{ width: `${teamKhmtRate}%` }} />
+                          </div>
+                          <small>
+                            {formatCount(teamKhmt)}/{formatCount(teamPassed)} SK đạt
+                            {teamKhmtMissing > 0 && <> · còn <em>{formatCount(teamKhmtMissing)}</em> chưa vào</>}
+                          </small>
+                        </div>
+
+                        <div className="fi-team-rate tone-completion">
+                          <div className="fi-team-rate-head">
+                            <span>Hoàn thành</span>
+                            <strong>{teamCompletionRate}%</strong>
+                          </div>
+                          <div className="fi-team-rate-bar" aria-hidden="true">
+                            <div className="fi-team-rate-bar-fill" style={{ width: `${teamCompletionRate}%` }} />
+                          </div>
+                          <small>
+                            {formatCount(teamCompleted)}/{formatCount(teamTotal)}
+                            {teamNotCompleted > 0 && <> · còn <em>{formatCount(teamNotCompleted)}</em> chưa xong</>}
+                          </small>
+                        </div>
+                      </div>
+
+                      <footer className="fi-team-detail-breakdown">
+                        <div className="tone-success">
+                          <strong>{formatCount(teamPassed)}</strong>
+                          <span>Đạt</span>
+                        </div>
+                        <div className="tone-danger">
+                          <strong>{formatCount(teamFailed)}</strong>
+                          <span>Không đạt</span>
+                        </div>
+                        <div className="tone-warning">
+                          <strong>{formatCount(teamDeferred)}</strong>
+                          <span>Xem xét sau</span>
+                        </div>
+                        <div className="tone-neutral">
+                          <strong>{formatCount(teamPending)}</strong>
+                          <span>Chưa duyệt</span>
+                        </div>
+                      </footer>
+                    </article>
+                  );
+                })}
               </div>
-              <div className="fi-dashboard-block">
-                <div className="fi-dashboard-section-title">
-                  <Clock3 size={17} />
-                  <h3>Tóm tắt trạng thái</h3>
+            )}
+          </div>
+
+          <div className="fi-dashboard-aux">
+            <div className="fi-dashboard-card">
+              <div className="fi-dashboard-section-title">
+                <CalendarDays size={17} />
+                <h3>KHMT theo tháng</h3>
+                <small className="muted">phân bổ SK đã vào KHMT theo từng tháng</small>
+              </div>
+              <div className="fi-khmt-month-grid">
+                {dashboardKhmtMonths.map((month: any) => (
+                  <div className="fi-khmt-month" key={`${month.year}-${month.month}`}>
+                    <span>T{month.month}/{month.year}</span>
+                    <strong>{formatCount(month.count)}</strong>
+                  </div>
+                ))}
+                {dashboardKhmtMonths.length === 0 && <p className="muted">Chưa có SK nào được xét vào KHMT.</p>}
+              </div>
+            </div>
+            <div className="fi-dashboard-card">
+              <div className="fi-dashboard-section-title">
+                <Clock3 size={17} />
+                <h3>Tóm tắt trạng thái</h3>
+                <small className="muted">tổng hợp trên toàn bộ 4 đội/tổ</small>
+              </div>
+              <div className="fi-dashboard-status-list">
+                <div>
+                  <span><i className="fi-swatch approved" /> Đã xét đạt</span>
+                  <strong>{formatCount(dashboardApprovedCount)}</strong>
                 </div>
-                <div className="fi-dashboard-status-list">
-                  <div>
-                    <span><i className="fi-swatch approved" /> Đã xét đạt</span>
-                    <strong>{formatCount(dashboardApprovedCount)}</strong>
-                  </div>
-                  <div>
-                    <span><i className="fi-swatch deferred" /> Xem xét sau</span>
-                    <strong>{formatCount(dashboardDeferredCount)}</strong>
-                  </div>
-                  <div>
-                    <span><i className="fi-swatch pending" /> Chưa duyệt</span>
-                    <strong>{formatCount(dashboardPendingCount)}</strong>
-                  </div>
-                  <div>
-                    <span><i className="fi-swatch rejected" /> Đã xét không đạt</span>
-                    <strong>{formatCount(dashboardReviewFailedCount)}</strong>
-                  </div>
+                <div>
+                  <span><i className="fi-swatch deferred" /> Xem xét sau</span>
+                  <strong>{formatCount(dashboardDeferredCount)}</strong>
+                </div>
+                <div>
+                  <span><i className="fi-swatch pending" /> Chưa duyệt</span>
+                  <strong>{formatCount(dashboardPendingCount)}</strong>
+                </div>
+                <div>
+                  <span><i className="fi-swatch rejected" /> Đã xét không đạt</span>
+                  <strong>{formatCount(dashboardReviewFailedCount)}</strong>
                 </div>
               </div>
             </div>
@@ -2552,8 +2620,6 @@ export function FIWorkspace({
             <div className="fi-history-headline">
               <h2>Lịch sử FI</h2>
               <p className="muted">
-                <strong>{historyTeam}</strong>
-                <span aria-hidden="true"> · </span>
                 {historyActiveFilterCount > 0 ? (
                   <>
                     Hiển thị <strong>{filteredHistoryItems.length}</strong>/{historyItems.length} SK-CTKT
@@ -2566,18 +2632,6 @@ export function FIWorkspace({
               </p>
             </div>
             <div className="toolbar fi-history-actions">
-              <div className="segmented-control legacy-team-picker" aria-label="Chọn đội/tổ">
-                {historyTeamOptions.map((team) => (
-                  <button
-                    className={historyTeam === team ? "active" : ""}
-                    key={team}
-                    onClick={() => selectHistoryTeam(team)}
-                    type="button"
-                  >
-                    {team}
-                  </button>
-                ))}
-              </div>
               <button
                 className="fi-history-reload"
                 onClick={reload}
@@ -2594,6 +2648,18 @@ export function FIWorkspace({
               <SlidersHorizontal size={14} />
               <span>Bộ lọc</span>
             </span>
+            <FilterChip<string>
+              label="Đội/tổ"
+              icon={<Users2 size={14} />}
+              options={historyTeamOptions.map((team) => ({
+                value: team,
+                label: team,
+              }))}
+              selected={[historyTeam]}
+              onChange={(next) => { if (next.length) selectHistoryTeam(next[0]); }}
+              single
+              prominent
+            />
             <FilterChip<number>
               label="Tháng"
               icon={<CalendarDays size={14} />}

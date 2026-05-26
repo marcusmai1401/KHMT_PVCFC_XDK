@@ -2982,6 +2982,238 @@ th {
   min-width: 0;
 }
 
+/* === FI Dashboard — Team detail cards === */
+.fi-dashboard-team-section {
+  background: #ffffff;
+  border: 1px solid #d9e3ee;
+  border-radius: 12px;
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.fi-dashboard-team-section > .fi-dashboard-section-title {
+  border-bottom: 1px solid #eef2f8;
+  padding-bottom: 10px;
+}
+
+.fi-dashboard-team-section > .fi-dashboard-section-title h3 {
+  margin: 0;
+}
+
+.fi-dashboard-team-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.fi-team-detail-card {
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  border: 1px solid #e1e8ef;
+  border-radius: 12px;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  transition: var(--transition);
+}
+
+.fi-team-detail-card:hover {
+  border-color: #c8d4e1;
+  box-shadow: 0 4px 12px -6px rgba(15, 23, 42, 0.12);
+  transform: translateY(-1px);
+}
+
+.fi-team-detail-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eef2f8;
+}
+
+.fi-team-detail-head > div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fi-team-detail-name {
+  color: #0f172a;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.fi-team-detail-head small {
+  color: #64748b;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.fi-team-detail-total {
+  align-items: flex-end;
+  display: grid;
+  gap: 2px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.fi-team-detail-total span {
+  color: #607087;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.fi-team-detail-total strong {
+  color: #0f172a;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.fi-team-detail-rates {
+  display: grid;
+  gap: 12px;
+}
+
+.fi-team-rate {
+  display: grid;
+  gap: 5px;
+}
+
+.fi-team-rate-head {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.fi-team-rate-head span {
+  color: #475569;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.fi-team-rate-head strong {
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.fi-team-rate-bar {
+  background: #f1f5f9;
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+  position: relative;
+}
+
+.fi-team-rate-bar-fill {
+  background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 999px;
+  height: 100%;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fi-team-rate.tone-success .fi-team-rate-bar-fill {
+  background: linear-gradient(90deg, #059669 0%, #10b981 100%);
+}
+
+.fi-team-rate.tone-success .fi-team-rate-head strong {
+  color: #047857;
+}
+
+.fi-team-rate.tone-info .fi-team-rate-bar-fill {
+  background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
+}
+
+.fi-team-rate.tone-info .fi-team-rate-head strong {
+  color: #1d4ed8;
+}
+
+.fi-team-rate.tone-completion .fi-team-rate-bar-fill {
+  background: linear-gradient(90deg, #0d9488 0%, #14b8a6 100%);
+}
+
+.fi-team-rate.tone-completion .fi-team-rate-head strong {
+  color: #0f766e;
+}
+
+.fi-team-rate small {
+  color: #64748b;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.fi-team-rate small em {
+  color: #b45309;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.fi-team-detail-breakdown {
+  background: #f8fafc;
+  border: 1px solid #e6edf5;
+  border-radius: 10px;
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+}
+
+.fi-team-detail-breakdown > div {
+  align-items: center;
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  padding: 8px 4px;
+  position: relative;
+  text-align: center;
+}
+
+.fi-team-detail-breakdown > div + div::before {
+  background: #e6edf5;
+  content: "";
+  height: 60%;
+  left: 0;
+  position: absolute;
+  top: 20%;
+  width: 1px;
+}
+
+.fi-team-detail-breakdown strong {
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.fi-team-detail-breakdown span {
+  color: #64748b;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.fi-team-detail-breakdown .tone-success strong { color: #047857; }
+.fi-team-detail-breakdown .tone-danger strong { color: #b91c1c; }
+.fi-team-detail-breakdown .tone-warning strong { color: #b45309; }
+.fi-team-detail-breakdown .tone-neutral strong { color: #475569; }
+
+/* Auxiliary section: KHMT theo tháng + status summary */
+.fi-dashboard-aux {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.fi-dashboard-aux .fi-dashboard-card {
+  margin: 0;
+}
+
 .fi-dashboard-table-wrap,
 .fi-dashboard-block {
   background: #ffffff;
@@ -3662,6 +3894,41 @@ th {
   color: #1d4ed8;
 }
 
+/* Prominent chip: used for primary segmenter (e.g. team selector) so it
+   reads as the main control rather than just another filter. */
+.fi-filter-chip.prominent {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #ffffff;
+}
+
+.fi-filter-chip.prominent:hover {
+  background: #1e293b;
+  border-color: #1e293b;
+}
+
+.fi-filter-chip.prominent .fi-filter-chip-icon,
+.fi-filter-chip.prominent .fi-filter-chip-label {
+  color: #cbd5e1;
+}
+
+.fi-filter-chip.prominent .fi-filter-chip-divider {
+  color: #475569;
+}
+
+.fi-filter-chip.prominent .fi-filter-chip-caret {
+  color: #94a3b8;
+}
+
+.fi-filter-chip.prominent .fi-filter-chip-value {
+  color: #ffffff;
+}
+
+.fi-filter-chip-wrap.open .fi-filter-chip.prominent {
+  border-color: #1e293b;
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.18);
+}
+
 .fi-filter-chip-icon {
   align-items: center;
   color: #64748b;
@@ -3857,6 +4124,28 @@ th {
   margin-top: -2px;
   transform: rotate(-45deg);
   width: 8px;
+}
+
+/* Radio variant for single-select mode */
+.fi-filter-option.is-radio .fi-filter-option-mark {
+  border-radius: 50%;
+}
+
+.fi-filter-option.is-radio.checked .fi-filter-option-mark {
+  background-color: #ffffff;
+  border-color: #2563eb;
+  border-width: 2px;
+}
+
+.fi-filter-option.is-radio.checked .fi-filter-option-mark::after {
+  background: #2563eb;
+  border: 0;
+  border-radius: 50%;
+  content: "";
+  height: 7px;
+  margin: 0;
+  transform: none;
+  width: 7px;
 }
 
 .fi-filter-option:focus-within .fi-filter-option-mark {

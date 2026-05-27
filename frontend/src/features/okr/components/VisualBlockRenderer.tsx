@@ -414,7 +414,7 @@ function O3StopByMonth({ title, payload, visualId, kind }: { title: string; payl
   const actualItem = summaryItems.find((item: any) => /th[uự]c\s*hi[eệ]n/i.test(String(item?.label || "")));
   const planItem = summaryItems.find((item: any) => /k[eế]\s*ho[aạ]ch/i.test(String(item?.label || "")));
   const rateItem = summaryItems.find((item: any) => item?.format === "percent");
-  const actual = numberValue(actualItem?.value) || values.reduce((sum, v) => sum + numberValue(v), 0);
+  const actual: number = numberValue(actualItem?.value) || values.reduce<number>((sum, v) => sum + numberValue(v), 0);
   const plan = numberValue(planItem?.value) || 0;
   const rate = rateItem ? numberValue(rateItem.value) : plan > 0 ? actual / plan : 0;
   const ratePct = Math.round(rate * 100);
@@ -844,18 +844,19 @@ function MetricTable({ title, payload, visualId, kind }: { title: string; payloa
                           );
                         }
                         if (column === rateColumn && rateColumn) {
-                          const pct = Math.max(0, Math.min(100, Math.round(rowRate * 100)));
-                          const targetPct = rowTarget > 0 ? Math.min(100, Math.round(rowTarget * 100)) : null;
+                          const pctClamped = Math.max(0, Math.min(100, rowRate * 100));
+                          const targetPctClamped = rowTarget > 0 ? Math.min(100, rowTarget * 100) : null;
+                          const rateLabel = formatDatasetValue(row[column.key], column.format);
                           return (
                             <td key={column.key} className="metric-rate-cell">
                               <div className="metric-rate-bar">
                                 <span className={`metric-rate-bar-track ${meetsTarget ? "meet" : "miss"}`}>
-                                  <span className="metric-rate-bar-fill" style={{ width: `${pct}%` }} />
-                                  {targetPct !== null ? (
-                                    <span className="metric-rate-bar-target" style={{ left: `${targetPct}%` }} />
+                                  <span className="metric-rate-bar-fill" style={{ width: `${pctClamped}%` }} />
+                                  {targetPctClamped !== null ? (
+                                    <span className="metric-rate-bar-target" style={{ left: `${targetPctClamped}%` }} />
                                   ) : null}
                                 </span>
-                                <strong>{pct}%</strong>
+                                <strong>{rateLabel}</strong>
                               </div>
                             </td>
                           );

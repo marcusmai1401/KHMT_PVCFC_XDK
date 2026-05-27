@@ -683,14 +683,24 @@ function NarrativeCard({ title, payload, visualId, kind }: { title: string; payl
 
 function ProgressCard({ title, payload, visualId, kind }: { title: string; payload?: Record<string, any>; visualId?: string; kind?: string }) {
   const items = Array.isArray(payload?.items) ? payload.items : [];
+  const isRunning = visualId === "o6_running";
+
   return (
-    <ChartShell title={title} icon={<TrendingUp size={17} />} kind={kind} visualId={visualId}>
+    <ChartShell title={title} icon={isRunning ? <Activity size={17} /> : <TrendingUp size={17} />} kind={kind} visualId={visualId}>
       <div className="okr-card-grid">
         {items.map((item: any) => {
           const rate = typeof item.participation_rate === "number" ? Math.min(item.participation_rate, 1) : 0;
+          const pct = Math.round(rate * 100);
           return (
             <div className="metric-card compact-card" key={String(item.team || item.label)}>
-              <strong>{item.team_name || item.team || item.label}</strong>
+              <div className="compact-card-header">
+                <strong>{item.team_name || item.team || item.label}</strong>
+                {isRunning ? (
+                  <span className={`status-pill ${pct >= 100 ? "status-success" : pct >= 50 ? "status-warning" : "status-danger"}`}>
+                    {pct}% đạt
+                  </span>
+                ) : null}
+              </div>
               <span>{formatValue(item.actual ?? item.value)} / {formatValue(item.total)}</span>
               <div className="progress-track">
                 <span style={{ width: `${rate * 100}%` }} />
@@ -832,65 +842,6 @@ function CompetencyRadarInline({ title, payload, visualId, kind }: { title: stri
           </svg>
         </div>
 
-        {fiSnapshot ? (
-          <section className="competency-fi-dashboard" aria-label="Tóm tắt FI Dashboard">
-            <div className="competency-fi-title">
-              <span><ClipboardList size={14} />FI Dashboard</span>
-              <strong>O5.KR13: {formatValue(fiSnapshot.totals.okrCount)}</strong>
-            </div>
-            <div className="competency-fi-kpis">
-              <span>
-                <ClipboardList size={15} />
-                <small>Tổng SK</small>
-                <strong>{formatValue(fiSnapshot.totals.total)}</strong>
-              </span>
-              <span>
-                <CheckCircle2 size={15} />
-                <small>Đã xét đạt</small>
-                <strong>{formatValue(fiSnapshot.totals.approved)}</strong>
-                <em>{fiSnapshot.approvalRate}%</em>
-              </span>
-              <span>
-                <CalendarDays size={15} />
-                <small>Đã vào KHMT</small>
-                <strong>{formatValue(fiSnapshot.totals.khmt)}</strong>
-                <em>{fiSnapshot.khmtRate}%</em>
-              </span>
-              <span>
-                <Flag size={15} />
-                <small>Hoàn tất</small>
-                <strong>{formatValue(fiSnapshot.totals.completed)}</strong>
-                <em>{fiSnapshot.completionRate}%</em>
-              </span>
-            </div>
-            {fiSnapshot.rows.length ? (
-              <div className="competency-fi-team-grid">
-                {fiSnapshot.rows.map((team) => (
-                  <div className="competency-fi-team" key={team.team}>
-                    <div className="competency-fi-team-head">
-                      <strong>{team.team}</strong>
-                      <span>{formatValue(team.total)} SK</span>
-                    </div>
-                    <div className="competency-fi-team-bars">
-                      <span title={`${team.approved} SK đã xét đạt`}>
-                        <i><b className="tone-approved" style={{ width: `${team.approvalRate}%` }} /></i>
-                        <em>{formatValue(team.approved)} đạt</em>
-                      </span>
-                      <span title={`${team.khmt} SK đã vào KHMT`}>
-                        <i><b className="tone-khmt" style={{ width: `${team.khmtRate}%` }} /></i>
-                        <em>{formatValue(team.khmt)} KHMT</em>
-                      </span>
-                      <span title={`${team.okrCount} CTKT tính O5.KR13`}>
-                        <i><b className="tone-okr" style={{ width: `${team.okrCount ? 100 : 0}%` }} /></i>
-                        <em>{formatValue(team.okrCount)} O5.KR13</em>
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </section>
-        ) : null}
 
         <div className="competency-position-list" aria-label="Tiến độ từng vị trí">
           {blockLabels.map((label, index) => {
@@ -907,6 +858,162 @@ function CompetencyRadarInline({ title, payload, visualId, kind }: { title: stri
             );
           })}
         </div>
+      </div>
+    </ChartShell>
+  );
+}
+
+function InitiativesFiDashboard({
+  title,
+  payload,
+  visualId,
+  kind,
+}: {
+  title: string;
+  payload?: Record<string, any>;
+  visualId?: string;
+  kind?: string;
+}) {
+  const fiSnapshot = buildFiDashboardSnapshot(payload);
+
+  const kr12Items = Array.isArray(payload?.items)
+    ? payload.items
+    : [
+        { label: "Mục tiêu", value: payload?.master_target },
+        { label: "Kết quả", value: payload?.total ?? payload?.current_result },
+        { label: "Lũy kế", value: payload?.cumulative },
+      ];
+
+  const kr13Target = payload?.o5_fi_payload?.master_target ?? 8;
+  const kr13Result = fiSnapshot?.totals?.okrCount ?? payload?.o5_fi_payload?.total ?? 8;
+
+  // Lấy danh sách sáng kiến cụ thể từ o5_fi_payload
+  const fiItems = Array.isArray(payload?.o5_fi_payload?.items) ? payload.o5_fi_payload.items : [];
+  const snapshotRows = Array.isArray(payload?.o5_fi_payload?.snapshot_rows) ? payload.o5_fi_payload.snapshot_rows : [];
+  const actualFiItems = fiItems.length ? fiItems : snapshotRows;
+
+  return (
+    <ChartShell title="Sáng kiến & FI Dashboard" icon={<ClipboardList size={17} />} kind={kind} visualId={visualId}>
+      <div className="initiatives-fi-layout">
+        
+        {/* Hàng trên cùng: Tóm tắt KPI OKR của O5.KR12 và O5.KR13 */}
+        <div className="kr-summary-grid">
+          <div className="kr-summary-card kr12-card">
+            <div className="kr-card-head">
+              <span className="kr-badge kr12-badge">O5.KR12</span>
+              <h4>Sáng kiến được công nhận</h4>
+            </div>
+            <div className="kr-card-metrics">
+              {kr12Items.map((item: any, idx: number) => (
+                <div className="kr-metric-box" key={idx}>
+                  <span>{vn(item.label)}</span>
+                  <strong>{formatValue(item.value)}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="kr-summary-card kr13-card">
+            <div className="kr-card-head">
+              <span className="kr-badge kr13-badge">O5.KR13</span>
+              <h4>FI/CTKT cấp Xưởng</h4>
+            </div>
+            <div className="kr-card-metrics">
+              <div className="kr-metric-box">
+                <span>Mục tiêu</span>
+                <strong>{formatValue(kr13Target)}</strong>
+              </div>
+              <div className="kr-metric-box">
+                <span>Kết quả</span>
+                <strong>{formatValue(kr13Result)}</strong>
+              </div>
+              <div className="kr-metric-box">
+                <span>Tỷ lệ đạt</span>
+                <strong>{kr13Target > 0 ? `${Math.round((Number(kr13Result) / Number(kr13Target)) * 100)}%` : "-"}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Khối giữa: Chỉ số Dashboard FI tổng hợp */}
+        {fiSnapshot ? (
+          <div className="fi-dashboard-content">
+            <div className="fi-sub-header">
+              <span>BÁO CÁO TIẾN ĐỘ SÁNG KIẾN & CTKT THỰC TẾ</span>
+            </div>
+            
+            <div className="competency-fi-kpis">
+              <span>
+                <ClipboardList size={15} />
+                <small>Tổng SK đăng ký</small>
+                <strong>{formatValue(fiSnapshot.totals.total)}</strong>
+              </span>
+              <span>
+                <CheckCircle2 size={15} />
+                <small>Đã xét đạt</small>
+                <strong>{formatValue(fiSnapshot.totals.approved)}</strong>
+                <em>{fiSnapshot.approvalRate}%</em>
+              </span>
+              <span>
+                <CalendarDays size={15} />
+                <small>Đã vào KHMT</small>
+                <strong>{formatValue(fiSnapshot.totals.khmt)}</strong>
+                <em>{fiSnapshot.khmtRate}%</em>
+              </span>
+              <span>
+                <Flag size={15} />
+                <small>Hoàn tất áp dụng</small>
+                <strong>{formatValue(fiSnapshot.totals.completed)}</strong>
+                <em>{fiSnapshot.completionRate}%</em>
+              </span>
+            </div>
+
+            {/* Tiến độ chi tiết theo từng đội tổ */}
+            {fiSnapshot.rows.length ? (
+              <div className="competency-fi-team-grid">
+                {fiSnapshot.rows.map((team) => (
+                  <div className="competency-fi-team" key={team.team}>
+                    <div className="competency-fi-team-head">
+                      <strong>{team.team}</strong>
+                      <span>{formatValue(team.total)} SK</span>
+                    </div>
+                    <div className="competency-fi-team-bars">
+                      <span title={`${team.approved} SK đã xét đạt`}>
+                        <i><b className="tone-approved" style={{ width: `${team.approvalRate}%` }} /></i>
+                        <em>{formatValue(team.approved)} đạt ({team.approvalRate}%)</em>
+                      </span>
+                      <span title={`${team.khmt} SK đã vào KHMT`}>
+                        <i><b className="tone-khmt" style={{ width: `${team.khmtRate}%` }} /></i>
+                        <em>{formatValue(team.khmt)} KHMT ({team.khmtRate}%)</em>
+                      </span>
+                      <span title={`${team.okrCount} CTKT tính O5.KR13`}>
+                        <i><b className="tone-okr" style={{ width: `${team.okrCount ? 100 : 0}%` }} /></i>
+                        <em>{formatValue(team.okrCount)} O5.KR13</em>
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* Danh sách sáng kiến cụ thể nếu có */}
+        {actualFiItems.length ? (
+          <div className="fi-narrative-section">
+            <div className="fi-sub-header">
+              <span>DANH SÁCH CHI TIẾT SÁNG KIẾN / CẢI TIẾN TRONG KỲ</span>
+            </div>
+            <div className="narrative-list visual-id-o5_fi">
+              {actualFiItems.map((item: any, index: number) => (
+                <div className="narrative-item" key={`${item.workshop_kr_code || item.label || index}`}>
+                  <strong>{item.workshop_kr_code || item.label || `Mục ${index + 1}`}</strong>
+                  <span>{item.kr_name || formatValue(item.value) || formatValue(item.values?.[1])}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
     </ChartShell>
   );
@@ -1016,6 +1123,9 @@ export function VisualBlockRenderer({ block }: { block: VisualBlock }) {
     case "progress_card":
       return <ProgressCard title={block.title} payload={payload} visualId={block.id} kind={block.kind} />;
     case "kpi_badges":
+      if (block.id === "o5_initiatives") {
+        return <InitiativesFiDashboard title={block.title} payload={payload} visualId={block.id} kind={block.kind} />;
+      }
       return <KpiBadges title={block.title} payload={payload} visualId={block.id} kind={block.kind} />;
     case "narrative_card":
     default:

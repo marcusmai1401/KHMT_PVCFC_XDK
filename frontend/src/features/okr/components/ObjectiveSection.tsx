@@ -22,9 +22,34 @@ export function ObjectiveSection({
   onDrillDown?: (objectiveCode: string) => void;
 }) {
   const code = section.objective_code || "";
-  const visuals = section.visuals || [];
+  let visuals = section.visuals || [];
   const status: ObjectiveStatus = section.status || "no_data";
   const hasConclusion = Boolean(section.conclusion);
+
+  if (code === "O5") {
+    const fiSource = visuals.find((v) => v.payload?.fi_dashboard_summary);
+    const fi_dashboard_summary = fiSource?.payload?.fi_dashboard_summary;
+    const fi_counts_by_team = fiSource?.payload?.fi_counts_by_team;
+    const o5FiBlock = visuals.find((v) => v.id === "o5_fi");
+
+    visuals = visuals
+      .map((v) => {
+        if (v.id === "o5_initiatives") {
+          return {
+            ...v,
+            payload: {
+              ...v.payload,
+              fi_dashboard_summary,
+              fi_counts_by_team,
+              o5_fi_payload: o5FiBlock?.payload,
+            },
+          };
+        }
+        return v;
+      })
+      .filter((v) => v.id !== "o5_fi");
+  }
+
   const hasContent = visuals.length > 0 || hasConclusion;
 
   return (

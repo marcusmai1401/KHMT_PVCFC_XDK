@@ -1,4 +1,4 @@
-import { Activity, BarChart3, ClipboardList, LineChart, Radar, Target, TrendingUp } from "lucide-react";
+import { Activity, BarChart3, CalendarDays, CheckCircle2, ClipboardList, Flag, LineChart, Radar, Target, TrendingUp } from "lucide-react";
 import React from "react";
 import type { ChartDataset, VisualBlock } from "../types/dashboard";
 import { vn } from "../i18n";
@@ -83,6 +83,87 @@ function numberValue(value: unknown) {
   if (value === null || value === undefined || value === "") return 0;
   const parsed = Number.parseFloat(String(value));
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+const FI_TEAM_ORDER = ["TBHTĐK", "TBCH", "TBĐL", "TCĐK"];
+
+function rateValue(value: number, total: number) {
+  return total > 0 ? Math.max(0, Math.min(100, Math.round((value / total) * 100))) : 0;
+}
+
+function reviewPassedCount(bucket: any) {
+  return numberValue(bucket?.review_passed ?? bucket?.approved);
+}
+
+function completedCount(bucket: any) {
+  return numberValue(bucket?.completed_count ?? bucket?.completed);
+}
+
+function khmtMissingCount(bucket: any) {
+  if (bucket?.khmt_not_considered !== undefined && bucket?.khmt_not_considered !== null) {
+    return numberValue(bucket.khmt_not_considered);
+  }
+  return Math.max(reviewPassedCount(bucket) - numberValue(bucket?.khmt_considered), 0);
+}
+
+function buildFiDashboardSnapshot(payload: Record<string, any> | undefined) {
+  const summary = payload?.fi_dashboard_summary && typeof payload.fi_dashboard_summary === "object"
+    ? payload.fi_dashboard_summary
+    : {};
+  const rawTeams = Array.isArray(summary?.teams) ? summary.teams : [];
+  const rawCounts = payload?.fi_counts_by_team && typeof payload.fi_counts_by_team === "object"
+    ? payload.fi_counts_by_team
+    : {};
+  const teamByCode = new Map<string, any>();
+  rawTeams.forEach((team: any) => {
+    if (team?.team) teamByCode.set(String(team.team), team);
+  });
+  const rows = FI_TEAM_ORDER.map((team) => {
+    const source = teamByCode.get(team) ?? {};
+    const total = numberValue(source.total);
+    const approved = reviewPassedCount(source);
+    const khmt = numberValue(source.khmt_considered);
+    const completed = completedCount(source);
+    const okrCount = numberValue(rawCounts[team]);
+    return {
+      team,
+      total,
+      approved,
+      khmt,
+      completed,
+      okrCount,
+      approvalRate: rateValue(approved, total),
+      khmtRate: rateValue(khmt, approved),
+      completionRate: rateValue(completed, total),
+    };
+  }).filter((row) => row.total || row.approved || row.khmt || row.completed || row.okrCount);
+  const rowTotals = rows.reduce(
+    (acc, row) => ({
+      total: acc.total + row.total,
+      approved: acc.approved + row.approved,
+      khmt: acc.khmt + row.khmt,
+      completed: acc.completed + row.completed,
+      okrCount: acc.okrCount + row.okrCount,
+    }),
+    { total: 0, approved: 0, khmt: 0, completed: 0, okrCount: 0 },
+  );
+  const totalsSource = summary?.totals && typeof summary.totals === "object" ? summary.totals : {};
+  const totals = {
+    total: numberValue(totalsSource.total) || rowTotals.total,
+    approved: reviewPassedCount(totalsSource) || rowTotals.approved,
+    khmt: numberValue(totalsSource.khmt_considered) || rowTotals.khmt,
+    completed: completedCount(totalsSource) || rowTotals.completed,
+    missing: khmtMissingCount(totalsSource),
+    okrCount: rowTotals.okrCount,
+  };
+  if (!rows.length && !Object.values(totals).some((value) => value > 0)) return null;
+  return {
+    rows,
+    totals,
+    approvalRate: rateValue(totals.approved, totals.total),
+    khmtRate: rateValue(totals.khmt, totals.approved),
+    completionRate: rateValue(totals.completed, totals.total),
+  };
 }
 
 function ChartShell({
@@ -671,6 +752,7 @@ function CompetencyRadarInline({ title, payload, visualId, kind }: { title: stri
   const average = validValues.length ? Math.round(validValues.reduce((sum, value) => sum + value, 0) / validValues.length) : 0;
   const completed = validValues.filter((value) => value >= 100).length;
   const inProgress = validValues.filter((value) => value > 0 && value < 100).length;
+  const fiSnapshot = buildFiDashboardSnapshot(payload);
 
   const width = 460;
   const height = 350;
@@ -679,10 +761,11 @@ function CompetencyRadarInline({ title, payload, visualId, kind }: { title: stri
   const radius = 108;
   const labelRadius = 158;
   const total = Math.max(blockLabels.length, 3);
-  const dataPoints = plotted.map((percent, index) => {
-    const point = radarCoordinate(centerX, centerY, radius, index, total, percent / 100);
-    return `${point.x},${point.y}`;
-  }).join(" ");
+  const dataPointList = plotted.map((percent, index) => radarCoordinate(centerX, centerY, radius, index, total, percent / 100));
+  const dataPoints = dataPointList.map((point) => `${point.x},${point.y}`).join(" ");
+  const dataOutlinePoints = plotted.length > 1 && plotted[0] > 0 && plotted[plotted.length - 1] > 0
+    ? `${dataPoints} ${dataPointList[0].x},${dataPointList[0].y}`
+    : dataPoints;
   const axisPoints = blockLabels.map((label, index) => {
     const point = radarCoordinate(centerX, centerY, radius, index, total);
     const labelPoint = radarCoordinate(centerX, centerY, labelRadius, index, total);
@@ -733,7 +816,8 @@ function CompetencyRadarInline({ title, payload, visualId, kind }: { title: stri
                 {tick}%
               </text>
             ))}
-            {dataPoints ? <polygon className="competency-radar-data" points={dataPoints} /> : null}
+            {dataPoints ? <polygon className="competency-radar-data-fill" points={dataPoints} /> : null}
+            {dataOutlinePoints ? <polyline className="competency-radar-data-line" points={dataOutlinePoints} /> : null}
             {plotted.map((percent, index) => {
               const point = radarCoordinate(centerX, centerY, radius, index, total, percent / 100);
               return <circle className="competency-radar-point" key={`${blockLabels[index]}-${index}`} cx={point.x} cy={point.y} r="4.5" />;
@@ -747,6 +831,66 @@ function CompetencyRadarInline({ title, payload, visualId, kind }: { title: stri
             ))}
           </svg>
         </div>
+
+        {fiSnapshot ? (
+          <section className="competency-fi-dashboard" aria-label="Tóm tắt FI Dashboard">
+            <div className="competency-fi-title">
+              <span><ClipboardList size={14} />FI Dashboard</span>
+              <strong>O5.KR13: {formatValue(fiSnapshot.totals.okrCount)}</strong>
+            </div>
+            <div className="competency-fi-kpis">
+              <span>
+                <ClipboardList size={15} />
+                <small>Tổng SK</small>
+                <strong>{formatValue(fiSnapshot.totals.total)}</strong>
+              </span>
+              <span>
+                <CheckCircle2 size={15} />
+                <small>Đã xét đạt</small>
+                <strong>{formatValue(fiSnapshot.totals.approved)}</strong>
+                <em>{fiSnapshot.approvalRate}%</em>
+              </span>
+              <span>
+                <CalendarDays size={15} />
+                <small>Đã vào KHMT</small>
+                <strong>{formatValue(fiSnapshot.totals.khmt)}</strong>
+                <em>{fiSnapshot.khmtRate}%</em>
+              </span>
+              <span>
+                <Flag size={15} />
+                <small>Hoàn tất</small>
+                <strong>{formatValue(fiSnapshot.totals.completed)}</strong>
+                <em>{fiSnapshot.completionRate}%</em>
+              </span>
+            </div>
+            {fiSnapshot.rows.length ? (
+              <div className="competency-fi-team-grid">
+                {fiSnapshot.rows.map((team) => (
+                  <div className="competency-fi-team" key={team.team}>
+                    <div className="competency-fi-team-head">
+                      <strong>{team.team}</strong>
+                      <span>{formatValue(team.total)} SK</span>
+                    </div>
+                    <div className="competency-fi-team-bars">
+                      <span title={`${team.approved} SK đã xét đạt`}>
+                        <i><b className="tone-approved" style={{ width: `${team.approvalRate}%` }} /></i>
+                        <em>{formatValue(team.approved)} đạt</em>
+                      </span>
+                      <span title={`${team.khmt} SK đã vào KHMT`}>
+                        <i><b className="tone-khmt" style={{ width: `${team.khmtRate}%` }} /></i>
+                        <em>{formatValue(team.khmt)} KHMT</em>
+                      </span>
+                      <span title={`${team.okrCount} CTKT tính O5.KR13`}>
+                        <i><b className="tone-okr" style={{ width: `${team.okrCount ? 100 : 0}%` }} /></i>
+                        <em>{formatValue(team.okrCount)} O5.KR13</em>
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
         <div className="competency-position-list" aria-label="Tiến độ từng vị trí">
           {blockLabels.map((label, index) => {

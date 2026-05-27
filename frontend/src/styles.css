@@ -6830,9 +6830,8 @@ pre {
 }
 
 [data-objective-code="O3"] .objective-visual-grid {
-  grid-template-columns: minmax(320px, 480px) minmax(320px, 420px);
+  grid-template-columns: repeat(2, minmax(320px, 1fr));
   gap: 16px;
-  justify-content: start;
 }
 
 [data-objective-code="O3"] .objective-visual {
@@ -6846,16 +6845,14 @@ pre {
 }
 
 [data-objective-code="O5"] .objective-visual-grid {
-  display: block !important;
-  column-count: 2;
-  column-gap: 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  grid-auto-flow: dense;
 }
 
 [data-objective-code="O5"] .objective-visual-grid > .objective-visual {
-  display: inline-block;
-  width: 100%;
-  break-inside: avoid;
-  margin-bottom: 20px;
+  margin-bottom: 0;
+  width: auto;
 }
 
 /* Minimalist Dashed List for 12 KRs description */
@@ -7020,14 +7017,14 @@ pre {
   white-space: pre-wrap;
 }
 
-[data-objective-code="O5"] .objective-visual-grid > .visual-id-o5_competency {
-  column-span: all;
-  display: block;
+[data-objective-code="O5"] .objective-visual-grid > .visual-id-o5_competency,
+[data-objective-code="O5"] .objective-visual-grid > .visual-id-o5_training,
+[data-objective-code="O5"] .objective-visual-grid > .visual-id-o5_fi {
+  grid-column: 1 / -1;
 }
 
-[data-objective-code="O5"] .objective-visual-grid > .visual-id-o5_training {
-  column-span: all;
-  display: block;
+.visual-id-o5_fi .narrative-list {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 
 .visual-id-o5_competency {
@@ -7046,15 +7043,19 @@ pre {
 }
 
 .competency-radar-layout {
-  align-items: center;
+  align-items: start;
   display: grid;
   gap: 18px;
+  grid-template-areas:
+    "goal radar list"
+    "fi fi list";
   grid-template-columns: minmax(190px, 0.68fr) minmax(360px, 1.18fr) minmax(240px, 0.88fr);
 }
 
 .competency-goal-panel {
   display: grid;
   gap: 12px;
+  grid-area: goal;
   min-width: 0;
 }
 
@@ -7139,6 +7140,7 @@ pre {
 
 .competency-radar-stage {
   display: flex;
+  grid-area: radar;
   justify-content: center;
   min-width: 0;
 }
@@ -7166,8 +7168,9 @@ pre {
 }
 
 .competency-radar-main-axis {
-  stroke: #ef4444;
-  stroke-width: 2.2;
+  stroke: rgba(16, 185, 129, 0.58);
+  stroke-dasharray: 4 4;
+  stroke-width: 1.2;
 }
 
 .competency-radar-scale {
@@ -7176,9 +7179,15 @@ pre {
   font-weight: 800;
 }
 
-.competency-radar-data {
+.competency-radar-data-fill {
   fill: rgba(239, 68, 68, 0.12);
+  stroke: none;
+}
+
+.competency-radar-data-line {
+  fill: none;
   stroke: #ef4444;
+  stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 3;
 }
@@ -7198,7 +7207,171 @@ pre {
 .competency-position-list {
   display: grid;
   gap: 8px;
+  grid-area: list;
   min-width: 0;
+}
+
+.competency-fi-dashboard {
+  background: #f8fbff;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-area: fi;
+  min-width: 0;
+  padding: 12px;
+}
+
+.competency-fi-title {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.competency-fi-title span {
+  align-items: center;
+  color: #2563eb;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 6px;
+  text-transform: uppercase;
+}
+
+.competency-fi-title strong {
+  color: #0f172a;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.competency-fi-kpis {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.competency-fi-kpis span {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dbe7ef;
+  border-radius: 8px;
+  display: grid;
+  gap: 3px;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 8px;
+}
+
+.competency-fi-kpis svg {
+  color: #2563eb;
+  grid-row: 1 / span 2;
+}
+
+.competency-fi-kpis small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.competency-fi-kpis strong {
+  color: #0f172a;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.competency-fi-kpis em {
+  align-self: center;
+  color: #0f766e;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  grid-row: 1 / span 2;
+}
+
+.competency-fi-team-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.competency-fi-team {
+  background: #ffffff;
+  border: 1px solid #e1e8ef;
+  border-radius: 8px;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 9px;
+}
+
+.competency-fi-team-head {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.competency-fi-team-head strong {
+  color: #0f172a;
+  font-size: 12px;
+}
+
+.competency-fi-team-head span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.competency-fi-team-bars {
+  display: grid;
+  gap: 5px;
+}
+
+.competency-fi-team-bars span {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) 58px;
+}
+
+.competency-fi-team-bars i {
+  background: #eef2f7;
+  border-radius: 999px;
+  display: block;
+  height: 6px;
+  overflow: hidden;
+}
+
+.competency-fi-team-bars b {
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+}
+
+.competency-fi-team-bars .tone-approved {
+  background: #10b981;
+}
+
+.competency-fi-team-bars .tone-khmt {
+  background: #2563eb;
+}
+
+.competency-fi-team-bars .tone-okr {
+  background: #f59e0b;
+}
+
+.competency-fi-team-bars em {
+  color: #475569;
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 700;
+  text-align: right;
 }
 
 .competency-position-item {
@@ -7535,24 +7708,46 @@ pre {
 
 @media (max-width: 1180px) {
   .competency-radar-layout {
+    grid-template-areas:
+      "goal radar"
+      "fi fi"
+      "list list";
     grid-template-columns: minmax(240px, 0.8fr) minmax(320px, 1fr);
   }
 
   .competency-position-list {
-    grid-column: 1 / -1;
+    grid-area: list;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .competency-fi-dashboard {
+    grid-area: fi;
+  }
+
+  .competency-fi-team-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 720px) {
-  .competency-radar-layout,
+  .competency-radar-layout {
+    grid-template-areas:
+      "goal"
+      "radar"
+      "fi"
+      "list";
+    grid-template-columns: 1fr;
+  }
+
   .training-summary-panel,
-  .competency-position-list {
+  .competency-position-list,
+  .competency-fi-kpis,
+  .competency-fi-team-grid {
     grid-template-columns: 1fr;
   }
 
   .competency-position-list {
-    grid-column: auto;
+    grid-area: list;
   }
 
   .competency-goal-panel h4 {

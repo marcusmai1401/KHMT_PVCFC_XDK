@@ -15,7 +15,7 @@ from app.db.session import get_db
 from app.models.domain import HistoricalSnapshotModel, KRMappingModel, SystemConfigModel, TeamHeadcountModel, TeamReportModel, WarningModel
 from app.schemas.common import LeaderKPIAllocationUpdate, WarningResolveRequest
 from app.services.cache import cache_delete_prefix, cache_get, cache_set
-from app.services.fi.service import count_for_okr
+from app.services.fi.service import count_for_okr, fi_dashboard
 from app.services.okr.constants import TEAM_DISPLAY_NAMES, TEAMS
 from app.services.okr.dashboard import build_dashboard_view, export_dashboard_workbook
 from app.services.okr.historical_snapshot import import_historical_snapshot, snapshots_to_dicts
@@ -389,7 +389,7 @@ def resolve_warning(
 
 def _dashboard_payload(month: int, year: int, principal: dict, db: Session) -> dict[str, Any]:
     namespace = "sandbox" if principal.get("sandbox") else "prod"
-    cache_key = f"okr:dashboard:v2:{namespace}:{month}:{year}:{principal['role']}:{principal['user_id']}"
+    cache_key = f"okr:dashboard:v3:{namespace}:{month}:{year}:{principal['role']}:{principal['user_id']}"
     cached = cache_get(cache_key)
     if cached is not None:
         return cached
@@ -446,6 +446,7 @@ def _dashboard_payload(month: int, year: int, principal: dict, db: Session) -> d
         historical_snapshots=snapshots,
         headcounts=_headcount_map(db, month, year),
         fi_counts_by_team=count_for_okr(db, month, year),
+        fi_dashboard_summary=fi_dashboard(db, principal),
         principal=principal,
     )
     data = _apply_manual_leader_kpi_allocations(data, _manual_leader_kpi_allocations(db, month, year))

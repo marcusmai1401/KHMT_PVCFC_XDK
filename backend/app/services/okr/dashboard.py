@@ -473,6 +473,7 @@ def build_dashboard_view(
     historical_snapshots: list[dict[str, Any]] | None = None,
     headcounts: dict[str, dict[str, Any]] | None = None,
     fi_counts_by_team: dict[str, int] | None = None,
+    fi_dashboard_summary: dict[str, Any] | None = None,
     principal: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     master_records = sorted(
@@ -525,6 +526,7 @@ def build_dashboard_view(
             chart_snapshots=chart_snapshots,
             headcounts=headcounts,
             fi_counts_by_team=fi_counts_by_team,
+            fi_dashboard_summary=fi_dashboard_summary,
             chart_blocks=chart_blocks,
             matrix=filtered_matrix,
             minor_okr_summary=minor_okr_summary,

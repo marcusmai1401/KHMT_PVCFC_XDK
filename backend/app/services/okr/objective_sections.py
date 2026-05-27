@@ -525,8 +525,8 @@ def _with_fi_counts(
 ) -> VisualBlock:
     if not fi_counts_by_team:
         return visual
+    visual = _with_fi_context(visual, fi_counts_by_team=fi_counts_by_team)
     payload = dict(visual.get("payload") or {})
-    payload["fi_counts_by_team"] = dict(fi_counts_by_team)
     if not payload.get("labels") or not payload.get("datasets"):
         teams = [team for team in TEAMS if team in fi_counts_by_team]
         payload["labels"] = teams
@@ -534,6 +534,22 @@ def _with_fi_counts(
         payload["total"] = sum(int(fi_counts_by_team.get(team, 0)) for team in teams)
     if any(int(value or 0) > 0 for value in fi_counts_by_team.values()):
         return {**visual, "data_state": "ready", "empty_message": None, "source": "fi_module", "payload": payload}
+    return {**visual, "payload": payload}
+
+
+def _with_fi_context(
+    visual: VisualBlock,
+    *,
+    fi_counts_by_team: dict[str, int] | None = None,
+    fi_dashboard_summary: dict[str, Any] | None = None,
+) -> VisualBlock:
+    if not fi_counts_by_team and not fi_dashboard_summary:
+        return visual
+    payload = dict(visual.get("payload") or {})
+    if fi_counts_by_team:
+        payload["fi_counts_by_team"] = dict(fi_counts_by_team)
+    if fi_dashboard_summary:
+        payload["fi_dashboard_summary"] = fi_dashboard_summary
     return {**visual, "payload": payload}
 
 
@@ -809,6 +825,7 @@ def build_objective_sections(
     chart_snapshots: list[dict[str, Any]] | None = None,
     headcounts: dict[str, dict[str, Any]] | None,
     fi_counts_by_team: dict[str, int] | None,
+    fi_dashboard_summary: dict[str, Any] | None = None,
     chart_blocks: dict[str, Any],
     matrix: dict[str, Any],
     minor_okr_summary: list[dict[str, Any]],
@@ -870,35 +887,43 @@ def build_objective_sections(
             conclusion="Tổng hợp tiến độ các KR cải tiến chuyên môn theo đội/tổ trong kỳ.",
         )
     )
-    fi_visual = _with_fi_counts(
+    fi_visual = _with_fi_context(
+        _with_fi_counts(
+            _visual_from_chart_block(
+                visual_id="o5_fi",
+                kind="narrative_card",
+                title="FI/CTKT cấp Xưởng",
+                block_type="ctkt_fi",
+                chart_blocks=chart_blocks,
+                snapshot_blocks=snapshot_blocks,
+                has_locked_data=has_locked_data,
+                has_period_data=has_period_data,
+                source_fallback="fi_module",
+            ),
+            fi_counts_by_team,
+        ),
+        fi_dashboard_summary=fi_dashboard_summary,
+    )
+    competency_visual = _with_fi_context(
         _visual_from_chart_block(
-            visual_id="o5_fi",
-            kind="narrative_card",
-            title="FI/CTKT cấp Xưởng",
-            block_type="ctkt_fi",
+            visual_id="o5_competency",
+            kind="radar_chart",
+            title="ET/Khung năng lực",
+            block_type="competency",
             chart_blocks=chart_blocks,
             snapshot_blocks=snapshot_blocks,
             has_locked_data=has_locked_data,
             has_period_data=has_period_data,
-            source_fallback="fi_module",
         ),
-        fi_counts_by_team,
+        fi_counts_by_team=fi_counts_by_team,
+        fi_dashboard_summary=fi_dashboard_summary,
     )
     sections.append(
         _section(
             "O5",
             status=_objective_status(matrix, "O5", has_period_data),
             visuals=[
-                _visual_from_chart_block(
-                    visual_id="o5_competency",
-                    kind="radar_chart",
-                    title="ET/Khung năng lực",
-                    block_type="competency",
-                    chart_blocks=chart_blocks,
-                    snapshot_blocks=snapshot_blocks,
-                    has_locked_data=has_locked_data,
-                    has_period_data=has_period_data,
-                ),
+                competency_visual,
                 _narrative_from_objective(
                     "O5",
                     "AM/PM/CTKT và các trụ cột TPM khác",

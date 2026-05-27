@@ -187,6 +187,8 @@ export const api = {
     request<any>(`/okr/web-input/${encodeURIComponent(team)}/${month}/${year}/preview`),
   getWebInputStatus: (month: number, year: number) =>
     request<any[]>(`/okr/web-input/status?month=${month}&year=${year}`),
+  listTaggableEmployees: () =>
+    request<Array<{ id: string; display_name: string; full_name: string; team: string | null; role: string }>>(`/okr/web-input/employees`),
   exportWebInputExcel: (team: string, month: number, year: number) =>
     requestBlob(`/okr/web-input/${encodeURIComponent(team)}/${month}/${year}/export/excel`),
   getWebInputEmail: (team: string, month: number, year: number) =>

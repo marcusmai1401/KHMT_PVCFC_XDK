@@ -27,6 +27,9 @@ export interface ChartBlockData {
   labels: string[];
   datasets: ChartDataset[];
   master_target?: number | string | null;
+  target_per_team?: number | null;
+  target_team_count?: number;
+  target_basis?: string;
   participation_target?: number | null;
   source_reference: string;
   mapping_status: "confirmed" | "needs_confirmation";

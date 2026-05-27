@@ -429,10 +429,10 @@ function O3StopByMonth({ title, payload, visualId, kind }: { title: string; payl
 
   const maxValueSafe = Math.max(1, ...values.map((v) => numberValue(v)));
   const chartWidth = 420;
-  const chartHeight = 200;
+  const chartHeight = 220;
   const left = 44;
   const right = chartWidth - 12;
-  const top = 14;
+  const top = 30;
   const bottom = chartHeight - 38;
   const innerWidth = right - left;
   const points = values.map((v, i) => {
@@ -879,7 +879,7 @@ function MetricTable({ title, payload, visualId, kind }: { title: string; payloa
         ) : null}
         {notes.length ? (
           <div className="metric-note-block">
-            <strong><ClipboardList size={13} /> Ghi chú từ dashboard Excel</strong>
+            <strong><ClipboardList size={13} /> Ghi chú</strong>
             <ul>
               {notes.map((note: string, index: number) => <li key={`${note}-${index}`}>{note}</li>)}
             </ul>
@@ -964,8 +964,9 @@ function O1StatusBoard({ title, items, visualId, kind }: { title: string; items:
   });
   const totalKrs = krSummaries.length;
   const krsOk = krSummaries.filter((kr) => kr.cardTone === "success").length;
-  const krsFlagged = krSummaries.filter((kr) => kr.cardTone === "danger").length;
   const totalNg = krSummaries.reduce((sum, kr) => sum + kr.ngCount, 0);
+  const totalNa = krSummaries.reduce((sum, kr) => sum + kr.naCount, 0);
+  const ngKrLabels = krSummaries.filter((kr) => kr.ngCount > 0).map((kr) => kr.item.workshop_kr_code).join(", ");
 
   return (
     <ChartShell title={title} icon={<ShieldCheck size={17} />} kind={kind} visualId={visualId}>
@@ -977,16 +978,26 @@ function O1StatusBoard({ title, items, visualId, kind }: { title: string; items:
             <span className="o1-status-overview-sub">KR đạt toàn diện</span>
           </div>
           <div className="o1-status-overview-stats">
-            <span className="o1-stat tone-ng">
-              <AlertTriangle size={14} />
-              <strong>{krsFlagged}</strong>
-              <em>KR có cảnh báo</em>
-            </span>
-            <span className="o1-stat tone-counts">
-              <XCircle size={14} />
-              <strong>{totalNg}</strong>
-              <em>điểm NG cần xử lý</em>
-            </span>
+            {totalNg > 0 ? (
+              <span className="o1-stat tone-ng">
+                <AlertTriangle size={14} />
+                <strong>{totalNg}</strong>
+                <em>điểm NG cần xử lý{ngKrLabels ? ` · ${ngKrLabels}` : ""}</em>
+              </span>
+            ) : (
+              <span className="o1-stat tone-ok">
+                <CheckCircle2 size={14} />
+                <strong>0</strong>
+                <em>không có vi phạm trong kỳ</em>
+              </span>
+            )}
+            {totalNa > 0 ? (
+              <span className="o1-stat tone-counts">
+                <ClipboardList size={14} />
+                <strong>{totalNa}</strong>
+                <em>ô N/A — đội/tổ không phát sinh</em>
+              </span>
+            ) : null}
           </div>
         </header>
 
@@ -1223,7 +1234,9 @@ function CompetencyRadarInline({ title, payload, visualId, kind }: { title: stri
   const total = Math.max(blockLabels.length, 3);
   const dataPointList = plotted.map((percent, index) => radarCoordinate(centerX, centerY, radius, index, total, percent / 100));
   const dataPoints = dataPointList.map((point) => `${point.x},${point.y}`).join(" ");
-  const dataOutlinePoints = plotted.length > 1 && plotted[0] > 0 && plotted[plotted.length - 1] > 0
+  // Always close the polygon by repeating the first point, so the outline reads as a continuous shape
+  // even when the last value is 0 (which would otherwise leave a gap).
+  const dataOutlinePoints = plotted.length > 1 && plotted.some((v) => v > 0)
     ? `${dataPoints} ${dataPointList[0].x},${dataPointList[0].y}`
     : dataPoints;
   const axisPoints = blockLabels.map((label, index) => {
@@ -1335,6 +1348,7 @@ function InitiativesFiDashboard({
       ];
 
   const kr13Target = payload?.o5_fi_payload?.master_target ?? 8;
+  const kr13TargetLabel = payload?.o5_fi_payload?.target_basis === "monthly_per_team" ? "Mục tiêu tháng" : "Mục tiêu";
   const kr13Result = fiSnapshot?.totals?.okrCount ?? payload?.o5_fi_payload?.total ?? 8;
 
   // Lấy danh sách sáng kiến cụ thể từ o5_fi_payload
@@ -1370,7 +1384,7 @@ function InitiativesFiDashboard({
             </div>
             <div className="kr-card-metrics">
               <div className="kr-metric-box">
-                <span>Mục tiêu</span>
+                <span>{kr13TargetLabel}</span>
                 <strong>{formatValue(kr13Target)}</strong>
               </div>
               <div className="kr-metric-box">

@@ -174,6 +174,10 @@ def test_dashboard_view_uses_fi_counts_as_normalized_o5_data():
     assert fi_visual["data_state"] == "ready"
     assert fi_visual["source"] == "fi_module"
     assert fi_visual["payload"]["fi_counts_by_team"] == {"TBCH": 2}
+    assert fi_visual["payload"]["target_basis"] == "monthly_per_team"
+    assert fi_visual["payload"]["target_per_team"] == 1
+    assert fi_visual["payload"]["target_team_count"] == 4
+    assert fi_visual["payload"]["master_target"] == 4.0
 
 
 def test_dashboard_view_prefers_selected_historical_snapshot_blocks_for_t1():

@@ -43,6 +43,7 @@ class ArisingWorkItem(BaseModel):
 class MonthlyConclusionInput(BaseModel):
     discipline_status: Literal["OK", "NOK"] = "OK"
     discipline_description: str | None = Field(default=None, max_length=2000)
+    discipline_violators: list[str] = Field(default_factory=list, max_length=55)
     overall_assessment: Literal[
         "Hoàn thành xuất sắc nhiệm vụ",
         "Hoàn thành tốt nhiệm vụ",
@@ -60,6 +61,26 @@ class MonthlyConclusionInput(BaseModel):
     @classmethod
     def normalize_optional_text(cls, value: Any) -> str:
         return "" if value is None else str(value)
+
+    @field_validator("discipline_violators", mode="before")
+    @classmethod
+    def normalize_violators(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [value] if value.strip() else []
+        if not isinstance(value, list):
+            return []
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            if item is None:
+                continue
+            text = str(item).strip()
+            if text and text not in seen:
+                seen.add(text)
+                cleaned.append(text)
+        return cleaned
 
 
 class WebInputPayload(BaseModel):

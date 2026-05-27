@@ -1,5 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Clipboard, Copy, Download, FileDown, Lock, RefreshCw, Save, Send, Unlock } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Clipboard,
+  Lock,
+  RefreshCw,
+  Save,
+  Search,
+  Send,
+  ShieldAlert,
+  Unlock,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
 import { api } from "../../api/client";
 
 const TEAMS = ["TBHTĐK", "TBCH", "TBĐL", "TCĐK"];
@@ -38,10 +54,19 @@ type WebInputData = {
   monthly_conclusion: {
     discipline_status: string;
     discipline_description: string;
+    discipline_violators: string[];
     overall_assessment: string;
     detailed_description: string;
   };
   objective_overrides: Record<string, string | null>;
+};
+
+type Employee = {
+  id: string;
+  display_name: string;
+  full_name: string;
+  team: string | null;
+  role: string;
 };
 
 type ValidationError = {
@@ -76,6 +101,7 @@ function emptyData(mapping: KRMapping[]): WebInputData {
     monthly_conclusion: {
       discipline_status: "OK",
       discipline_description: "",
+      discipline_violators: [],
       overall_assessment: "Hoàn thành nhiệm vụ",
       detailed_description: ""
     },
@@ -121,6 +147,9 @@ function validateData(data: WebInputData): ValidationError[] {
   });
   if (data.monthly_conclusion.discipline_status === "NOK" && !data.monthly_conclusion.discipline_description.trim()) {
     errors.push({ field: "discipline-description", message: "Cần mô tả khi kỷ luật là NOK" });
+  }
+  if (data.monthly_conclusion.discipline_status === "NOK" && data.monthly_conclusion.discipline_violators.length === 0) {
+    errors.push({ field: "discipline-violators", message: "Cần tag nhân sự vi phạm khi kỷ luật là NOK" });
   }
   if (data.monthly_conclusion.overall_assessment === "Không hoàn thành nhiệm vụ" && data.monthly_conclusion.detailed_description.trim().length < 20) {
     errors.push({ field: "detailed-description", message: "Cần lý do ít nhất 20 ký tự khi Không hoàn thành nhiệm vụ" });
@@ -209,7 +238,10 @@ export function WebInputForm({
   const [warnings, setWarnings] = useState<any[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => Object.fromEntries(OBJECTIVES.map((objective) => [objective, true])));
   const [showPreview, setShowPreview] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [violatorPickerOpen, setViolatorPickerOpen] = useState(false);
+  const [violatorSearch, setViolatorSearch] = useState("");
+  const [hasSavedDraft, setHasSavedDraft] = useState(false);
   const autosaveTimer = useRef<number | null>(null);
 
   const canWrite = role === "Admin" || (role === "Team_Account" && teamFromAccount === team);
@@ -281,6 +313,18 @@ export function WebInputForm({
   }, []);
 
   useEffect(() => {
+    api.listTaggableEmployees()
+      .then((list) => setEmployees(list))
+      .catch(() => setEmployees([]));
+  }, []);
+
+  // After data is reloaded (team/month/year changed), reset the "đăng ký xong" flag
+  // so user has to confirm again before submitting.
+  useEffect(() => {
+    setHasSavedDraft(false);
+  }, [team, month, year]);
+
+  useEffect(() => {
     load();
   }, [load]);
 
@@ -294,7 +338,12 @@ export function WebInputForm({
         setSavedAt(response.last_saved_at ?? new Date().toISOString());
         setWarnings(response.warnings ?? []);
         setUnsaved(false);
-        setError(manual ? "Đã lưu draft." : "");
+        if (manual) {
+          setHasSavedDraft(true);
+          setError("Đã lưu đăng ký. Bạn có thể bấm Gửi báo cáo.");
+        } else {
+          setError("");
+        }
       })
       .catch((err) => {
         setError(err.message);
@@ -340,6 +389,7 @@ export function WebInputForm({
   function mutate(next: (current: WebInputData) => WebInputData) {
     setData((current) => next(current));
     setUnsaved(true);
+    setHasSavedDraft(false);
     setError("");
   }
 
@@ -403,25 +453,6 @@ export function WebInputForm({
     setShowPreview(true);
   }
 
-  function copyEmail() {
-    navigator.clipboard?.writeText(emailText).then(() => {
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-    });
-  }
-
-  function downloadExcel() {
-    api.exportWebInputExcel(team, month, year)
-      .then((blob) => downloadBlob(blob, `bao-cao-okr-${team}-T${month}-${year}.xlsx`))
-      .catch((err) => setError(err.message));
-  }
-
-  function downloadEmail() {
-    api.downloadWebInputEmail(team, month, year)
-      .then((blob) => downloadBlob(blob, `email-bao-cao-okr-${team}-T${month}-${year}.txt`))
-      .catch((err) => setError(err.message));
-  }
-
   function toggleLock(nextLocked: boolean) {
     const reason = window.prompt(nextLocked ? "Lý do chốt báo cáo" : "Lý do mở chốt báo cáo");
     if (!reason) return;
@@ -466,9 +497,25 @@ export function WebInputForm({
         <div className="web-input-actions">
           <span className={unsaved ? "save-state unsaved" : "save-state"}>{saveLabel}</span>
           <button type="button" onClick={load} title="Tải lại"><RefreshCw size={17} /></button>
-          <button type="button" onClick={() => saveDraft(true)} disabled={readOnly || saving}><Save size={17} />Lưu draft</button>
+          <button
+            type="button"
+            className={hasSavedDraft ? "btn-primary-soft is-saved" : "btn-primary-soft"}
+            onClick={() => saveDraft(true)}
+            disabled={readOnly || saving}
+            title={hasSavedDraft ? "Đã lưu đăng ký — bạn có thể gửi báo cáo" : "Lưu đăng ký trước khi gửi báo cáo"}
+          >
+            <Save size={17} />Lưu đăng ký
+          </button>
           <button type="button" onClick={preview}><Clipboard size={17} />Xem trước</button>
-          <button type="button" onClick={submit} disabled={readOnly || saving}><Send size={17} />Gửi báo cáo</button>
+          <button
+            type="button"
+            className={hasSavedDraft && !unsaved ? "btn-primary" : ""}
+            onClick={submit}
+            disabled={readOnly || saving || !hasSavedDraft || unsaved}
+            title={!hasSavedDraft || unsaved ? "Cần bấm Lưu đăng ký trước khi gửi báo cáo" : "Gửi báo cáo chính thức"}
+          >
+            <Send size={17} />Gửi báo cáo
+          </button>
           {role === "Admin" && (
             <button type="button" onClick={() => toggleLock(!locked)}>{locked ? <Unlock size={17} /> : <Lock size={17} />}{locked ? "Mở chốt" : "Chốt"}</button>
           )}
@@ -497,19 +544,6 @@ export function WebInputForm({
             </button>
             {expanded[objective] && (
               <div className="okr-objective-body">
-                <label className="objective-override">
-                  <span>Đánh giá Objective trong email</span>
-                  <select
-                    value={data.objective_overrides[objective] ?? ""}
-                    disabled={readOnly}
-                    onChange={(event) => mutate((current) => ({
-                      ...current,
-                      objective_overrides: { ...current.objective_overrides, [objective]: event.target.value || null }
-                    }))}
-                  >
-                    {OBJECTIVE_OVERRIDE_OPTIONS.map((item) => <option key={item || "auto"} value={item}>{item || "Tự động theo KR"}</option>)}
-                  </select>
-                </label>
                 {grouped[objective]?.map((item) => {
                   const mappingItem = mappingByCode.get(item.workshop_kr_code);
                   const itemErrors = validationErrors.filter((err) => err.kr_code === item.workshop_kr_code);
@@ -597,53 +631,89 @@ export function WebInputForm({
         </div>
       </section>
 
-      <section className="panel">
-        <h2>Kết luận tháng</h2>
-        <div className="form-stack">
-          <label>
-            <span>Kỷ luật</span>
-            <select value={data.monthly_conclusion.discipline_status} disabled={readOnly} onChange={(event) => mutate((current) => ({ ...current, monthly_conclusion: { ...current.monthly_conclusion, discipline_status: event.target.value } }))}>
-              <option>OK</option>
-              <option>NOK</option>
-            </select>
-          </label>
-          {data.monthly_conclusion.discipline_status === "NOK" && (
-            <textarea
-              data-field="discipline-description"
-              value={data.monthly_conclusion.discipline_description}
-              disabled={readOnly}
-              maxLength={2000}
-              onChange={(event) => mutate((current) => ({ ...current, monthly_conclusion: { ...current.monthly_conclusion, discipline_description: event.target.value } }))}
-              placeholder="Mô tả kỷ luật"
-            />
-          )}
-          <label>
-            <span>Đánh giá chung</span>
-            <select value={data.monthly_conclusion.overall_assessment} disabled={readOnly} onChange={(event) => mutate((current) => ({ ...current, monthly_conclusion: { ...current.monthly_conclusion, overall_assessment: event.target.value } }))}>
-              {MONTHLY_ASSESSMENTS.map((item) => <option key={item}>{item}</option>)}
-            </select>
-          </label>
-          <textarea
-            data-field="detailed-description"
-            value={data.monthly_conclusion.detailed_description}
-            disabled={readOnly}
-            maxLength={5000}
-            onChange={(event) => mutate((current) => ({ ...current, monthly_conclusion: { ...current.monthly_conclusion, detailed_description: event.target.value } }))}
-            placeholder="Mô tả chi tiết"
-          />
-        </div>
-      </section>
-
-      <section className="panel wide">
+      <section className="panel conclusion-panel">
         <div className="panel-header">
-          <h2>Email báo cáo</h2>
-          <div className="toolbar">
-            <button type="button" onClick={copyEmail}><Copy size={17} />{copied ? "Đã copy" : "Copy"}</button>
-            <button type="button" onClick={downloadEmail}><FileDown size={17} />Tải .txt</button>
-            <button type="button" onClick={downloadExcel}><Download size={17} />Tải Excel</button>
+          <h2>Kết luận tháng</h2>
+          <span className="panel-sub">Đánh giá tổng quan và xử lý kỷ luật trong kỳ</span>
+        </div>
+        <div className={`conclusion-grid ${data.monthly_conclusion.discipline_status === "NOK" ? "has-violation" : ""}`}>
+          <div className="conclusion-card discipline-card">
+            <header>
+              <span className="conclusion-card-kicker"><ShieldAlert size={14} /> Kỷ luật vận hành</span>
+              <div className="discipline-toggle" role="radiogroup" aria-label="Trạng thái kỷ luật">
+                <button
+                  type="button"
+                  className={`discipline-pill ${data.monthly_conclusion.discipline_status === "OK" ? "is-active tone-ok" : ""}`}
+                  onClick={() => mutate((current) => ({ ...current, monthly_conclusion: { ...current.monthly_conclusion, discipline_status: "OK", discipline_description: "", discipline_violators: [] } }))}
+                  disabled={readOnly}
+                >
+                  <CheckCircle2 size={14} /> OK
+                </button>
+                <button
+                  type="button"
+                  className={`discipline-pill ${data.monthly_conclusion.discipline_status === "NOK" ? "is-active tone-ng" : ""}`}
+                  onClick={() => mutate((current) => ({ ...current, monthly_conclusion: { ...current.monthly_conclusion, discipline_status: "NOK" } }))}
+                  disabled={readOnly}
+                >
+                  <AlertTriangle size={14} /> NOK
+                </button>
+              </div>
+            </header>
+            {data.monthly_conclusion.discipline_status === "NOK" && (
+              <div className="discipline-detail">
+                <label className="discipline-field">
+                  <span><Users size={13} /> Nhân sự vi phạm</span>
+                  <ViolatorPicker
+                    employees={employees}
+                    selected={data.monthly_conclusion.discipline_violators}
+                    excludedRoles={["Workshop_Leader", "Admin"]}
+                    open={violatorPickerOpen}
+                    setOpen={setViolatorPickerOpen}
+                    search={violatorSearch}
+                    setSearch={setViolatorSearch}
+                    readOnly={readOnly}
+                    onChange={(violators) => mutate((current) => ({ ...current, monthly_conclusion: { ...current.monthly_conclusion, discipline_violators: violators } }))}
+                  />
+                </label>
+                <label className="discipline-field">
+                  <span>Mô tả vi phạm</span>
+                  <textarea
+                    data-field="discipline-description"
+                    value={data.monthly_conclusion.discipline_description}
+                    disabled={readOnly}
+                    maxLength={2000}
+                    onChange={(event) => mutate((current) => ({ ...current, monthly_conclusion: { ...current.monthly_conclusion, discipline_description: event.target.value } }))}
+                    placeholder="Mô tả ngắn gọn vi phạm và biện pháp xử lý..."
+                    rows={3}
+                  />
+                </label>
+              </div>
+            )}
+          </div>
+
+          <div className="conclusion-card assessment-card">
+            <header>
+              <span className="conclusion-card-kicker"><CheckCircle2 size={14} /> Đánh giá chung</span>
+              <select
+                className="assessment-select"
+                value={data.monthly_conclusion.overall_assessment}
+                disabled={readOnly}
+                onChange={(event) => mutate((current) => ({ ...current, monthly_conclusion: { ...current.monthly_conclusion, overall_assessment: event.target.value } }))}
+              >
+                {MONTHLY_ASSESSMENTS.map((item) => <option key={item}>{item}</option>)}
+              </select>
+            </header>
+            <textarea
+              data-field="detailed-description"
+              value={data.monthly_conclusion.detailed_description}
+              disabled={readOnly}
+              maxLength={5000}
+              onChange={(event) => mutate((current) => ({ ...current, monthly_conclusion: { ...current.monthly_conclusion, detailed_description: event.target.value } }))}
+              placeholder="Diễn giải kết quả, nguyên nhân, đề xuất cho tháng tới..."
+              rows={5}
+            />
           </div>
         </div>
-        <textarea className="email-preview" readOnly value={emailText} />
       </section>
 
       {showPreview && (
@@ -705,13 +775,164 @@ export function WebInputForm({
             <section>
               <h2>Kết luận tháng</h2>
               <p><strong>Kỷ luật:</strong> {data.monthly_conclusion.discipline_status}</p>
+              {data.monthly_conclusion.discipline_status === "NOK" && data.monthly_conclusion.discipline_violators.length > 0 && (
+                <p>
+                  <strong>Nhân sự vi phạm:</strong>{" "}
+                  {data.monthly_conclusion.discipline_violators
+                    .map((id) => employees.find((e) => e.id === id)?.full_name || id)
+                    .join(", ")}
+                </p>
+              )}
               {data.monthly_conclusion.discipline_description && <p>{data.monthly_conclusion.discipline_description}</p>}
               <p><strong>Đánh giá chung:</strong> {data.monthly_conclusion.overall_assessment}</p>
               {data.monthly_conclusion.detailed_description && <p>{data.monthly_conclusion.detailed_description}</p>}
             </section>
           </div>
-          <pre className="preview-email">{emailText}</pre>
         </section>
+      )}
+    </div>
+  );
+}
+
+const TEAM_LABEL: Record<string, string> = {
+  TBHTĐK: "Đội thiết bị hệ thống điều khiển",
+  TBCH: "Đội thiết bị chấp hành",
+  TBĐL: "Đội thiết bị đo lường",
+  TCĐK: "Tổ trực ca",
+  Workshop_Staff: "Xưởng Điều khiển",
+};
+
+function ViolatorPicker({
+  employees,
+  selected,
+  excludedRoles,
+  open,
+  setOpen,
+  search,
+  setSearch,
+  readOnly,
+  onChange,
+}: {
+  employees: Employee[];
+  selected: string[];
+  excludedRoles: string[];
+  open: boolean;
+  setOpen: (next: boolean) => void;
+  search: string;
+  setSearch: (next: string) => void;
+  readOnly: boolean;
+  onChange: (next: string[]) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(event: MouseEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open, setOpen]);
+
+  const excludedRoleSet = new Set(excludedRoles);
+  const filtered = employees
+    .filter((emp) => !excludedRoleSet.has(emp.role))
+    .filter((emp) => {
+      if (!search.trim()) return true;
+      const needle = search.trim().toLowerCase();
+      return (
+        emp.full_name.toLowerCase().includes(needle) ||
+        emp.display_name.toLowerCase().includes(needle) ||
+        (emp.team || "").toLowerCase().includes(needle) ||
+        emp.id.toLowerCase().includes(needle)
+      );
+    });
+  const groupedByTeam = filtered.reduce<Record<string, Employee[]>>((acc, emp) => {
+    const key = emp.team || "Khác";
+    acc[key] = acc[key] || [];
+    acc[key].push(emp);
+    return acc;
+  }, {});
+
+  const selectedSet = new Set(selected);
+  const toggle = (id: string) => {
+    if (selectedSet.has(id)) onChange(selected.filter((s) => s !== id));
+    else onChange([...selected, id]);
+  };
+  const remove = (id: string) => onChange(selected.filter((s) => s !== id));
+
+  return (
+    <div className={`violator-picker ${open ? "is-open" : ""}`} ref={containerRef} data-field="discipline-violators">
+      <div className="violator-tags">
+        {selected.length === 0 && <span className="violator-empty">Chưa có nhân sự nào được tag</span>}
+        {selected.map((id) => {
+          const emp = employees.find((e) => e.id === id);
+          return (
+            <span className="violator-tag" key={id}>
+              <strong>{emp?.full_name || id}</strong>
+              {emp?.team && <em>{emp.team}</em>}
+              {!readOnly && (
+                <button type="button" onClick={() => remove(id)} title="Bỏ tag" aria-label={`Bỏ tag ${emp?.full_name || id}`}>
+                  <X size={12} />
+                </button>
+              )}
+            </span>
+          );
+        })}
+        {!readOnly && (
+          <button type="button" className="violator-add" onClick={() => setOpen(!open)}>
+            <UserPlus size={14} /> {open ? "Đóng" : "Tag nhân sự"}
+          </button>
+        )}
+      </div>
+      {open && !readOnly && (
+        <div className="violator-dropdown" role="listbox">
+          <div className="violator-search">
+            <Search size={14} />
+            <input
+              type="text"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Tìm theo tên, mã hoặc đội/tổ..."
+              autoFocus
+            />
+            {search && (
+              <button type="button" onClick={() => setSearch("")} aria-label="Xóa tìm kiếm">
+                <X size={12} />
+              </button>
+            )}
+          </div>
+          <div className="violator-list">
+            {Object.entries(groupedByTeam).length === 0 ? (
+              <p className="violator-empty">Không tìm thấy nhân sự phù hợp.</p>
+            ) : (
+              Object.entries(groupedByTeam).map(([team, list]) => (
+                <div className="violator-group" key={team}>
+                  <h5>{team} · {TEAM_LABEL[team] || team}</h5>
+                  {list.map((emp) => {
+                    const isSelected = selectedSet.has(emp.id);
+                    return (
+                      <button
+                        type="button"
+                        key={emp.id}
+                        className={`violator-option ${isSelected ? "is-selected" : ""}`}
+                        onClick={() => toggle(emp.id)}
+                      >
+                        <span className="violator-option-main">
+                          <strong>{emp.full_name}</strong>
+                          <small>{emp.id} · {emp.team || "—"}</small>
+                        </span>
+                        {isSelected ? <CheckCircle2 size={16} /> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -119,6 +119,7 @@ def _monthly_to_team_level(conclusion: MonthlyConclusionInput, objective_overrid
         "monthly_assessment": conclusion.overall_assessment,
         "discipline_status": conclusion.discipline_status,
         "discipline_description": conclusion.discipline_description or "",
+        "discipline_violators": list(conclusion.discipline_violators or []),
         "detailed_description": conclusion.detailed_description or "",
         "objective_overrides": clean_overrides,
     }
@@ -141,6 +142,7 @@ def _payload_from_report(report: TeamReportModel | None) -> dict[str, Any]:
             "monthly_conclusion": {
                 "discipline_status": "OK",
                 "discipline_description": "",
+                "discipline_violators": [],
                 "overall_assessment": "Hoàn thành nhiệm vụ",
                 "detailed_description": "",
             },
@@ -161,6 +163,7 @@ def _payload_from_report(report: TeamReportModel | None) -> dict[str, Any]:
         "monthly_conclusion": {
             "discipline_status": team_level.get("discipline_status") or "OK",
             "discipline_description": team_level.get("discipline_description") or "",
+            "discipline_violators": team_level.get("discipline_violators") or [],
             "overall_assessment": team_level.get("monthly_assessment") or "Hoàn thành nhiệm vụ",
             "detailed_description": team_level.get("detailed_description") or "",
         },

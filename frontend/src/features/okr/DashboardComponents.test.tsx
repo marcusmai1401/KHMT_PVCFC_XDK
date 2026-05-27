@@ -233,6 +233,35 @@ describe("OKR dashboard components", () => {
     expect(training).toContain("Đạt kế hoạch");
   });
 
+  it("uses the monthly per-team target for O5.KR13 rate", () => {
+    const html = renderToStaticMarkup(
+      <VisualBlockRenderer
+        block={{
+          id: "o5_initiatives",
+          kind: "kpi_badges",
+          title: "Sáng kiến được công nhận",
+          data_state: "ready",
+          payload: {
+            master_target: 8,
+            total: 33,
+            fi_counts_by_team: { TBHTĐK: 3, TBCH: 1, TBĐL: 1, TCĐK: 3 },
+            o5_fi_payload: {
+              master_target: 4,
+              target_per_team: 1,
+              target_team_count: 4,
+              target_basis: "monthly_per_team",
+              total: 8,
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(html).toContain("Mục tiêu tháng");
+    expect(html).toContain(">200%<");
+    expect(html).not.toContain(">800%<");
+  });
+
   it("renders compact metric tables with imported Excel notes", () => {
     const metricTable = renderToStaticMarkup(
       <VisualBlockRenderer
@@ -258,7 +287,7 @@ describe("OKR dashboard components", () => {
     expect(metricTable).toContain("metric-table");
     expect(metricTable).toContain("Đội thiết bị chấp hành");
     expect(metricTable).toContain("98.8%");
-    expect(metricTable).toContain("Ghi chú từ dashboard Excel");
+    expect(metricTable).toContain("Ghi chú");
     expect(metricTable).toContain("25 mục không thực hiện do điều kiện khách quan");
   });
 

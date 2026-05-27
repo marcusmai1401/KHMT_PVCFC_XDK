@@ -2,10 +2,12 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse, PlainTextResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import Role, require_role
 from app.db.session import get_db
+from app.models.domain import User
 from app.schemas.web_input import LockRequest, WebInputSaveRequest
 from app.services.okr.email_report import email_report_path, generate_email_report, write_email_report_file
 from app.services.okr.report_template import generate_excel_from_web_input
@@ -37,6 +39,33 @@ def web_input_status(
     db: Session = Depends(get_db),
 ):
     return statuses_for_period(db, month, year, principal)
+
+
+@router.get("/employees")
+def list_taggable_employees(
+    _: dict = Depends(require_role(*READ_ROLES)),
+    db: Session = Depends(get_db),
+):
+    """Trả về danh sách nhân sự có thể được tag trong phần vi phạm kỷ luật.
+
+    Loại trừ Lãnh đạo Xưởng (WORKSHOP_LEADER) và tài khoản admin hệ thống.
+    """
+    excluded_roles = {Role.WORKSHOP_LEADER.value, Role.ADMIN.value}
+    employees = []
+    for user in db.execute(select(User)).scalars():
+        if user.role in excluded_roles:
+            continue
+        if not user.is_active:
+            continue
+        employees.append({
+            "id": user.id,
+            "display_name": user.display_name,
+            "full_name": user.full_name or user.display_name,
+            "team": user.team,
+            "role": user.role,
+        })
+    employees.sort(key=lambda item: (item["team"] or "ZZZ", item["full_name"]))
+    return employees
 
 
 @router.get("/{team}/{month}/{year}")

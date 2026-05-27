@@ -114,6 +114,15 @@ def _block(config: ChartBlockConfig, labels: list[str], datasets: list[dict[str,
     }
 
 
+def _numeric_target(value: float | str | None) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
 def _plain_text(value: Any) -> str:
     normalized = unicodedata.normalize("NFD", str(value or "").strip().lower())
     return "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn").replace("đ", "d")
@@ -376,6 +385,8 @@ def build_chart_blocks(
     fi_config = CHART_CONFIGS["ctkt_fi"]
     fi_counts = fi_counts_by_team or {}
     fi_values = [int(fi_counts.get(team, 0)) for team in teams]
+    fi_target_per_team = _numeric_target(fi_config.master_target)
+    fi_monthly_target = fi_target_per_team * len(teams) if fi_target_per_team is not None else fi_config.master_target
 
     blocks = {
         "stop_by_team": _block(
@@ -406,6 +417,15 @@ def build_chart_blocks(
         "vhdn_running": _participation_items(CHART_CONFIGS["vhdn_running"], metric_by_key, seen_keys, teams, month, headcounts),
         "vhdn_sports": _participation_items(CHART_CONFIGS["vhdn_sports"], metric_by_key, seen_keys, teams, month, headcounts),
         "sk_initiatives": _block(sk_config, teams, [{"label": "Số sáng kiến", "data": sk_values}], total=sum(value or 0 for value in sk_values)),
-        "ctkt_fi": _block(fi_config, teams, [{"label": "Số CTKT", "data": fi_values}], total=sum(fi_values)),
+        "ctkt_fi": _block(
+            fi_config,
+            teams,
+            [{"label": "Số CTKT", "data": fi_values}],
+            total=sum(fi_values),
+            master_target=fi_monthly_target,
+            target_per_team=fi_target_per_team,
+            target_team_count=len(teams),
+            target_basis="monthly_per_team",
+        ),
     }
     return _apply_snapshot_overrides(blocks, historical_snapshots, teams)

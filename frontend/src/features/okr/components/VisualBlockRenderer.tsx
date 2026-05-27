@@ -1,4 +1,4 @@
-import { Activity, BarChart3, CalendarDays, CheckCircle2, ClipboardList, Flag, LineChart, Radar, Target, TrendingUp } from "lucide-react";
+import { Activity, AlertTriangle, BarChart3, CalendarDays, CheckCircle2, ClipboardList, Flag, LineChart, Radar, ShieldCheck, Target, TrendingUp, XCircle } from "lucide-react";
 import React from "react";
 import type { ChartDataset, VisualBlock } from "../types/dashboard";
 import { vn } from "../i18n";
@@ -325,6 +325,199 @@ function TrainingChartInline({ title, payload, visualId, kind }: { title: string
   );
 }
 
+function findSeries(series: ChartDataset[], pattern: RegExp) {
+  return series.find((dataset) => pattern.test(vn(dataset.label)));
+}
+
+function O3StopByTeam({ title, payload, visualId, kind }: { title: string; payload?: Record<string, any>; visualId?: string; kind?: string }) {
+  const series = datasets(payload);
+  const blockLabels = labels(payload);
+  const cardsSeries = findSeries(series, /th[eẻ]\s*ghi\s*nh[aậ]n/i) ?? series[0];
+  const headcountSeries = findSeries(series, /t[oổ]ng\s*nh[aâ]n\s*s[uự]/i) ?? series[1];
+  const rateSeries = findSeries(series, /ghi\s*nh[aậ]n/i) ?? series[2];
+  const targetSeries = findSeries(series, /ch[iỉ]\s*ti[eê]u/i) ?? series[3];
+  const target = numberValue(targetSeries?.data?.find((v) => typeof v === "number")) || 0.5;
+
+  const teamRows = blockLabels.map((label, index) => {
+    const cards = numberValue(cardsSeries?.data?.[index]);
+    const headcount = numberValue(headcountSeries?.data?.[index]);
+    const rate = headcount > 0 ? cards / headcount : numberValue(rateSeries?.data?.[index]);
+    return { team: label, cards, headcount, rate, meets: rate >= target };
+  });
+  const totalCards = teamRows.reduce((sum, row) => sum + row.cards, 0);
+  const totalPeople = teamRows.reduce((sum, row) => sum + row.headcount, 0);
+  const overallRate = totalPeople > 0 ? totalCards / totalPeople : 0;
+  const teamsMeeting = teamRows.filter((row) => row.meets).length;
+  const overallTone = overallRate >= target ? "success" : overallRate >= target * 0.8 ? "warning" : "danger";
+
+  return (
+    <ChartShell title={title} icon={<ShieldCheck size={17} />} kind={kind} visualId={visualId}>
+      <div className="o3-stop-board">
+        <header className={`o3-stop-overview tone-${overallTone}`}>
+          <div className="o3-stop-overview-main">
+            <span className="o3-stop-kicker">O3.KR2 · Chương trình STOP</span>
+            <div className="o3-stop-overview-metric">
+              <strong>{Math.round(overallRate * 100)}%</strong>
+              <span>tỷ lệ ghi nhận / mục tiêu {Math.round(target * 100)}%</span>
+            </div>
+          </div>
+          <div className="o3-stop-overview-stats">
+            <span>
+              <strong>{totalCards}</strong>
+              <em>thẻ ghi nhận</em>
+            </span>
+            <span>
+              <strong>{totalPeople}</strong>
+              <em>tổng nhân sự</em>
+            </span>
+            <span>
+              <strong>{teamsMeeting}/{teamRows.length}</strong>
+              <em>đội đạt mục tiêu</em>
+            </span>
+          </div>
+        </header>
+
+        <div className="o3-stop-team-grid">
+          {teamRows.map((row) => {
+            const pct = Math.min(140, Math.round(row.rate * 100));
+            const fillWidth = Math.min(100, pct);
+            return (
+              <article className={`o3-stop-team-card ${row.meets ? "tone-meet" : "tone-miss"}`} key={row.team}>
+                <header>
+                  <strong>{row.team}</strong>
+                  <span className={`status-pill ${row.meets ? (pct >= Math.round(target * 100) * 2 ? "status-success" : "status-success-soft") : "status-warning"}`}>{pct}%</span>
+                </header>
+                <div className="o3-stop-team-bar">
+                  <span className="o3-stop-team-track">
+                    <span className="o3-stop-team-fill" style={{ width: `${fillWidth}%` }} />
+                    <span className="o3-stop-team-target" style={{ left: `${Math.round(target * 100)}%` }} title={`Chỉ tiêu ${Math.round(target * 100)}%`} />
+                  </span>
+                </div>
+                <footer>
+                  <span><strong>{row.cards}</strong> thẻ</span>
+                  <span>/ {row.headcount} người</span>
+                </footer>
+              </article>
+            );
+          })}
+        </div>
+      </div>
+    </ChartShell>
+  );
+}
+
+function O3StopByMonth({ title, payload, visualId, kind }: { title: string; payload?: Record<string, any>; visualId?: string; kind?: string }) {
+  const series = datasets(payload);
+  const blockLabels = labels(payload);
+  const values = (series[0]?.data ?? []).map((v) => (typeof v === "number" ? v : null));
+  const summaryItems = Array.isArray(payload?.summary_items) ? payload.summary_items : [];
+  const actualItem = summaryItems.find((item: any) => /th[uự]c\s*hi[eệ]n/i.test(String(item?.label || "")));
+  const planItem = summaryItems.find((item: any) => /k[eế]\s*ho[aạ]ch/i.test(String(item?.label || "")));
+  const rateItem = summaryItems.find((item: any) => item?.format === "percent");
+  const actual = numberValue(actualItem?.value) || values.reduce((sum, v) => sum + numberValue(v), 0);
+  const plan = numberValue(planItem?.value) || 0;
+  const rate = rateItem ? numberValue(rateItem.value) : plan > 0 ? actual / plan : 0;
+  const ratePct = Math.round(rate * 100);
+  const tone = ratePct >= 100 ? "success" : ratePct >= 80 ? "warning" : "danger";
+  const monthValues = values.map((v, i) => ({ month: blockLabels[i], value: v }));
+  const monthsWithData = monthValues.filter((m) => m.value !== null);
+  const peakMonth = monthsWithData.reduce(
+    (best, current) => (numberValue(current.value) > numberValue(best.value) ? current : best),
+    monthsWithData[0] ?? { month: "-", value: 0 },
+  );
+  const avgPerMonth = monthsWithData.length ? Math.round(monthsWithData.reduce((sum, m) => sum + numberValue(m.value), 0) / monthsWithData.length) : 0;
+
+  const maxValueSafe = Math.max(1, ...values.map((v) => numberValue(v)));
+  const chartWidth = 420;
+  const chartHeight = 200;
+  const left = 44;
+  const right = chartWidth - 12;
+  const top = 14;
+  const bottom = chartHeight - 38;
+  const innerWidth = right - left;
+  const points = values.map((v, i) => {
+    if (v === null) return null;
+    const x = values.length <= 1 ? left : left + (i / (values.length - 1)) * innerWidth;
+    const y = bottom - (v / maxValueSafe) * (bottom - top);
+    return { x, y, value: v, month: blockLabels[i] };
+  });
+  const segments: Array<Array<{ x: number; y: number }>> = [];
+  let currentSeg: Array<{ x: number; y: number }> = [];
+  for (const p of points) {
+    if (!p) {
+      if (currentSeg.length) segments.push(currentSeg);
+      currentSeg = [];
+    } else {
+      currentSeg.push({ x: p.x, y: p.y });
+    }
+  }
+  if (currentSeg.length) segments.push(currentSeg);
+  const scale = axisScale(maxValueSafe);
+
+  return (
+    <ChartShell title={title} icon={<TrendingUp size={17} />} kind={kind} visualId={visualId}>
+      <div className="o3-stop-board">
+        <header className={`o3-stop-overview tone-${tone}`}>
+          <div className="o3-stop-overview-main">
+            <span className="o3-stop-kicker">O3.KR2 · Lũy kế STOP</span>
+            <div className="o3-stop-overview-metric">
+              <strong>{ratePct}%</strong>
+              <span>{actual} / {plan} thẻ</span>
+            </div>
+          </div>
+          <div className="o3-stop-overview-stats">
+            <span>
+              <strong>{actual}</strong>
+              <em>thực hiện</em>
+            </span>
+            <span>
+              <strong>{plan}</strong>
+              <em>kế hoạch năm</em>
+            </span>
+            <span>
+              <strong>{avgPerMonth}</strong>
+              <em>TB/tháng</em>
+            </span>
+            <span>
+              <strong>{peakMonth?.month || "-"}</strong>
+              <em>cao nhất ({formatValue(peakMonth?.value)})</em>
+            </span>
+          </div>
+        </header>
+
+        <div className="o3-stop-month-chart">
+          <svg className="okr-chart" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label={title}>
+            {scale.ticks.map((tick) => {
+              const y = bottom - (tick / scale.max) * (bottom - top);
+              return (
+                <g key={`tick-${tick}`}>
+                  <line className="chart-gridline" x1={left} x2={right} y1={y} y2={y} />
+                  <text className="chart-tick" x={left - 6} y={y + 4} textAnchor="end">{formatAxisValue(tick)}</text>
+                </g>
+              );
+            })}
+            <line className="chart-axis-line" x1={left} x2={left} y1={top} y2={bottom} />
+            <line className="chart-axis-line" x1={left} x2={right} y1={bottom} y2={bottom} />
+            {segments.map((seg, i) => (
+              <polyline key={i} points={seg.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#0ea5e9" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+            ))}
+            {points.map((p, i) => p ? (
+              <g key={`pt-${i}`}>
+                <circle cx={p.x} cy={p.y} r="4" fill="#0ea5e9" stroke="#ffffff" strokeWidth="2" />
+                <text x={p.x} y={p.y - 9} textAnchor="middle" className="o3-stop-point-label">{formatValue(p.value)}</text>
+              </g>
+            ) : null)}
+            {blockLabels.map((label, i) => {
+              const x = values.length <= 1 ? left : left + (i / (values.length - 1)) * innerWidth;
+              return <text key={label} x={x} y={chartHeight - 16} textAnchor="middle" className="chart-month-label">{label}</text>;
+            })}
+          </svg>
+        </div>
+      </div>
+    </ChartShell>
+  );
+}
+
 function BarLineChartInline({ title, payload, visualId, kind }: { title: string; payload?: Record<string, any>; visualId?: string; kind?: string }) {
   const [hoveredItem, setHoveredItem] = React.useState<{
     x: number;
@@ -334,6 +527,10 @@ function BarLineChartInline({ title, payload, visualId, kind }: { title: string;
     value: string;
     color: string;
   } | null>(null);
+
+  if (visualId === "o3_stop_by_team") {
+    return <O3StopByTeam title={title} payload={payload} visualId={visualId} kind={kind} />;
+  }
 
   const series = datasets(payload);
   const blockLabels = labels(payload);
@@ -490,6 +687,9 @@ function BarLineChartInline({ title, payload, visualId, kind }: { title: string;
 }
 
 function LineChartInline({ title, payload, visualId, kind }: { title: string; payload?: Record<string, any>; visualId?: string; kind?: string }) {
+  if (visualId === "o3_stop_by_month") {
+    return <O3StopByMonth title={title} payload={payload} visualId={visualId} kind={kind} />;
+  }
   const series = datasets(payload);
   const values = series[0]?.data ?? [];
   const scale = axisScale(maxValue(series));
@@ -570,42 +770,115 @@ function MetricTable({ title, payload, visualId, kind }: { title: string; payloa
   const columns = Array.isArray(payload?.columns) ? payload.columns : [];
   const rows = Array.isArray(payload?.rows) ? payload.rows : [];
   const notes = Array.isArray(payload?.notes) ? payload.notes : [];
+  const summaryItems = Array.isArray(payload?.summary_items) ? payload.summary_items : [];
+  const rateColumn = columns.find((c: any) => c.key === "rate" || c.format === "percent");
+  const targetColumn = columns.find((c: any) => c.key === "target");
+  const targetRate = rows.reduce((max: number, row: any) => Math.max(max, numberValue(row?.target)), 0);
+  const teamsAtTarget = targetRate > 0
+    ? rows.filter((row: any) => numberValue(row?.rate) >= numberValue(row?.target ?? targetRate)).length
+    : 0;
+  const headlineSummary = summaryItems[summaryItems.length - 1];
+  const headlineRate = headlineSummary && headlineSummary.format === "percent" ? percentValue(headlineSummary.value) : null;
+  const headlineTone = headlineRate === null
+    ? "neutral"
+    : targetRate > 0 && headlineRate >= targetRate * 100 - 0.5
+      ? "success"
+      : headlineRate >= 80
+        ? "warning"
+        : "danger";
+
   return (
     <ChartShell title={title} icon={<ClipboardList size={17} />} kind={kind} visualId={visualId}>
       <div className="metric-table-stack">
+        {summaryItems.length ? (
+          <header className={`metric-table-overview tone-${headlineTone}`}>
+            <div className="metric-table-overview-main">
+              <span className="metric-table-kicker">{payload?.kr_code || "Tiến độ kỳ"}</span>
+              {headlineRate !== null ? (
+                <strong>{Math.round(headlineRate)}%</strong>
+              ) : (
+                <strong>{formatValue(headlineSummary?.value)}</strong>
+              )}
+              <small>{vn(String(headlineSummary?.label || "Tỷ lệ kỳ"))}</small>
+            </div>
+            <div className="metric-table-overview-stats">
+              {summaryItems.slice(0, -1).map((item: any, idx: number) => (
+                <span key={`${item.label}-${idx}`}>
+                  <strong>{formatDatasetValue(item.value, item.format)}</strong>
+                  <em>{vn(String(item.label))}</em>
+                </span>
+              ))}
+              {targetRate > 0 ? (
+                <span>
+                  <strong>{teamsAtTarget}/{rows.length}</strong>
+                  <em>đội đạt mục tiêu</em>
+                </span>
+              ) : null}
+            </div>
+          </header>
+        ) : null}
         {columns.length ? (
           <div className="metric-table-wrapper">
-            <table className="metric-table">
+            <table className="metric-table metric-table-enhanced">
               <thead>
                 <tr>
                   {columns.map((column: any) => <th key={column.key}>{vn(String(column.label || column.key))}</th>)}
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row: Record<string, any>, rowIndex: number) => (
-                  <tr key={String(row.team || rowIndex)}>
-                    {columns.map((column: any) => (
-                      <td key={column.key}>
-                        {column.key === "team_name" ? (
-                          <div className="team-cell-info" title={formatValue(row[column.key])}>
-                            <strong>{row.team || formatValue(row[column.key])}</strong>
-                            {row.team ? <small className="team-fullname">{formatValue(row[column.key])}</small> : null}
-                          </div>
-                        ) : (
-                          formatDatasetValue(row[column.key], column.format)
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+                {rows.map((row: Record<string, any>, rowIndex: number) => {
+                  const rowRate = numberValue(row.rate);
+                  const rowTarget = numberValue(row.target ?? targetRate);
+                  const meetsTarget = rowTarget > 0 ? rowRate >= rowTarget : true;
+                  return (
+                    <tr key={String(row.team || rowIndex)} className={meetsTarget ? "row-meet" : "row-miss"}>
+                      {columns.map((column: any) => {
+                        if (column.key === "team_name") {
+                          return (
+                            <td key={column.key}>
+                              <div className="team-cell-info" title={formatValue(row[column.key])}>
+                                <strong>{row.team || formatValue(row[column.key])}</strong>
+                                {row.team ? <small className="team-fullname">{formatValue(row[column.key])}</small> : null}
+                              </div>
+                            </td>
+                          );
+                        }
+                        if (column === rateColumn && rateColumn) {
+                          const pct = Math.max(0, Math.min(100, Math.round(rowRate * 100)));
+                          const targetPct = rowTarget > 0 ? Math.min(100, Math.round(rowTarget * 100)) : null;
+                          return (
+                            <td key={column.key} className="metric-rate-cell">
+                              <div className="metric-rate-bar">
+                                <span className={`metric-rate-bar-track ${meetsTarget ? "meet" : "miss"}`}>
+                                  <span className="metric-rate-bar-fill" style={{ width: `${pct}%` }} />
+                                  {targetPct !== null ? (
+                                    <span className="metric-rate-bar-target" style={{ left: `${targetPct}%` }} />
+                                  ) : null}
+                                </span>
+                                <strong>{pct}%</strong>
+                              </div>
+                            </td>
+                          );
+                        }
+                        if (column === targetColumn) {
+                          return (
+                            <td key={column.key} className="metric-target-cell">
+                              <span className="metric-target-pill">{formatDatasetValue(row[column.key], column.format)}</span>
+                            </td>
+                          );
+                        }
+                        return <td key={column.key}>{formatDatasetValue(row[column.key], column.format)}</td>;
+                      })}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         ) : null}
-        {Array.isArray(payload?.summary_items) && payload.summary_items.length ? <SummaryBadges items={payload.summary_items} /> : null}
         {notes.length ? (
           <div className="metric-note-block">
-            <strong>Ghi chú từ dashboard Excel</strong>
+            <strong><ClipboardList size={13} /> Ghi chú từ dashboard Excel</strong>
             <ul>
               {notes.map((note: string, index: number) => <li key={`${note}-${index}`}>{note}</li>)}
             </ul>
@@ -638,8 +911,21 @@ function KpiBadges({ title, payload, visualId, kind }: { title: string; payload?
   );
 }
 
+const STATUS_TEAM_ORDER = ["TBHTĐK", "TBCH", "TBĐL", "TCĐK"];
+
+function normalizeStatus(status: unknown): { key: string; tone: "ok" | "ng" | "na"; label: string } {
+  const raw = String(status ?? "#N/A").trim();
+  const upper = raw.toUpperCase();
+  if (upper === "OK") return { key: "ok", tone: "ok", label: "OK" };
+  if (upper === "NG" || upper === "NOK" || upper === "FAIL") return { key: "ng", tone: "ng", label: "NG" };
+  return { key: "na", tone: "na", label: raw === "#N/A" ? "—" : raw };
+}
+
 function StatusGrid({ title, payload, visualId, kind }: { title: string; payload?: Record<string, any>; visualId?: string; kind?: string }) {
   const items = Array.isArray(payload?.items) ? payload.items : [];
+  if (visualId === "o1_status_grid") {
+    return <O1StatusBoard title={title} items={items} visualId={visualId} kind={kind} />;
+  }
   return (
     <ChartShell title={title} icon={<ClipboardList size={17} />} kind={kind} visualId={visualId}>
       <div className="objective-status-grid">
@@ -656,6 +942,91 @@ function StatusGrid({ title, payload, visualId, kind }: { title: string; payload
             </div>
           </div>
         ))}
+      </div>
+    </ChartShell>
+  );
+}
+
+function O1StatusBoard({ title, items, visualId, kind }: { title: string; items: any[]; visualId?: string; kind?: string }) {
+  const krSummaries = items.map((item: any) => {
+    const teams = item.team_statuses || {};
+    const teamList = STATUS_TEAM_ORDER.filter((t) => t in teams).length
+      ? STATUS_TEAM_ORDER
+      : Object.keys(teams);
+    const normalized = teamList.map((team) => ({ team, ...normalizeStatus(teams[team]) }));
+    const okCount = normalized.filter((t) => t.tone === "ok").length;
+    const ngCount = normalized.filter((t) => t.tone === "ng").length;
+    const naCount = normalized.filter((t) => t.tone === "na").length;
+    const evaluable = okCount + ngCount;
+    const cardTone = ngCount > 0 ? "danger" : evaluable === 0 ? "neutral" : "success";
+    return { item, normalized, okCount, ngCount, naCount, evaluable, cardTone };
+  });
+  const totalKrs = krSummaries.length;
+  const krsOk = krSummaries.filter((kr) => kr.cardTone === "success").length;
+  const krsFlagged = krSummaries.filter((kr) => kr.cardTone === "danger").length;
+  const totalNg = krSummaries.reduce((sum, kr) => sum + kr.ngCount, 0);
+
+  return (
+    <ChartShell title={title} icon={<ShieldCheck size={17} />} kind={kind} visualId={visualId}>
+      <div className="o1-status-board">
+        <header className="o1-status-overview">
+          <div className="o1-status-overview-main">
+            <span className="o1-status-kicker">Kỷ luật vận hành</span>
+            <strong>{krsOk}<small>/{totalKrs}</small></strong>
+            <span className="o1-status-overview-sub">KR đạt toàn diện</span>
+          </div>
+          <div className="o1-status-overview-stats">
+            <span className="o1-stat tone-ng">
+              <AlertTriangle size={14} />
+              <strong>{krsFlagged}</strong>
+              <em>KR có cảnh báo</em>
+            </span>
+            <span className="o1-stat tone-counts">
+              <XCircle size={14} />
+              <strong>{totalNg}</strong>
+              <em>điểm NG cần xử lý</em>
+            </span>
+          </div>
+        </header>
+
+        <div className="o1-status-list">
+          {krSummaries.map(({ item, normalized, okCount, ngCount, naCount, evaluable, cardTone }) => (
+            <article className={`o1-status-card tone-${cardTone}`} key={item.workshop_kr_code}>
+              <div className="o1-status-card-head">
+                <span className="o1-status-card-code">{item.workshop_kr_code}</span>
+                <div className="o1-status-card-meter">
+                  {ngCount > 0 ? (
+                    <span className="o1-status-card-pill tone-ng">
+                      <AlertTriangle size={12} /> {ngCount} NG
+                    </span>
+                  ) : evaluable === 0 ? (
+                    <span className="o1-status-card-pill tone-na">Chưa phát sinh</span>
+                  ) : (
+                    <span className="o1-status-card-pill tone-ok">
+                      <CheckCircle2 size={12} /> {okCount}/{evaluable} đạt
+                    </span>
+                  )}
+                </div>
+              </div>
+              <p className="o1-status-card-title">{item.kr_name || item.workshop_kr_code}</p>
+              <div className="o1-status-card-teams">
+                {normalized.map(({ team, tone, label }) => (
+                  <div className={`o1-status-team tone-${tone}`} key={team} title={`${team}: ${label}`}>
+                    <strong>{team}</strong>
+                    <span>{label}</span>
+                  </div>
+                ))}
+              </div>
+              {naCount === normalized.length ? null : (
+                <div className="o1-status-card-track" aria-hidden="true">
+                  {normalized.map(({ team, tone }) => (
+                    <span key={team} className={`o1-status-card-seg tone-${tone}`} />
+                  ))}
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
       </div>
     </ChartShell>
   );

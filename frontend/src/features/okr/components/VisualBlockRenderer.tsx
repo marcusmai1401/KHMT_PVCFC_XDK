@@ -199,6 +199,9 @@ function BarChartInline({ title, payload, visualId, kind }: { title: string; pay
   if (visualId === "o5_training") {
     return <TrainingChartInline title={title} payload={payload} visualId={visualId} kind={kind} />;
   }
+  if (visualId === "o6_sports") {
+    return <SportsParticipationInline title={title} payload={payload} visualId={visualId} kind={kind} />;
+  }
 
   const series = datasets(payload);
   const blockLabels = labels(payload);
@@ -684,20 +687,41 @@ function NarrativeCard({ title, payload, visualId, kind }: { title: string; payl
 function ProgressCard({ title, payload, visualId, kind }: { title: string; payload?: Record<string, any>; visualId?: string; kind?: string }) {
   const items = Array.isArray(payload?.items) ? payload.items : [];
   const isRunning = visualId === "o6_running";
+  const targetRate = typeof payload?.participation_target === "number" ? payload.participation_target : 0.5;
+  const totalActual = items.reduce((sum: number, item: any) => sum + numberValue(item.actual ?? item.value), 0);
+  const totalCount = items.reduce((sum: number, item: any) => sum + numberValue(item.total), 0);
+  const overallRate = totalCount > 0 ? totalActual / totalCount : 0;
+  const teamsMeetTarget = items.filter((item: any) => numberValue(item.participation_rate) >= targetRate).length;
 
   return (
     <ChartShell title={title} icon={isRunning ? <Activity size={17} /> : <TrendingUp size={17} />} kind={kind} visualId={visualId}>
+      {isRunning && items.length ? (
+        <div className="o6-running-overview">
+          <div className="o6-running-overview-main">
+            <span className="o6-running-kicker">O6.KR1</span>
+            <strong>{Math.round(overallRate * 100)}%</strong>
+            <small>Tỷ lệ tham gia toàn Xưởng</small>
+          </div>
+          <div className="o6-running-overview-stats">
+            <span><strong>{totalActual}</strong>/{totalCount} <em>người tham gia</em></span>
+            <span><strong>{teamsMeetTarget}</strong>/{items.length} <em>đội đạt mục tiêu</em></span>
+            <span><strong>{Math.round(targetRate * 100)}%</strong> <em>mục tiêu tham gia</em></span>
+          </div>
+        </div>
+      ) : null}
       <div className="okr-card-grid">
         {items.map((item: any) => {
           const rate = typeof item.participation_rate === "number" ? Math.min(item.participation_rate, 1) : 0;
           const pct = Math.round(rate * 100);
+          const itemTarget = typeof item.participation_target === "number" ? item.participation_target : targetRate;
+          const meetsTarget = rate >= itemTarget;
           return (
             <div className="metric-card compact-card" key={String(item.team || item.label)}>
               <div className="compact-card-header">
                 <strong>{item.team_name || item.team || item.label}</strong>
                 {isRunning ? (
-                  <span className={`status-pill ${pct >= 100 ? "status-success" : pct >= 50 ? "status-warning" : "status-danger"}`}>
-                    {pct}% đạt
+                  <span className={`status-pill ${meetsTarget ? (pct >= 100 ? "status-success" : "status-success-soft") : "status-warning"}`}>
+                    {pct}% {meetsTarget ? "đạt" : "chưa đạt"}
                   </span>
                 ) : null}
               </div>
@@ -705,10 +729,64 @@ function ProgressCard({ title, payload, visualId, kind }: { title: string; paylo
               <div className="progress-track">
                 <span style={{ width: `${rate * 100}%` }} />
               </div>
-              <small>Mục tiêu tham gia {formatValue(item.participation_target)}</small>
+              <small>Mục tiêu tham gia {Math.round(itemTarget * 100)}%</small>
             </div>
           );
         })}
+      </div>
+    </ChartShell>
+  );
+}
+
+function SportsParticipationInline({ title, payload, visualId, kind }: { title: string; payload?: Record<string, any>; visualId?: string; kind?: string }) {
+  const items = Array.isArray(payload?.items) ? payload.items : [];
+  const targetRate = typeof payload?.participation_target === "number" ? payload.participation_target : 0.5;
+  const totalActual = items.reduce((sum: number, item: any) => sum + numberValue(item.actual ?? item.value), 0);
+  const totalCount = items.reduce((sum: number, item: any) => sum + numberValue(item.total), 0);
+  const overallRate = totalCount > 0 ? totalActual / totalCount : 0;
+  const teamsMeetTarget = items.filter((item: any) => numberValue(item.participation_rate) >= targetRate).length;
+
+  return (
+    <ChartShell title={title} icon={<BarChart3 size={17} />} kind={kind} visualId={visualId}>
+      <div className="o6-sports-layout">
+        <div className="o6-sports-overview">
+          <div className="o6-sports-overview-main">
+            <span className="o6-sports-kicker">O6.KR2</span>
+            <strong>{Math.round(overallRate * 100)}%</strong>
+            <small>Tỷ lệ tham gia toàn Xưởng</small>
+          </div>
+          <div className="o6-sports-overview-stats">
+            <span><strong>{totalActual}</strong>/{totalCount} <em>lượt tham gia</em></span>
+            <span><strong>{teamsMeetTarget}</strong>/{items.length} <em>đội đạt mục tiêu</em></span>
+            <span><strong>{Math.round(targetRate * 100)}%</strong> <em>mục tiêu tham gia</em></span>
+          </div>
+        </div>
+        <div className="o6-sports-list">
+          {items.length ? items.map((item: any) => {
+            const rate = typeof item.participation_rate === "number" ? Math.min(item.participation_rate, 1) : 0;
+            const pct = Math.round(rate * 100);
+            const itemTarget = typeof item.participation_target === "number" ? item.participation_target : targetRate;
+            const meetsTarget = rate >= itemTarget;
+            return (
+              <div className={`o6-sports-row ${meetsTarget ? "tone-meet" : "tone-miss"}`} key={String(item.team || item.label)}>
+                <div className="o6-sports-row-head">
+                  <strong>{item.team || item.label}</strong>
+                  <small>{item.team_name}</small>
+                  <span className={`status-pill ${meetsTarget ? (pct >= 100 ? "status-success" : "status-success-soft") : "status-warning"}`}>{pct}%</span>
+                </div>
+                <div className="o6-sports-row-bar">
+                  <span className="o6-sports-row-track">
+                    <span className="o6-sports-row-fill" style={{ width: `${pct}%` }} />
+                    <span className="o6-sports-row-target" style={{ left: `${Math.round(itemTarget * 100)}%` }} title={`Mục tiêu ${Math.round(itemTarget * 100)}%`} />
+                  </span>
+                  <em>{formatValue(item.actual ?? item.value)}/{formatValue(item.total)} người</em>
+                </div>
+              </div>
+            );
+          }) : (
+            <NoDataBlock />
+          )}
+        </div>
       </div>
     </ChartShell>
   );

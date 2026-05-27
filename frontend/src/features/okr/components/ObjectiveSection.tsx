@@ -32,7 +32,7 @@ export function ObjectiveSection({
     const fi_counts_by_team = fiSource?.payload?.fi_counts_by_team;
     const o5FiBlock = visuals.find((v) => v.id === "o5_fi");
 
-    visuals = visuals
+    const mergedVisuals = visuals
       .map((v) => {
         if (v.id === "o5_initiatives") {
           return {
@@ -48,6 +48,16 @@ export function ObjectiveSection({
         return v;
       })
       .filter((v) => v.id !== "o5_fi");
+
+    const desiredOrder = ["o5_competency", "o5_tpm_narrative", "o5_initiatives", "o5_training"];
+    visuals = [...mergedVisuals].sort((a, b) => {
+      const ai = desiredOrder.indexOf(String(a.id));
+      const bi = desiredOrder.indexOf(String(b.id));
+      if (ai === -1 && bi === -1) return 0;
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
   }
 
   const hasContent = visuals.length > 0 || hasConclusion;

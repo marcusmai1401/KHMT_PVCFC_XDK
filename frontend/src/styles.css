@@ -9398,9 +9398,17 @@ pre {
 
 /* === Initiatives & FI Dashboard Combined Card Styling === */
 [data-objective-code="O5"] .objective-visual-grid > .visual-id-o5_initiatives {
-  grid-column: 1 / -1;
   background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
   border-color: #bfd7ff;
+}
+
+/* Pair AM/PM/CTKT narrative with Sáng kiến & FI Dashboard on the same row */
+[data-objective-code="O5"] .objective-visual-grid > .visual-id-o5_tpm_narrative {
+  grid-column: 1;
+}
+
+[data-objective-code="O5"] .objective-visual-grid > .visual-id-o5_initiatives {
+  grid-column: 2;
 }
 
 .visual-id-o5_initiatives .objective-visual-icon {
@@ -9420,8 +9428,8 @@ pre {
 
 .kr-summary-grid {
   display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
 .kr-summary-card {
@@ -9526,6 +9534,26 @@ pre {
 .fi-narrative-section {
   display: grid;
   gap: 12px;
+}
+
+/* When o5_initiatives sits in a half-width column next to o5_tpm_narrative,
+   reflow the inner 4-up grids into 2-up so things still breathe. */
+.visual-id-o5_initiatives .competency-fi-kpis,
+.visual-id-o5_initiatives .competency-fi-team-grid {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.visual-id-o5_initiatives .kr-card-metrics {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.visual-id-o5_initiatives .kr-metric-box strong {
+  font-size: 18px;
+}
+
+.visual-id-o5_initiatives .initiatives-fi-layout {
+  gap: 16px;
 }
 
 /* === Objective O6 Corporate Culture Premium Styling === */
@@ -9716,4 +9744,295 @@ pre {
   font-size: 12.5px;
   color: #292524;
   font-weight: 500;
+}
+
+/* O6 polish — soft success pill + headline overviews */
+.status-success-soft {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.o6-running-overview,
+.o6-sports-overview {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(170px, 0.85fr) minmax(220px, 1.15fr);
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  align-items: center;
+}
+
+.o6-sports-overview {
+  background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%);
+  border-color: #fecdd3;
+}
+
+.o6-running-overview-main,
+.o6-sports-overview-main {
+  display: grid;
+  gap: 2px;
+}
+
+.o6-running-kicker,
+.o6-sports-kicker {
+  color: #ea580c;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.o6-sports-kicker {
+  color: #e11d48;
+}
+
+.o6-running-overview-main strong,
+.o6-sports-overview-main strong {
+  color: #ea580c;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.o6-sports-overview-main strong {
+  color: #e11d48;
+}
+
+.o6-running-overview-main small,
+.o6-sports-overview-main small {
+  color: #7c2d12;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.o6-sports-overview-main small {
+  color: #881337;
+}
+
+.o6-running-overview-stats,
+.o6-sports-overview-stats {
+  display: grid;
+  gap: 6px;
+}
+
+.o6-running-overview-stats span,
+.o6-sports-overview-stats span {
+  align-items: baseline;
+  color: #1f2937;
+  display: flex;
+  font-size: 13px;
+  gap: 6px;
+}
+
+.o6-running-overview-stats strong,
+.o6-sports-overview-stats strong {
+  color: #ea580c;
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.o6-sports-overview-stats strong {
+  color: #e11d48;
+}
+
+.o6-running-overview-stats em,
+.o6-sports-overview-stats em {
+  color: #475569;
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+/* O6 sports — participation list */
+.o6-sports-layout {
+  display: grid;
+  gap: 0;
+}
+
+.o6-sports-list {
+  display: grid;
+  gap: 10px;
+}
+
+.o6-sports-row {
+  background: #ffffff;
+  border: 1px solid #fecdd3;
+  border-left: 3px solid #f43f5e;
+  border-radius: 10px;
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  transition: all 0.2s ease;
+}
+
+.o6-sports-row:hover {
+  box-shadow: 0 4px 10px rgba(244, 63, 94, 0.08);
+  transform: translateY(-1px);
+}
+
+.o6-sports-row.tone-meet {
+  border-left-color: #16a34a;
+}
+
+.o6-sports-row.tone-miss {
+  border-left-color: #f59e0b;
+}
+
+.o6-sports-row-head {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.o6-sports-row-head strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.o6-sports-row-head small {
+  color: #64748b;
+  font-size: 11.5px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.o6-sports-row-bar {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.o6-sports-row-track {
+  background: #fff1f2;
+  border: 1px solid #ffe4e6;
+  border-radius: 999px;
+  display: block;
+  height: 10px;
+  overflow: visible;
+  position: relative;
+}
+
+.o6-sports-row-fill {
+  background: linear-gradient(90deg, #f43f5e 0%, #be123c 100%);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+.o6-sports-row.tone-meet .o6-sports-row-fill {
+  background: linear-gradient(90deg, #16a34a 0%, #15803d 100%);
+}
+
+.o6-sports-row-target {
+  background: #475569;
+  border-radius: 1px;
+  height: 16px;
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  z-index: 2;
+}
+
+.o6-sports-row-target::before {
+  background: #475569;
+  border-radius: 50%;
+  content: "";
+  height: 5px;
+  left: -1.5px;
+  position: absolute;
+  top: -3px;
+  width: 5px;
+}
+
+.o6-sports-row-bar em {
+  color: #475569;
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* O6 running — tighten card grid for new overview header */
+.visual-id-o6_running .okr-card-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+/* O6 culture — refresh into KR cards with subtle accents */
+.visual-id-o6_culture {
+  background: linear-gradient(180deg, #ffffff 0%, #fefce8 100%);
+  border-color: #fde68a;
+}
+
+.visual-id-o6_culture .objective-visual-icon {
+  background: #fef3c7;
+  border-color: #fde68a;
+  color: #b45309;
+}
+
+.visual-id-o6_culture .objective-visual-header {
+  border-color: #fde68a;
+}
+
+.visual-id-o6_culture .narrative-list {
+  grid-template-columns: 1fr;
+}
+
+.visual-id-o6_culture .narrative-item {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-left: 3px solid #f59e0b;
+  border-radius: 10px;
+  padding: 11px 12px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(180, 83, 9, 0.04);
+}
+
+.visual-id-o6_culture .narrative-item:hover {
+  background: #fef9c3;
+  border-color: #f59e0b;
+  transform: none;
+  box-shadow: 0 3px 8px rgba(180, 83, 9, 0.08);
+}
+
+.visual-id-o6_culture .narrative-item strong {
+  background: #f59e0b;
+  border: none;
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  letter-spacing: 0.03em;
+}
+
+.visual-id-o6_culture .narrative-item span {
+  color: #422006;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+@media (max-width: 1200px) {
+  .o6-running-overview,
+  .o6-sports-overview {
+    grid-template-columns: 1fr;
+  }
 }

@@ -1,9 +1,11 @@
-param(
+﻿param(
     [int]$BackendPort = 8000,
     [int]$FrontendPort = 5173,
     [switch]$SkipInstall,
     [switch]$ResetData,
-    [switch]$SeparateWindows
+    [switch]$SeparateWindows,
+    [switch]$WithProdData,
+    [switch]$ResetUserPasswords
 )
 
 $ErrorActionPreference = "Stop"
@@ -177,6 +179,112 @@ if ($ResetData) {
     Write-Host "Cleared demo website data and runtime files. Historical import data T1-T4 is preserved." -ForegroundColor Yellow
 }
 
+function Invoke-BackendPython {
+    param(
+        [Parameter(Mandatory)][string[]]$Arguments,
+        [string]$StepLabel,
+        [switch]$WarnOnFail
+    )
+    if ($StepLabel) { Write-Step $StepLabel }
+    $env:PYTHONIOENCODING = "utf-8"
+    Push-Location $BackendDir
+    $prevPref = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & $BackendPython @Arguments 2>&1 | ForEach-Object { Write-Host $_ }
+        $exit = $LASTEXITCODE
+        $ErrorActionPreference = $prevPref
+        if ($exit -ne 0) {
+            if ($WarnOnFail) {
+                Write-Warning "$StepLabel - exit code $exit (kiem tra log o tren)."
+            } else {
+                throw "$StepLabel failed with exit code $exit"
+            }
+        }
+    } finally {
+        $ErrorActionPreference = $prevPref
+        Pop-Location
+    }
+}
+
+function Invoke-AlembicUpgradeHead {
+    # Local SQLite DB co the da co schema moi nhat (do bootstrap.py them columns thu cong).
+    # Truong hop nay alembic upgrade head bao "duplicate column" -> fallback: stamp head.
+    Write-Step "Running Alembic migrations (alembic upgrade head)"
+    $env:PYTHONIOENCODING = "utf-8"
+    Push-Location $BackendDir
+    $prevPref = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & $BackendPython -m alembic upgrade head 2>&1 | ForEach-Object { Write-Host $_ }
+        $upgradeExit = $LASTEXITCODE
+        if ($upgradeExit -ne 0) {
+            Write-Warning "alembic upgrade exit $upgradeExit - schema co the da o head do bootstrap.py them column. Stamp head."
+            & $BackendPython -m alembic stamp head 2>&1 | ForEach-Object { Write-Host $_ }
+            $stampExit = $LASTEXITCODE
+            if ($stampExit -ne 0) {
+                $ErrorActionPreference = $prevPref
+                throw "Alembic stamp head failed with exit code $stampExit"
+            }
+        }
+    } finally {
+        $ErrorActionPreference = $prevPref
+        Pop-Location
+    }
+}
+
+function Seed-ProdLikeData {
+    param([switch]$ResetPasswords)
+    if (-not (Test-Path $BackendPython)) {
+        throw "Backend Python not found. Rerun without -SkipInstall first."
+    }
+    if (Test-TcpPort $BackendPort) {
+        throw "Backend đang chạy trên port $BackendPort. Dừng backend trước khi seed."
+    }
+    $historicalDir = Join-Path $RootDir "KHMT_T1_T2_T3_T4"
+    $bm01Workbook = Join-Path $RootDir "FI xlsx\BM 01 Dang ky - Danh gia SK _Rev1.xlsx"
+
+    # Mirror exactly the production deploy steps (deploy_prod.py:138-196).
+    # Step 1 — Alembic migrations (giong "alembic upgrade head" trong production).
+    Invoke-AlembicUpgradeHead
+
+    # Step 2 — Seed 55 production users (giong scripts/seed_users_xuong_dk.py).
+    $seedArgs = @("scripts\seed_users_xuong_dk.py")
+    if ($ResetPasswords) { $seedArgs += "--reset-passwords" }
+    Invoke-BackendPython -Arguments $seedArgs -StepLabel "Seeding 55 production users (pass PVCFC@123)"
+
+    # Step 3 — Import BM01 legacy sheets (giong production: 4 sheets TBCH, TBĐ, TBHTĐK, TC- ĐK).
+    if (Test-Path $bm01Workbook) {
+        $bm01Sheets = @("TBCH", "TBĐ", "TBHTĐK", "TC- ĐK")
+        $sourceLabel = "FI xlsx/BM 01 Dang ky - Danh gia SK _Rev1.xlsx"
+        foreach ($sheet in $bm01Sheets) {
+            $bm01Args = @(
+                "scripts\import_bm01_legacy_sheet.py",
+                $bm01Workbook,
+                "--sheet", $sheet,
+                "--year", "2026",
+                "--source-label", $sourceLabel,
+                "--imported-by", "local-prod-like-seed"
+            )
+            Invoke-BackendPython -Arguments $bm01Args -StepLabel "Importing BM01 sheet '$sheet' (sang kien/CTKT)" -WarnOnFail
+        }
+    } else {
+        Write-Warning "Khong tim thay $bm01Workbook — bo qua BM01 import (sang kien/CTKT se trong)."
+    }
+
+    # Step 4 — Local-only: import historical OKR T1-T4 (production khong lam vi du lieu da co trong DB qua backup).
+    # Local can buoc nay de dashboard hien thi data lich su.
+    if (Test-Path $historicalDir) {
+        Invoke-BackendPython -Arguments @("scripts\import_historical.py", $historicalDir) -StepLabel "Importing historical OKR T1-T4/2026 (local-only, prod da co)" -WarnOnFail
+    } else {
+        Write-Warning "Khong tim thay $historicalDir — bo qua import historical OKR."
+    }
+}
+
+if ($WithProdData) {
+    Seed-ProdLikeData -ResetPasswords:$ResetUserPasswords
+}
+
 if (-not $SkipInstall) {
     Write-Step "Preparing backend virtual environment"
     if (-not (Test-Path $BackendPython)) {
@@ -275,7 +383,14 @@ Set-Location -LiteralPath $(Quote-PowerShellString $FrontendDir)
 
     Write-Host ""
     Write-Host "Website: $FrontendUrl" -ForegroundColor Green
-    Write-Host "Demo login: admin / admin-pass" -ForegroundColor Green
+    if ($WithProdData) {
+        Write-Host "Login: kiaq (Quan doc) / quyenpt (FI) / minhvq (Doi truong) ... / PVCFC@123" -ForegroundColor Green
+    } else {
+        Write-Host "Demo login: admin / admin-pass" -ForegroundColor Green
+        Write-Host "  De co tai khoan giong production + du lieu OKR that:" -ForegroundColor Yellow
+        Write-Host "  Dung backend lai (Ctrl+C), chay: .\seed-prod-like.cmd" -ForegroundColor Yellow
+        Write-Host "  Hoac: .\start-dev.cmd -SkipInstall -WithProdData" -ForegroundColor Yellow
+    }
     Write-Host "Close the 'OKR Backend' and 'OKR Frontend' windows to stop the servers."
     return
 }
@@ -322,7 +437,14 @@ try {
 
     Write-Host ""
     Write-Host "Website: $FrontendUrl" -ForegroundColor Green
-    Write-Host "Demo login: admin / admin-pass" -ForegroundColor Green
+    if ($WithProdData) {
+        Write-Host "Login: kiaq (Quan doc) / quyenpt (FI) / minhvq (Doi truong) ... / PVCFC@123" -ForegroundColor Green
+    } else {
+        Write-Host "Demo login: admin / admin-pass" -ForegroundColor Green
+        Write-Host "  De co tai khoan giong production + du lieu OKR that:" -ForegroundColor Yellow
+        Write-Host "  Dung backend lai (Ctrl+C), chay: .\seed-prod-like.cmd" -ForegroundColor Yellow
+        Write-Host "  Hoac: .\start-dev.cmd -SkipInstall -WithProdData" -ForegroundColor Yellow
+    }
     Write-Host "Logs are streaming in this terminal. Press Ctrl+C to stop servers." -ForegroundColor Yellow
     Write-Host ""
 

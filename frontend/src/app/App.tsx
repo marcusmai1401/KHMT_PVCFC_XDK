@@ -15,6 +15,7 @@ import {
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
+  Pencil,
   RotateCcw,
   ShieldCheck,
   Undo2,
@@ -137,6 +138,7 @@ export function App() {
   const [resettingSandbox, setResettingSandbox] = useState(false);
   const [exportingPng, setExportingPng] = useState(false);
   const [workspaceVersion, setWorkspaceVersion] = useState(0);
+  const [adminEditMode, setAdminEditMode] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
@@ -344,6 +346,12 @@ export function App() {
       window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed ? "1" : "0");
     }
   }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    if (role !== "Admin" && adminEditMode) {
+      setAdminEditMode(false);
+    }
+  }, [role, adminEditMode]);
 
   const groupedIdentities = useMemo(() => {
     const groups: Record<string, SandboxIdentity[]> = {};
@@ -559,8 +567,10 @@ export function App() {
 
   const isAdminProd = role === "Admin" && !sandbox;
 
+  const effectiveEditMode = role === "Admin" ? adminEditMode : true;
+
   return (
-    <main className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+    <main className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""} ${role === "Admin" && adminEditMode ? "edit-mode-on" : "edit-mode-off"}`}>
       <aside className="sidebar">
         <div className="sidebar-head">
           <div className="brand">
@@ -692,6 +702,20 @@ export function App() {
             )}
             {role === "Admin" && (
               <button
+                aria-pressed={adminEditMode}
+                className={`edit-mode-toggle ${adminEditMode ? "is-on" : ""}`}
+                data-export-exclude="true"
+                onClick={() => setAdminEditMode((current) => !current)}
+                title={adminEditMode ? "Tắt chế độ chỉnh sửa" : "Bật chế độ chỉnh sửa"}
+                type="button"
+              >
+                <span className="edit-mode-switch" aria-hidden="true"><span /></span>
+                <Pencil size={16} />
+                <span>{adminEditMode ? "Chỉnh sửa: Bật" : "Chỉnh sửa: Tắt"}</span>
+              </button>
+            )}
+            {role === "Admin" && (
+              <button
                 className="topbar-snapshot-btn"
                 data-export-exclude="true"
                 disabled={exportingPng}
@@ -727,9 +751,9 @@ export function App() {
           data-snapshot-name={tabSnapshotNames[tab]}
           key={workspaceVersion}
         >
-          {tab === "okr" && <OKRModule role={role} currentUserId={currentUserId} currentTeam={currentTeam} />}
-          {tab === "et" && <ETModule role={role} currentUserId={currentUserId} />}
-          {tab === "fi" && <FIWorkspace role={role} currentUserId={currentUserId} currentTeam={currentTeam} displayName={currentDisplayName} />}
+          {tab === "okr" && <OKRModule role={role} currentUserId={currentUserId} currentTeam={currentTeam} editMode={effectiveEditMode} />}
+          {tab === "et" && <ETModule role={role} currentUserId={currentUserId} editMode={effectiveEditMode} />}
+          {tab === "fi" && <FIWorkspace role={role} currentUserId={currentUserId} currentTeam={currentTeam} displayName={currentDisplayName} editMode={effectiveEditMode} />}
           {tab === "admin" && <AdminPanel />}
         </div>
       </section>

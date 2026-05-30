@@ -2,6 +2,13 @@ from pathlib import Path
 from io import BytesIO
 
 from openpyxl import load_workbook
+from sqlalchemy import func, select
+
+from app.models.et_domain import CompetencyFramework, CompetencyItem
+from app.services.pvcfc_knl_seed import seed_pvcfc_knl_frameworks
+
+
+PVCFC_KNL_CODES = {"KNL_\u0110K_10", "KNL_\u0110K_12", "KNL_\u0110K_13", "KNL_\u0110K_14", "KNL_\u0110K_15"}
 
 
 def _login(client, user_id: str, password: str) -> dict[str, str]:
@@ -21,6 +28,65 @@ def _import_frameworks(client, headers):
     assert response.status_code == 200, response.text
     assert len(response.json()["created"]) == 5
     return response.json()["created"]
+
+
+def test_pvcfc_knl_seeded_framework_detail(client, admin_headers):
+    response = client.get("/api/v1/et/frameworks", headers=admin_headers)
+    assert response.status_code == 200
+    frameworks = response.json()
+    assert PVCFC_KNL_CODES.issubset({framework["code"] for framework in frameworks})
+
+    framework = next(
+        row for row in frameworks
+        if row["code"] == "KNL_\u0110K_14" and row["is_active"] is True
+    )
+    detail_response = client.get(f"/api/v1/et/frameworks/{framework['id']}", headers=admin_headers)
+    assert detail_response.status_code == 200
+    detail = detail_response.json()
+    assert len(detail["items"]) == 37
+    assert [detail["level_sums"][str(level)] for level in range(1, 9)] == [40, 68, 75, 85, 91, 97, 102, 104]
+
+    first_item = next(item for item in detail["items"] if item["nlcm_code"] == "\u0110K_NLCM_001")
+    assert first_item["definition"]
+    assert first_item["requirements_text"]
+
+
+def test_pvcfc_knl_seed_is_idempotent(db_session):
+    before_frameworks = (
+        db_session.scalar(select(func.count()).select_from(CompetencyFramework).where(CompetencyFramework.code.in_(PVCFC_KNL_CODES)))
+        or 0
+    )
+    before_items = (
+        db_session.scalar(
+            select(func.count())
+            .select_from(CompetencyItem)
+            .join(CompetencyFramework, CompetencyFramework.id == CompetencyItem.framework_id)
+            .where(CompetencyFramework.code.in_(PVCFC_KNL_CODES))
+        )
+        or 0
+    )
+
+    first = seed_pvcfc_knl_frameworks(db_session, actor_id="admin")
+    second = seed_pvcfc_knl_frameworks(db_session, actor_id="admin")
+    db_session.flush()
+
+    after_frameworks = (
+        db_session.scalar(select(func.count()).select_from(CompetencyFramework).where(CompetencyFramework.code.in_(PVCFC_KNL_CODES)))
+        or 0
+    )
+    after_items = (
+        db_session.scalar(
+            select(func.count())
+            .select_from(CompetencyItem)
+            .join(CompetencyFramework, CompetencyFramework.id == CompetencyItem.framework_id)
+            .where(CompetencyFramework.code.in_(PVCFC_KNL_CODES))
+        )
+        or 0
+    )
+    assert first["skipped"] is True
+    assert second["skipped"] is True
+    assert after_frameworks == before_frameworks
+    assert after_items == before_items
 
 
 def test_framework_import_and_assessment_dashboard_flow(client, admin_headers):
@@ -167,3 +233,63 @@ def test_team_account_can_only_read_linked_personnel_assessment(client, admin_he
     list_response = client.get("/api/v1/et/assessments", headers=team_headers)
     assert list_response.status_code == 200
     assert [row["id"] for row in list_response.json()] == [own_assessment["id"]]
+
+
+def test_personnel_can_include_backend_users(client, admin_headers):
+    response = client.get("/api/v1/et/personnel?include_users=true", headers=admin_headers)
+
+    assert response.status_code == 200
+    rows = response.json()
+    admin_row = next(row for row in rows if row["user_id"] == "admin")
+    assert admin_row["full_name"] == "Demo Admin"
+    assert admin_row["role"] == "Admin"
+    assert admin_row["team"] == ""
+    assert admin_row["employee_code"] == ""
+    assert admin_row["status"] == "active"
+    assert admin_row["salary_grade"] == ""
+    assert admin_row["source_type"] == "user"
+
+
+def test_personnel_draft_search_and_hide_flow(client, admin_headers):
+    draft_response = client.post(
+        "/api/v1/et/personnel",
+        headers=admin_headers,
+        json={
+            "full_name": "Draft Person",
+            "role": "Technician",
+            "team": "Draft Team",
+            "salary_grade": "L3",
+            "status": "active",
+        },
+    )
+    assert draft_response.status_code == 200, draft_response.text
+    draft = draft_response.json()
+    assert draft["employee_code"] is None
+    assert draft["position_code"] is None
+    assert draft["current_level"] is None
+
+    search_response = client.get("/api/v1/et/personnel?include_users=true&search=L3", headers=admin_headers)
+    assert search_response.status_code == 200
+    assert [row["id"] for row in search_response.json()] == [draft["id"]]
+
+    assessment_response = client.post(
+        "/api/v1/et/assessments",
+        headers=admin_headers,
+        json={"personnel_id": draft["id"], "assessment_period": "2026-Q3"},
+    )
+    assert assessment_response.status_code == 422
+
+    hide_response = client.delete(f"/api/v1/et/personnel/visibility/personnel/{draft['id']}", headers=admin_headers)
+    assert hide_response.status_code == 200
+    list_response = client.get("/api/v1/et/personnel?include_users=true&search=Draft Person", headers=admin_headers)
+    assert list_response.status_code == 200
+    assert list_response.json() == []
+
+    users_response = client.get("/api/v1/et/personnel?include_users=true", headers=admin_headers)
+    admin_row = next(row for row in users_response.json() if row["user_id"] == "admin")
+    hide_user = client.delete("/api/v1/et/personnel/visibility/user/admin", headers=admin_headers)
+    assert hide_user.status_code == 200
+    assert admin_row["source_type"] == "user"
+    users_after_hide = client.get("/api/v1/et/personnel?include_users=true&search=admin", headers=admin_headers)
+    assert users_after_hide.status_code == 200
+    assert all(row["user_id"] != "admin" for row in users_after_hide.json())

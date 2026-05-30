@@ -237,6 +237,8 @@ export const api = {
     request<any>("/et/frameworks", { method: "POST", body: JSON.stringify(payload) }),
   updateEtFramework: (id: string, payload: any) =>
     request<any>(`/et/frameworks/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteEtFramework: (id: string) =>
+    request<any>(`/et/frameworks/${id}`, { method: "DELETE" }),
   duplicateEtFramework: (id: string) =>
     request<any>(`/et/frameworks/${id}/duplicate`, { method: "POST" }),
   activateEtFramework: (id: string) =>
@@ -254,11 +256,13 @@ export const api = {
     request<any>(`/et/frameworks/${frameworkId}/items/${itemId}`, { method: "DELETE" }),
   exportEtFramework: (id: string) => requestBlob(`/et/frameworks/${id}/export`),
   etPersonnel: (query = "") => request<any[]>(`/et/personnel${query}`),
-  etPersonnelSummary: () => request<any>("/et/personnel/summary"),
+  etPersonnelSummary: (query = "") => request<any>(`/et/personnel/summary${query}`),
   createEtPersonnel: (payload: any) =>
     request<any>("/et/personnel", { method: "POST", body: JSON.stringify(payload) }),
   updateEtPersonnel: (id: string, payload: any) =>
     request<any>(`/et/personnel/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  hideEtPersonnel: (sourceType: string, sourceId: string) =>
+    request<any>(`/et/personnel/visibility/${encodeURIComponent(sourceType)}/${encodeURIComponent(sourceId)}`, { method: "DELETE" }),
   bulkUpdateEtPersonnelLevel: (payload: any) =>
     request<any>("/et/personnel/bulk-level", { method: "PUT", body: JSON.stringify(payload) }),
   importEtPersonnel: (file: File) => {

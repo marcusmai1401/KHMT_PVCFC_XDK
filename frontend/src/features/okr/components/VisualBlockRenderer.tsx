@@ -428,6 +428,7 @@ function O3StopByMonth({ title, payload, visualId, kind }: { title: string; payl
   const avgPerMonth = monthsWithData.length ? Math.round(monthsWithData.reduce((sum, m) => sum + numberValue(m.value), 0) / monthsWithData.length) : 0;
 
   const maxValueSafe = Math.max(1, ...values.map((v) => numberValue(v)));
+  const scale = axisScale(maxValueSafe);
   const chartWidth = 420;
   const chartHeight = 220;
   const left = 44;
@@ -438,7 +439,8 @@ function O3StopByMonth({ title, payload, visualId, kind }: { title: string; payl
   const points = values.map((v, i) => {
     if (v === null) return null;
     const x = values.length <= 1 ? left : left + (i / (values.length - 1)) * innerWidth;
-    const y = bottom - (v / maxValueSafe) * (bottom - top);
+    // Use the scale's domain max (nice-stepped, e.g. 80 for data max 59) so points and gridlines share the same coordinate space.
+    const y = bottom - (v / scale.max) * (bottom - top);
     return { x, y, value: v, month: blockLabels[i] };
   });
   const segments: Array<Array<{ x: number; y: number }>> = [];
@@ -452,7 +454,6 @@ function O3StopByMonth({ title, payload, visualId, kind }: { title: string; payl
     }
   }
   if (currentSeg.length) segments.push(currentSeg);
-  const scale = axisScale(maxValueSafe);
 
   return (
     <ChartShell title={title} icon={<TrendingUp size={17} />} kind={kind} visualId={visualId}>
@@ -973,7 +974,7 @@ function O1StatusBoard({ title, items, visualId, kind }: { title: string; items:
       <div className="o1-status-board">
         <header className="o1-status-overview">
           <div className="o1-status-overview-main">
-            <span className="o1-status-kicker">Kỷ luật vận hành</span>
+            <span className="o1-status-kicker">Tính tuân thủ</span>
             <strong>{krsOk}<small>/{totalKrs}</small></strong>
             <span className="o1-status-overview-sub">KR đạt toàn diện</span>
           </div>

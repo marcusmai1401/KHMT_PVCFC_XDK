@@ -274,9 +274,12 @@ async def import_frameworks(
 
 @router.get("/personnel/summary")
 def get_personnel_summary(
+    include_users: bool = False,
     _: dict[str, str] = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER)),
     db: Session = Depends(get_db),
 ):
+    if include_users:
+        return et_service.personnel_summary_with_users(db)
     return et_service.personnel_summary(db)
 
 
@@ -287,11 +290,15 @@ def list_personnel(
     level: int | None = None,
     status: str | None = None,
     search: str | None = None,
+    include_users: bool = False,
     principal: dict[str, str] = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER)),
     db: Session = Depends(get_db),
 ):
-    rows = et_service.list_personnel(db, {"team": team, "position": position, "level": level, "status": status, "search": search})
-    return [et_service.serialize_personnel(row) for row in rows]
+    filters = {"team": team, "position": position, "level": level, "status": status, "search": search}
+    rows = [et_service.serialize_personnel(row) for row in et_service.list_personnel(db, filters)]
+    if include_users:
+        rows.extend(et_service.list_user_personnel_rows(db, filters))
+    return rows
 
 
 @router.post("/personnel")
@@ -335,6 +342,22 @@ def bulk_update_personnel_level(
         rows = et_service.bulk_update_personnel_level(db, payload.personnel_ids, payload.current_level, principal["user_id"])
         _commit_or_rollback(db)
         return [et_service.serialize_personnel(row) for row in rows]
+    except ETValidationError as exc:
+        db.rollback()
+        raise _handle_error(exc) from exc
+
+
+@router.delete("/personnel/visibility/{source_type}/{source_id}")
+def hide_personnel_row(
+    source_type: str,
+    source_id: str,
+    principal: dict[str, str] = Depends(require_role(Role.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    try:
+        row = et_service.hide_personnel_row(db, source_type, source_id, principal["user_id"])
+        _commit_or_rollback(db)
+        return {"hidden": True, "source_type": row.source_type, "source_id": row.source_id}
     except ETValidationError as exc:
         db.rollback()
         raise _handle_error(exc) from exc

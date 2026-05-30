@@ -58,6 +58,13 @@ describe("FI action visibility", () => {
     expect(visibleActionsForSk("Workshop_Leader", "leader", approved)).toEqual([]);
   });
 
+  it("hides admin edit actions when global edit mode is off", () => {
+    const approved = { status: "Approved", author_user_id: "TBCH", team: "TBCH" };
+
+    expect(visibleActionsForSk("Admin", "admin", approved, false)).toEqual([]);
+    expect(visibleActionsForSk("Team_Account", "TBCH", approved, false)).toEqual(["edit", "assignKhmt"]);
+  });
+
   it("allows only the owning team account to choose KHMT month", () => {
     const approved = { status: "Approved", team: "TBCH" };
 

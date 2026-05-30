@@ -41,6 +41,8 @@ class CompetencyItem(Base):
     nlcm_code: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     competency_name: Mapped[str] = mapped_column(String(255), nullable=False)
     competency_detail: Mapped[str | None] = mapped_column(Text)
+    definition: Mapped[str | None] = mapped_column(Text)
+    requirements_text: Mapped[str | None] = mapped_column(Text)
     category: Mapped[str] = mapped_column(String(50), nullable=False)
     stt: Mapped[int] = mapped_column(Integer, nullable=False)
     level_requirements: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
@@ -61,11 +63,13 @@ class Personnel(Base):
     __table_args__ = (UniqueConstraint("employee_code", name="uq_personnel_employee_code"),)
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: make_id("etperson"))
-    employee_code: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
+    employee_code: Mapped[str | None] = mapped_column(String(50), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    position_code: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    team: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    current_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    role: Mapped[str | None] = mapped_column(String(100), index=True)
+    position_code: Mapped[str | None] = mapped_column(String(50), index=True)
+    team: Mapped[str | None] = mapped_column(String(50), index=True)
+    current_level: Mapped[int | None] = mapped_column(Integer)
+    salary_grade: Mapped[str | None] = mapped_column(String(50))
     hire_date: Mapped[date | None] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(20), default="active", nullable=False, index=True)
     user_id: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), index=True)
@@ -74,6 +78,17 @@ class Personnel(Base):
 
     assessments: Mapped[list["CompetencyAssessment"]] = relationship("CompetencyAssessment", back_populates="personnel")
     learning_plans: Mapped[list["LearningPlan"]] = relationship("LearningPlan", back_populates="personnel")
+
+
+class PersonnelHiddenRow(Base):
+    __tablename__ = "personnel_hidden_rows"
+    __table_args__ = (UniqueConstraint("source_type", "source_id", name="uq_personnel_hidden_source"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: make_id("ethide"))
+    source_type: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    source_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    hidden_by: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False)
+    hidden_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class CompetencyAssessment(Base):

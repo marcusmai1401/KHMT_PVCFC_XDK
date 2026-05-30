@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.models.domain import User
 from app.models.et_domain import (
     AssessmentItem,
     CompetencyAssessment,
@@ -15,6 +16,7 @@ from app.models.et_domain import (
     LearningPlan,
     LearningPlanItem,
     Personnel,
+    PersonnelHiddenRow,
 )
 from app.services.et_gap_calculator import (
     EXCLUDED_CATEGORY,
@@ -51,7 +53,28 @@ def serialize_framework(framework: CompetencyFramework, include_items: bool = Fa
 
 
 def serialize_personnel(personnel: Personnel) -> dict[str, Any]:
-    return model_to_dict(personnel)
+    data = model_to_dict(personnel)
+    data["source_type"] = "personnel"
+    return data
+
+
+def serialize_user_personnel(user: User) -> dict[str, Any]:
+    return {
+        "id": f"user:{user.id}",
+        "employee_code": "",
+        "full_name": user.full_name or user.display_name,
+        "role": user.role,
+        "position_code": "",
+        "team": user.team or "",
+        "current_level": None,
+        "salary_grade": "",
+        "hire_date": None,
+        "status": "active" if user.is_active else "inactive",
+        "user_id": user.id,
+        "source_type": "user",
+        "created_at": user.created_at,
+        "updated_at": user.updated_at,
+    }
 
 
 def serialize_assessment_item(item: AssessmentItem) -> dict[str, Any]:
@@ -62,6 +85,8 @@ def serialize_assessment_item(item: AssessmentItem) -> dict[str, Any]:
             "nlcm_code": competency.nlcm_code,
             "competency_name": competency.competency_name,
             "competency_detail": competency.competency_detail,
+            "definition": competency.definition,
+            "requirements_text": competency.requirements_text,
             "category": competency.category,
             "stt": competency.stt,
         }
@@ -98,6 +123,8 @@ def serialize_learning_plan_item(item: LearningPlanItem) -> dict[str, Any]:
             "nlcm_code": competency.nlcm_code,
             "competency_name": competency.competency_name,
             "competency_detail": competency.competency_detail,
+            "definition": competency.definition,
+            "requirements_text": competency.requirements_text,
             "category": competency.category,
             "stt": competency.stt,
         }
@@ -246,6 +273,8 @@ def duplicate_framework(db: Session, framework_id: str, actor: str) -> Competenc
                 nlcm_code=item.nlcm_code,
                 competency_name=item.competency_name,
                 competency_detail=item.competency_detail,
+                definition=item.definition,
+                requirements_text=item.requirements_text,
                 category=item.category,
                 stt=item.stt,
                 level_requirements=dict(item.level_requirements or {}),
@@ -287,6 +316,8 @@ def add_framework_item(db: Session, framework_id: str, data: Any, actor: str | N
         nlcm_code=nlcm_code,
         competency_name=str(payload["competency_name"]).strip(),
         competency_detail=payload.get("competency_detail"),
+        definition=payload.get("definition"),
+        requirements_text=payload.get("requirements_text"),
         category=str(payload["category"]).strip(),
         stt=int(payload["stt"]),
         level_requirements={str(level): int(value) for level, value in (payload.get("level_requirements") or {}).items()},
@@ -321,6 +352,8 @@ def update_framework_item(db: Session, framework_id: str, item_id: str, data: An
     for field in [
         "competency_name",
         "competency_detail",
+        "definition",
+        "requirements_text",
         "category",
         "stt",
         "month_hold_level",
@@ -360,7 +393,10 @@ def reorder_framework_items(db: Session, framework_id: str, orders: list[dict[st
 
 
 def list_personnel(db: Session, filters: dict[str, Any] | None = None) -> list[Personnel]:
+    hidden_ids = _hidden_source_ids(db, "personnel")
     statement = select(Personnel).order_by(Personnel.team, Personnel.full_name)
+    if hidden_ids:
+        statement = statement.where(Personnel.id.not_in(hidden_ids))
     filters = filters or {}
     if filters.get("team"):
         statement = statement.where(Personnel.team == filters["team"])
@@ -372,8 +408,50 @@ def list_personnel(db: Session, filters: dict[str, Any] | None = None) -> list[P
         statement = statement.where(Personnel.status == filters["status"])
     if filters.get("search"):
         term = f"%{filters['search']}%"
-        statement = statement.where(or_(Personnel.full_name.ilike(term), Personnel.employee_code.ilike(term)))
+        statement = statement.where(
+            or_(
+                Personnel.full_name.ilike(term),
+                Personnel.employee_code.ilike(term),
+                Personnel.role.ilike(term),
+                Personnel.team.ilike(term),
+                Personnel.position_code.ilike(term),
+                Personnel.status.ilike(term),
+                Personnel.salary_grade.ilike(term),
+                Personnel.user_id.ilike(term),
+            )
+        )
     return db.execute(statement).scalars().all()
+
+
+def list_user_personnel_rows(db: Session, filters: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    filters = filters or {}
+    hidden_user_ids = _hidden_source_ids(db, "user")
+    linked_user_ids = {
+        user_id
+        for user_id in db.execute(select(Personnel.user_id).where(Personnel.user_id.is_not(None))).scalars()
+        if user_id
+    }
+    users = db.execute(select(User).order_by(User.team, User.display_name)).scalars().all()
+    rows = [serialize_user_personnel(user) for user in users if user.id not in linked_user_ids and user.id not in hidden_user_ids]
+    if filters.get("team"):
+        rows = [row for row in rows if row["team"] == filters["team"]]
+    if filters.get("position"):
+        rows = [row for row in rows if row["role"] == filters["position"]]
+    if filters.get("status"):
+        rows = [row for row in rows if row["status"] == filters["status"]]
+    if filters.get("search"):
+        term = str(filters["search"]).casefold()
+        rows = [
+            row
+            for row in rows
+            if term in str(row["full_name"]).casefold()
+            or term in str(row["user_id"]).casefold()
+            or term in str(row["role"]).casefold()
+            or term in str(row["team"]).casefold()
+            or term in str(row["status"]).casefold()
+            or term in str(row["salary_grade"]).casefold()
+        ]
+    return rows
 
 
 def get_personnel(db: Session, personnel_id: str) -> Personnel:
@@ -384,14 +462,18 @@ def get_personnel(db: Session, personnel_id: str) -> Personnel:
 
 
 def create_personnel(db: Session, data: Any, actor: str | None = None) -> Personnel:
-    payload = _dump(data)
-    _validate_level(payload["current_level"])
-    _validate_position_code_exists(db, payload["position_code"])
-    if db.execute(select(Personnel).where(Personnel.employee_code == payload["employee_code"])).scalar_one_or_none():
+    payload = _normalize_personnel_payload(_dump(data))
+    if payload.get("current_level") is not None:
+        _validate_level(payload["current_level"])
+    if payload.get("position_code"):
+        _validate_position_code_exists(db, payload["position_code"])
+    if payload.get("employee_code") and db.execute(select(Personnel).where(Personnel.employee_code == payload["employee_code"])).scalar_one_or_none():
         raise ETValidationError("Employee code already exists", status_code=409)
     personnel = Personnel(**payload)
     db.add(personnel)
     db.flush()
+    if personnel.user_id:
+        _unhide_source(db, "user", personnel.user_id)
     if actor:
         audit(db, actor, "Personnel", personnel.id, "create", serialize_personnel(personnel))
     return personnel
@@ -400,7 +482,7 @@ def create_personnel(db: Session, data: Any, actor: str | None = None) -> Person
 def update_personnel(db: Session, personnel_id: str, data: Any, actor: str) -> Personnel:
     personnel = get_personnel(db, personnel_id)
     before = serialize_personnel(personnel)
-    payload = _dump(data, exclude_unset=True)
+    payload = _normalize_personnel_payload(_dump(data, exclude_unset=True))
     if "employee_code" in payload and payload["employee_code"] and payload["employee_code"] != personnel.employee_code:
         existing = db.execute(select(Personnel).where(Personnel.employee_code == payload["employee_code"])).scalar_one_or_none()
         if existing:
@@ -416,6 +498,29 @@ def update_personnel(db: Session, personnel_id: str, data: Any, actor: str) -> P
     return personnel
 
 
+def hide_personnel_row(db: Session, source_type: str, source_id: str, actor: str) -> PersonnelHiddenRow:
+    if source_type not in {"personnel", "user"}:
+        raise ETValidationError("Unsupported personnel source type", status_code=400)
+    if source_type == "personnel":
+        get_personnel(db, source_id)
+    else:
+        if db.get(User, source_id) is None:
+            raise ETValidationError("User not found", status_code=404)
+    existing = db.execute(
+        select(PersonnelHiddenRow).where(
+            PersonnelHiddenRow.source_type == source_type,
+            PersonnelHiddenRow.source_id == source_id,
+        )
+    ).scalar_one_or_none()
+    if existing:
+        return existing
+    row = PersonnelHiddenRow(source_type=source_type, source_id=source_id, hidden_by=actor)
+    db.add(row)
+    db.flush()
+    audit(db, actor, "Personnel", source_id, "hide", {"source_type": source_type})
+    return row
+
+
 def bulk_update_personnel_level(db: Session, personnel_ids: list[str], current_level: int, actor: str) -> list[Personnel]:
     _validate_level(current_level)
     personnel = db.execute(select(Personnel).where(Personnel.id.in_(personnel_ids))).scalars().all()
@@ -428,12 +533,23 @@ def bulk_update_personnel_level(db: Session, personnel_ids: list[str], current_l
 
 
 def personnel_summary(db: Session) -> dict[str, Any]:
-    rows = db.execute(select(Personnel)).scalars().all()
+    rows = list_personnel(db)
     return {
         "total": len(rows),
-        "by_position": dict(Counter(row.position_code for row in rows)),
-        "by_team": dict(Counter(row.team for row in rows)),
-        "by_level": {str(key): value for key, value in Counter(row.current_level for row in rows).items()},
+        "by_position": dict(Counter(row.position_code or "N/A" for row in rows)),
+        "by_team": dict(Counter(row.team or "N/A" for row in rows)),
+        "by_level": {str(key): value for key, value in Counter(row.current_level if row.current_level is not None else "N/A" for row in rows).items()},
+    }
+
+
+def personnel_summary_with_users(db: Session) -> dict[str, Any]:
+    personnel_rows = [serialize_personnel(row) for row in list_personnel(db)]
+    rows = personnel_rows + list_user_personnel_rows(db)
+    return {
+        "total": len(rows),
+        "by_position": dict(Counter(row.get("role") or row.get("position_code") or "N/A" for row in rows)),
+        "by_team": dict(Counter(row.get("team") or "N/A" for row in rows)),
+        "by_level": {str(key): value for key, value in Counter(row.get("salary_grade") or "N/A" for row in rows).items()},
     }
 
 
@@ -442,6 +558,15 @@ def create_assessment(db: Session, data: Any, actor: str) -> CompetencyAssessmen
     personnel = get_personnel(db, payload["personnel_id"])
     if personnel.status != "active":
         raise ETValidationError("Assessment can only be created for active personnel")
+    if not personnel.position_code or personnel.current_level is None:
+        raise ETValidationError(
+            "Personnel profile is incomplete",
+            [
+                {"field": "position_code", "message": "Position code is required for assessment"},
+                {"field": "current_level", "message": "Current level is required for assessment"},
+            ],
+            status_code=422,
+        )
     existing = db.execute(
         select(CompetencyAssessment).where(
             CompetencyAssessment.personnel_id == personnel.id,
@@ -921,6 +1046,10 @@ def _draft_exists(db: Session, personnel_id: str) -> bool:
 
 def _filtered_active_personnel(db: Session, filters: dict[str, Any]) -> list[Personnel]:
     statement = select(Personnel).where(Personnel.status == "active").order_by(Personnel.team, Personnel.full_name)
+    hidden_ids = _hidden_source_ids(db, "personnel")
+    if hidden_ids:
+        statement = statement.where(Personnel.id.not_in(hidden_ids))
+    statement = statement.where(Personnel.position_code.is_not(None), Personnel.current_level.is_not(None))
     if filters.get("team"):
         statement = statement.where(Personnel.team == filters["team"])
     if filters.get("position"):
@@ -986,6 +1115,38 @@ def _deactivate_other_frameworks(db: Session, code: str, except_id: str | None =
         statement = statement.where(CompetencyFramework.id != except_id)
     for framework in db.execute(statement).scalars():
         framework.is_active = False
+
+
+def _hidden_source_ids(db: Session, source_type: str) -> set[str]:
+    return set(
+        db.execute(select(PersonnelHiddenRow.source_id).where(PersonnelHiddenRow.source_type == source_type))
+        .scalars()
+        .all()
+    )
+
+
+def _unhide_source(db: Session, source_type: str, source_id: str) -> None:
+    row = db.execute(
+        select(PersonnelHiddenRow).where(
+            PersonnelHiddenRow.source_type == source_type,
+            PersonnelHiddenRow.source_id == source_id,
+        )
+    ).scalar_one_or_none()
+    if row is not None:
+        db.delete(row)
+
+
+def _normalize_personnel_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload)
+    for field in ["employee_code", "role", "position_code", "team", "salary_grade", "user_id"]:
+        if field in normalized and normalized[field] is not None:
+            value = str(normalized[field]).strip()
+            normalized[field] = value or None
+    if "full_name" in normalized and normalized["full_name"] is not None:
+        normalized["full_name"] = str(normalized["full_name"]).strip()
+    if "current_level" in normalized and normalized["current_level"] in {"", None}:
+        normalized["current_level"] = None
+    return normalized
 
 
 def _validate_level(level: int) -> None:

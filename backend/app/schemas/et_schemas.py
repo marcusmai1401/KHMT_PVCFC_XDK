@@ -19,6 +19,8 @@ class FrameworkItemBase(BaseModel):
     nlcm_code: str
     competency_name: str
     competency_detail: str | None = None
+    definition: str | None = None
+    requirements_text: str | None = None
     category: str
     stt: int
     level_requirements: dict[str, int] = Field(default_factory=dict)
@@ -35,6 +37,8 @@ class FrameworkItemUpdate(BaseModel):
     nlcm_code: str | None = None
     competency_name: str | None = None
     competency_detail: str | None = None
+    definition: str | None = None
+    requirements_text: str | None = None
     category: str | None = None
     stt: int | None = None
     level_requirements: dict[str, int] | None = None
@@ -89,11 +93,13 @@ class ItemReorderRequest(BaseModel):
 
 
 class PersonnelBase(BaseModel):
-    employee_code: str
+    employee_code: str | None = None
     full_name: str
-    position_code: str
-    team: str
-    current_level: int = Field(ge=1, le=8)
+    role: str | None = None
+    position_code: str | None = None
+    team: str | None = None
+    current_level: int | None = Field(default=None, ge=1, le=8)
+    salary_grade: str | None = None
     hire_date: date | None = None
     status: str = "active"
     user_id: str | None = None
@@ -106,9 +112,11 @@ class PersonnelCreate(PersonnelBase):
 class PersonnelUpdate(BaseModel):
     employee_code: str | None = None
     full_name: str | None = None
+    role: str | None = None
     position_code: str | None = None
     team: str | None = None
     current_level: int | None = Field(default=None, ge=1, le=8)
+    salary_grade: str | None = None
     hire_date: date | None = None
     status: str | None = None
     user_id: str | None = None

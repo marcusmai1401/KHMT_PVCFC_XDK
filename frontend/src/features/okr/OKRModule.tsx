@@ -25,10 +25,12 @@ export function OKRModule({
   role,
   currentUserId,
   currentTeam,
+  editMode = true,
 }: {
   role: string;
   currentUserId: string;
   currentTeam?: string | null;
+  editMode?: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<OKRTab>("dashboard");
   // Staff chỉ được xem dashboard + reference; ẩn tab nhập liệu OKR.
@@ -60,9 +62,9 @@ export function OKRModule({
           })}
         </div>
       </div>
-      {activeTab === "dashboard" && <OKRWorkspace role={role} />}
+      {activeTab === "dashboard" && <OKRWorkspace role={role} editMode={editMode} />}
       {activeTab === "web-input" && role !== "Staff" && (
-        <WebInputForm role={role} currentUserId={currentUserId} currentTeam={currentTeam} />
+        <WebInputForm role={role} currentUserId={currentUserId} currentTeam={currentTeam} editMode={editMode} />
       )}
       {activeTab === "criteria" && <EvaluationReference kind="criteria" />}
       {activeTab === "principles" && <EvaluationReference kind="principles" />}

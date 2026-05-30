@@ -147,6 +147,8 @@ def import_personnel_from_excel(db: Session, file_path: Path, actor: str) -> lis
         "hire_date": {"ngay bat dau lam viec", "hire date", "hire_date"},
         "status": {"trang thai", "status"},
         "user_id": {"user id", "user_id", "tai khoan"},
+        "role": {"vai tro", "role"},
+        "salary_grade": {"bac luong", "salary grade", "salary_grade"},
     }
     for field, aliases in optional.items():
         for alias in aliases:

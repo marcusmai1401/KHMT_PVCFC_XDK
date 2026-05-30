@@ -351,8 +351,9 @@ function khmtMissingCount(row: any) {
   return Math.max(0, reviewPassedCount(row) - Number(row?.khmt_considered ?? 0));
 }
 
-export function visibleActionsForSk(role: string, currentUserId: string, item: any): string[] {
+export function visibleActionsForSk(role: string, currentUserId: string, item: any, editMode = true): string[] {
   const actions: string[] = [];
+  if (role === ADMIN_ROLE && !editMode) return actions;
   const reviewableStatuses = REVIEW_DECISION_STATUSES;
   const isAuthor = AUTHOR_ROLES.includes(role);
   const isOwnAuthor = item.author_user_id === currentUserId;
@@ -387,11 +388,11 @@ export function visibleActionsForSk(role: string, currentUserId: string, item: a
 
 const isReviewerRole = (role: string) => REVIEWER_ROLES.includes(role);
 
-function canUploadImages(role: string, currentUserId: string, item: any) {
+function canUploadImages(role: string, currentUserId: string, item: any, editMode = true) {
   if (item.is_historical_import) return false;
+  if (role === ADMIN_ROLE) return editMode;
   return (
-    role === ADMIN_ROLE ||
-    (AUTHOR_ROLES.includes(role) && item.author_user_id === currentUserId && ["Draft", "NeedMoreInfo"].includes(item.status))
+    AUTHOR_ROLES.includes(role) && item.author_user_id === currentUserId && ["Draft", "NeedMoreInfo"].includes(item.status)
   );
 }
 
@@ -1041,11 +1042,13 @@ export function FIWorkspace({
   currentUserId,
   currentTeam,
   displayName,
+  editMode = true,
 }: {
   role: string;
   currentUserId: string;
   currentTeam?: string | null;
   displayName?: string | null;
+  editMode?: boolean;
 }) {
   const teamFromAccount = currentTeam ?? (AUTHOR_ROLES.includes(role) ? currentUserId : null);
   const isLockedToTeam = AUTHOR_ROLES.includes(role) && teamFromAccount && FI_TEAMS.includes(teamFromAccount);
@@ -1055,7 +1058,7 @@ export function FIWorkspace({
     : "";
   const accountAuthorName = defaultAuthorName || currentUserId;
   const accountTeam = AUTHOR_ROLES.includes(role) ? teamFromAccount : null;
-  const canRegister = AUTHOR_ROLES.includes(role) || role === ADMIN_ROLE;
+  const canRegister = AUTHOR_ROLES.includes(role) || (role === ADMIN_ROLE && editMode);
   const canReview = REVIEWER_ROLES.includes(role);
   const defaultTab: FITab = canRegister ? "register" : canReview ? "review" : "dashboard";
   const [items, setItems] = useState<any[]>([]);
@@ -1149,6 +1152,7 @@ export function FIWorkspace({
 
   const create = async () => {
     if (creating) return;
+    if (role === ADMIN_ROLE && !editMode) return;
     // Client-side validation: prevent submitting empty registrations.
     const missing: string[] = [];
     const authorName = AUTHOR_ROLES.includes(role) ? accountAuthorName : form.author_name;
@@ -1526,7 +1530,7 @@ export function FIWorkspace({
   };
   const selectedImages = Array.isArray(selectedItem?.supporting_images) ? selectedItem.supporting_images : [];
   const selectedHistory = Array.isArray(selectedItem?.status_history) ? selectedItem.status_history : [];
-  const canUploadForSelected = selectedItem ? canUploadImages(role, currentUserId, selectedItem) : false;
+  const canUploadForSelected = selectedItem ? canUploadImages(role, currentUserId, selectedItem, editMode) : false;
   const selectedHistoryTeamSet = new Set(historyTeams);
   const historyItems = allHistoryItems.filter((item) =>
     historyTeams.length === 0 || selectedHistoryTeamSet.has(item.team)
@@ -2126,7 +2130,7 @@ export function FIWorkspace({
         {error && <p className="error">{error}</p>}
         <div className="list">
           {myItems.map((item) => {
-            const actions = visibleActionsForSk(role, currentUserId, item);
+            const actions = visibleActionsForSk(role, currentUserId, item, editMode);
             const editedAfterSubmit = item.status !== "Draft" && AUTHOR_EDITABLE_STATUSES.includes(item.status);
             return (
               <div className={`workflow-item ${selectedItem?.id === item.id ? "active-row" : ""}`} key={item.id}>
@@ -2220,7 +2224,7 @@ export function FIWorkspace({
           {error && <p className="error">{error}</p>}
           <div className="list">
             {reviewQueue.map((item) => {
-              const actions = visibleActionsForSk(role, currentUserId, item);
+              const actions = visibleActionsForSk(role, currentUserId, item, editMode);
               const alreadyReviewed = REVIEWED_STATUSES.includes(item.status);
               const isReviewOpen = actionTarget?.id === item.id;
               return (
@@ -2300,7 +2304,7 @@ export function FIWorkspace({
               <p>{displayTeam(selectedItem.team)}</p>
             </div>
             <div className="fi-detail-actions">
-            {visibleActionsForSk(role, currentUserId, selectedItem).includes("edit") && (
+            {visibleActionsForSk(role, currentUserId, selectedItem, editMode).includes("edit") && (
               <button
                 className="fi-detail-action"
                 title="Chỉnh sửa nội dung/kế hoạch"
@@ -2872,7 +2876,7 @@ export function FIWorkspace({
               </div>
               {group.items.map((item) => {
                 const isOpen = selectedItem?.id === item.id;
-                const actions = visibleActionsForSk(role, currentUserId, item);
+                const actions = visibleActionsForSk(role, currentUserId, item, editMode);
                 const detail: any = isOpen ? (selectedItem ?? item) : item;
                 const detailImages = Array.isArray(detail.supporting_images) ? detail.supporting_images : [];
                 const isHistorical = Boolean(detail.is_historical_import);

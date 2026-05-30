@@ -190,6 +190,16 @@ describe("api client auth contract", () => {
     expect((fetchMock.mock.calls[1][1] as RequestInit).method).toBe("POST");
   });
 
+  it("uses ET personnel hide endpoint", async () => {
+    setToken("signed-token");
+    fetchMock.mockResolvedValue(okJson({ hidden: true }));
+
+    await api.hideEtPersonnel("user", "admin");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/v1/et/personnel/visibility/user/admin", expect.any(Object));
+    expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe("DELETE");
+  });
+
   it("exports ET dashboard as an authenticated blob request", async () => {
     const workbook = new Blob(["xlsx"], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

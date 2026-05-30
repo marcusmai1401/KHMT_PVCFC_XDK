@@ -1,0 +1,3288 @@
+{
+  "source_repo": "https://github.com/lucylam/PVCFC-KNL.git",
+  "source_commit": "82aa6ef0f9583cf62e7e3c104aba50b2bb857417",
+  "extracted_from": [
+    "assets/app.js",
+    "assets/matrix_data.js"
+  ],
+  "frameworks": [
+    {
+      "source_job_id": "knl-dk-10",
+      "code": "KNL_ĐK_10",
+      "title": "Kỹ sư BDSC thiết bị hệ thống điều khiển",
+      "short_name": "KS BDSC thiết bị HTĐK",
+      "description": "Kỹ sư phụ trách bảo dưỡng sửa chữa thiết bị hệ thống điều khiển tại Nhà máy Đạm Cà Mau.",
+      "icon": "🎓",
+      "color": "#047857",
+      "source_totals": [
+        51,
+        108,
+        130,
+        136,
+        136,
+        145,
+        161,
+        178
+      ],
+      "items": [
+        {
+          "category": "Cơ bản",
+          "competency_name": "HSE cương vị",
+          "stt": 1,
+          "nlcm_code": "ĐK_NLCM_001",
+          "competency_detail": "Kiến thức về an toàn khi làm việc với các thiết bị đo lường tự động hóa",
+          "level_requirements": {
+            "1": 1,
+            "2": 4,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến thức về an toàn khi làm việc với các thiết bị đo lường tự động hóa",
+          "requirements_text": "- Nội quy an toàn công ty\n- Sử dụng PPE phù hợp\n- Quy trình làm việc an toàn tại khu vực nguy hiểm\n- Nhận diện mối nguy hiện hữu\n- An toàn điện"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Quy trình làm việc",
+          "stt": 2,
+          "nlcm_code": "ĐK_NLCM_002",
+          "competency_detail": "Kiến thức về quy trình làm việc",
+          "level_requirements": {
+            "1": 1,
+            "2": 4,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến thức về quy trình làm việc",
+          "requirements_text": "- Quy trình BDSC (BDĐK & SCĐX)\n- Quy trình cấp phép làm việc"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Nhận diện mối nguy và đánh giá rủi ro",
+          "stt": 3,
+          "nlcm_code": "ĐK_NLCM_003",
+          "competency_detail": "Nhận diện mối nguy và đánh giá rủi ro",
+          "level_requirements": {
+            "1": 1,
+            "2": 4,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Nhận diện mối nguy và đánh giá rủi ro",
+          "requirements_text": "Phương pháp nhận diện mối nguy, đánh giá rủi ro và biện pháp giảm thiểu"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Nền tảng chuyên ngành đo lường điều khiển",
+          "stt": 4,
+          "nlcm_code": "ĐK_NLCM_004",
+          "competency_detail": "Kiến thức Điện - Điện tử cơ bản",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến thức Điện - Điện tử cơ bản",
+          "requirements_text": "- Kiến thức Điện cơ bản\n+ Hiểu các đại lượng: Điện áp, dòng điện, điện trở.\n+ Phân biệt AC/DC\n+ Các khí cụ điện: Relay, khởi động từ, Rờ le nhiệt, Timer cơ bản.\n- Kiến thức điện tử cơ bản: \n+ Nắm được chức năng, nguyên lý hoạt động của các linh kiện cơ bản như điện trở, tụ điện, cuộn cảm, transistor.\n+ Đại số Boole, hiểu nguyên lý hoạt động của các cổng logic\n- Kiến thức về tín hiệu:\n+ Phân biệt 2 loại tín hiệu Analog và Digital và mục đích sử dụng 0-10V, 0-5V, 4-20mA\n+ Phân biệt tín hiệu Sink, Source, tín hiệu tín hiệu NO/NC"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Nền tảng chuyên ngành đo lường điều khiển",
+          "stt": 5,
+          "nlcm_code": "ĐK_NLCM_005",
+          "competency_detail": "Kiến thức và kỹ năng cơ bản về truyền thông công nghiệp",
+          "level_requirements": {
+            "1": 2,
+            "2": 4,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức và kỹ năng cơ bản về truyền thông công nghiệp",
+          "requirements_text": "Kiến thức:\n- Kiến thức nền tảng về truyền thông\n+ Khái niệm: Master – Slave / Client – Server\n+ Tham số truyền thông: Baud rate, Bandwidth\n- Các chuẩn mạng công nghiệp:\n+ Ethernet: PROFINET, Modbus TCP\n+ Fieldbus: Profibus DP, Modbus RTU, Foundation Fieldbus, HART\n+ Serial: RS232, RS485\n- Địa chỉ mạng:\n+ Địa chỉ IP: IPv4, Subnet mask, Gateway\n+ Mac address\n- Kiến thức phần cứng mạng công nghiệp\n+ Thiết bị mạng: Switch, router, converter.\n+ Cáp & vật tư: Ethernet (CAT5e, CAT6), Cáp quang, Đầu RJ45, ODF, FOC.\n- Hiểu cơ bản cơ chế trao đổi dữ liệu: OPC, DDE.\nKỹ năng:\n- Thi công / đấu nối đầu RJ45, DP\n- Hàn cáp quang, kiểm tra suy hao & điểm đứt cáp quang\n- Lắp đặt/Cấu hình thiết bị mạng (Switch, access point)\n- Cấu hình đọc dữ liệu từ các giao thức RS232/RS485 TCP/IP."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Nền tảng chuyên ngành đo lường điều khiển",
+          "stt": 6,
+          "nlcm_code": "ĐK_NLCM_006",
+          "competency_detail": "Kiến thức về điều khiển",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến thức về điều khiển",
+          "requirements_text": "- Khái niệm: Open loop, Closse loop, các thành phần vòng điều khiển, SP, PV, MV.\n- Đặc tính cơ bản ảnh hưởng đến đáp ứng của process: Process Gain, Time Constant và Dead Time\n- Bộ điều khiển PID, ảnh hưởng của các thành phần và các chỉ tiêu chất lượng: Overshoot, Settling time, error."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Nền tảng chuyên ngành đo lường điều khiển",
+          "stt": 7,
+          "nlcm_code": "ĐK_NLCM_007",
+          "competency_detail": "Kiến thức và kỹ năng về hệ thống máy tính",
+          "level_requirements": {
+            "1": 2,
+            "2": 4,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức và kỹ năng về hệ thống máy tính",
+          "requirements_text": "Kiến thức:\n- Nắm được chức năng các phần tử cơ bản: CPU, GPU, RAM, Hard disk, card Raid, card truyền thông, cổng giao tiếp cơ bản, UPS.\n- Nắm  được các loại cấu hình RAID, ưu nhược điểm của từng loại\n- Nắm cơ bản về an ninh mạng.\n- Phân biệt IT và OT\nKỹ năng:\n- Quản lý file, thư mục chương trình điều khiển\n- Cài đặt hệ điều hành\n- Nắm được các cách Backup và Restore máy tính\n- Kiểm tra/chuẩn đoán thay thế các phần tử (Ram, Hard disk, card truyền thông,...)\n- Xử lý lỗi mất kết nối"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Nền tảng chuyên ngành đo lường điều khiển",
+          "stt": 8,
+          "nlcm_code": "ĐK_NLCM_008",
+          "competency_detail": "Kiến thức về hệ thống nối đất",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến thức về hệ thống nối đất",
+          "requirements_text": "- Nguyên lý làm việc của hệ thống.\n- Các loại nối đất (Nối đất bảo vệ (PE), Nối đất chức năng (FE), Shield Ground), chức năng của từng loại\n- Kiến trúc hệ thống nối đất (Cọc tiếp địa, dây tiếp địa, thanh cái tiếp địa,…)\n- Kiến thức về điện trở đất"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Công cụ, Dụng cụ cầm tay cho chuyên môn thiết bị HTĐK",
+          "stt": 9,
+          "nlcm_code": "ĐK_NLCM_009",
+          "competency_detail": "Kiến thức và kỹ năng sử dụng công cụ dụng cụ cầm tay thuộc chuyên môn thiết bị HTĐK",
+          "level_requirements": {
+            "1": 1,
+            "2": 4,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 5,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến thức và kỹ năng sử dụng công cụ dụng cụ cầm tay thuộc chuyên môn thiết bị HTĐK",
+          "requirements_text": "Kiến thức:\nNắm và sử dụng đúng chức năng CCDC\nKỹ năng:\n- Sử dụng công cụ dụng cụ thuộc phạm vi Đội TBHTĐK và Hart communicator\n- Sử dụng thành thạo dụng cụ điện trong đấu nối và lắp đặt.\n- Đấu nối cable gland."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "P&ID",
+          "stt": 10,
+          "nlcm_code": "ĐK_NLCM_010",
+          "competency_detail": "Kiến thức và kỹ năng về P&ID",
+          "level_requirements": {
+            "1": 1,
+            "2": 3,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức và kỹ năng về P&ID",
+          "requirements_text": "- Dựa vào  P&ID có thể nắm được thông số áp suất, nhiệt độ, môi chất trong đường ống.\n- Đọc hiểu các ký hiệu trên P&ID (Phân loại tín hiệu, ký hiệu thiết bị đo, phương pháp đo, khối chức năng, điều khiển,...).\n- Dựa trên P&ID có thể trình bày được chức năng của thiết bị đo, van điều khiển, control loop, Interlock, thiết bị kết nối với hệ thống nào.\nKỹ năng: \nPhát triển và triển khai bản vẽ liên quan đến đo lường điều khiển"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Công nghệ sản xuất",
+          "stt": 11,
+          "nlcm_code": "ĐK_NLCM_016",
+          "competency_detail": "Kiến thức cơ bản về quy trình công nghệ sản xuất tại Nhà máy Đạm Cà Mau từ khí đầu vào đến tạo hạt, đóng bao",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức cơ bản về quy trình công nghệ sản xuất tại Nhà máy Đạm Cà Mau từ khí đầu vào đến tạo hạt, đóng bao.",
+          "requirements_text": "- Nắm tổng quan các phân Xưởng trong NM ĐCM: chức năng và vai trò.\n- Lưu đồ công nghệ về phân cụm: chức năng và vai trò."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Tổng quan Hệ thống điều khiển nhà máy Đạm Cà Mau",
+          "stt": 12,
+          "nlcm_code": "ĐK_NLCM_017",
+          "competency_detail": "Nắm được chức năng của các hệ thống điều khiển tại nhà máy Đạm Cà Mau bao gồm Hệ thống điều khiển phân tán, ESD, hệ thống điều khiển Turbine và máy nén, hệ thống MPS/MMS, hệ thống đóng bao xuất hàng",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Nắm được chức năng của các hệ thống điều khiển tại nhà máy Đạm Cà Mau bao gồm Hệ thống điều khiển phân tán, ESD, hệ thống điều khiển Turbine và máy nén, hệ thống MPS/MMS, hệ thống đóng bao xuất hàng",
+          "requirements_text": "- Nắm tổng quan Hệ thống điều khiển tại NM ĐCM: chức năng và vai trò của các hệ thống\n- Sự kết nối giữa các hệ thống, phương thức kết nối."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Tổng quan Thiết bị đo lường và van điều khiển nhà máy Đạm Cà Mau",
+          "stt": 13,
+          "nlcm_code": "ĐK_NLCM_018",
+          "competency_detail": "Kiến thức về thiết bị đo lường và van điều khiển tại nhà máy Đạm Cà Mau",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức về thiết bị đo lường và van điều khiển tại nhà máy Đạm Cà Mau",
+          "requirements_text": "- Biết được các thiết bị đo: Mức, áp, lưu lượng, nhiệt độ, đầu dò độ rung đang áp dụng tại NM ĐCM.\n- Biết được các loại van điều khiển đang được sử dụng tại NM ĐCM"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Kiến thức tổng quan về biện pháp phòng nổ (Ex protection)",
+          "stt": 14,
+          "nlcm_code": "ĐK_NLCM_019",
+          "competency_detail": "Kiến thức về vùng nguy hiểm",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức về vùng nguy hiểm",
+          "requirements_text": "- Khái niệm vùng nguy hiểm theo ATEX/IECEx, phân vùng nguy hiểm trong NM ĐCM.\n- Hiểu nguyên lý cháy nổ (tam giác cháy)"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Kiến thức tổng quan về biện pháp phòng nổ (Ex protection)",
+          "stt": 15,
+          "nlcm_code": "ĐK_NLCM_020",
+          "competency_detail": "Kiến thức về ký hiệu phòng nổ trên thiết bị",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến thức về ký hiệu phòng nổ trên thiết bị",
+          "requirements_text": "- Các phương pháp phòng nổ tại nhà máy Đạm Cà Mau\n- Sử dụng công cụ/tài liệu để đọc được Ex marking trên thiết bị"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Kỹ năng mềm chuyên ngành Đo lường - Điều khiển",
+          "stt": 16,
+          "nlcm_code": "ĐK_NLCM_021",
+          "competency_detail": "Kỹ năng mềm chuyên ngành Đo lường - Điều khiển",
+          "level_requirements": {
+            "1": 3,
+            "2": 4,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kỹ năng mềm chuyên ngành Đo lường - Điều khiển",
+          "requirements_text": "- Sử dụng được phần mềm Autocad\n- Kỹ năng soạn thảo Email\n- Kỹ năng soạn thảo báo cáo (Excel, Word, PowerPoint, Visio, Ms project)"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Nắm được nguyên lý hoạt động Turbine/máy nén và nồi hơi",
+          "stt": 17,
+          "nlcm_code": "ĐK_NLCM_022",
+          "competency_detail": "Nắm được nguyên lý hoạt động Turbine/máy nén và nồi hơi",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Nắm được nguyên lý hoạt động Turbine/máy nén và nồi hơi",
+          "requirements_text": "Nắm được nguyên lý hoạt động Turbine/máy nén và nồi hơi\n…"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Kiến thức và kỹ năng liên quan đến hệ thống các tiêu chuẩn Quốc tế liên quan đến ngành đo lường điều khiển",
+          "stt": 18,
+          "nlcm_code": "ĐK_NLCM_023",
+          "competency_detail": "Kiến thức và kỹ năng liên quan đến hệ thống các tiêu chuẩn Quốc tế liên quan đến ngành đo lường điều khiển",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 5,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến thức và kỹ năng liên quan đến hệ thống các tiêu chuẩn Quốc tế liên quan đến ngành đo lường điều khiển",
+          "requirements_text": "- IEC – nền tảng của ngành Đo lường Điều khiển: IEC 61511, IEC 60079\n- API 554 Process Instrumentation and Control, API 612: turbine, compressor\nKỹ năng: \n- Có thể đọc hiểu, áp dụng các tiêu chuẩn vào thực tế công việc"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Trí tuệ nhân tạo (AI)",
+          "stt": 19,
+          "nlcm_code": "ĐK_NLCM_024",
+          "competency_detail": "Kiến thức và kỹ năng liên về trí tuệ nhân tạo (AI)",
+          "level_requirements": {
+            "1": 3,
+            "2": 4,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến thức và kỹ năng liên về trí tuệ nhân tạo (AI)",
+          "requirements_text": "Kiến thức\n- Nắm được nguyên tắc hoạt động cơ bản của các công cụ AI hỗ trợ xử lý thông tin, phân tích dữ liệu và tạo nội dung.\n- Hiểu các giới hạn và rủi ro khi sử dụng AI, bao gồm độ chính xác thông tin và bảo mật dữ liệu.\n- Nhận biết các ứng dụng AI phổ biến trong công việc văn phòng và kỹ thuật như hỗ trợ viết báo cáo, phân tích dữ liệu, tra cứu tài liệu kỹ thuật.\nKỹ năng:\n- Sử dụng các công cụ AI để hỗ trợ tìm kiếm, tổng hợp và phân tích thông tin phục vụ công việc.\n- Ứng dụng AI trong soạn thảo tài liệu kỹ thuật, báo cáo và trình bày nội dung.\n- Biết đặt câu hỏi (prompt) rõ ràng để khai thác hiệu quả thông tin từ công cụ AI.\n- Kiểm tra, đánh giá và xác minh lại kết quả do AI cung cấp trước khi áp dụng vào thực tế.\n- Kết hợp AI với các công cụ làm việc khác (Excel, tài liệu kỹ thuật, hệ thống quản lý dữ liệu) để nâng cao hiệu quả công việc."
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Hệ thống Fire Alarm - FA & Automatic Fire Fighting System - AFFS",
+          "stt": 20,
+          "nlcm_code": "ĐK_NLCM_025",
+          "competency_detail": "Kiến thức và kỹ năng liên quan đến hệ thống FA & AFFS",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến thức và kỹ năng liên quan đến hệ thống FA & AFFS",
+          "requirements_text": "Kiến thức:\n- Hệ thống báo cháy: FA\n+ Nguyên lý Đầu báo khói - nhiệt được sử dụng trong NM ĐCM\n+ Chức năng nút nhấn khẩn (Manual Call Point)\n+ Điều khiển chuông, còi, đèn, relay\n+ Bản vẽ đấu nối thiết bị, kết nối với hệ thống AFFS & Fire and Gas\n- Hệ thống chữa cháy tự động (AFFS): FM-200, CO2, Bọt Foam.\n+ Chức năng hệ thống\n+ Bản vẽ đấu nối thiết bị, kết nối với hệ thống FA\n- Tiêu chuẩn\n+ TCVN 3890 Trang bị, kiểm tra hệ thống báo cháy – chữa cháy\n+ TCVN 5760/5738 Hệ thống báo cháy tự động – thiết kế & lắp đặt\nKỹ năng:\n- Đấu nối dây loop & end-of-line (EOL)\t\n- Sử dụng cơ bản phần mềm Notifier Verifire Tool (Cấu hình khai báo mới, relay, còi, đèn, chuông, thiết lập Interlock, MOC)\n- Sử dụng công cụ để backup/restore hệ thống"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Phần cứng hệ thống MPS/MMS",
+          "stt": 21,
+          "nlcm_code": "ĐK_NLCM_026",
+          "competency_detail": "Kiến trúc phần cứng hệ thống MPS/MMS",
+          "level_requirements": {
+            "1": 1,
+            "2": 4,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 5,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến trúc phần cứng hệ thống MPS/MMS",
+          "requirements_text": "Kiến thức nền tảng:\n- Nắm được kiến trúc phần cứng: liệt kê các phần tử, nêu được chức năng từng phần tử\n- Đọc hiểu bản vẽ IO wiring, trình bày được đường đi của tín hiệu từ thiết bị hiện trường đến Card và ngược lại.\n- Nắm được chức năng từng loại card.\nKỹ năng:\n- Có thể lắp đặt, đấu nối tín hiệu, thay thế các phần tử trong hệ thống."
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Phần mềm hệ thống MPS/MMS",
+          "stt": 22,
+          "nlcm_code": "ĐK_NLCM_027",
+          "competency_detail": "Kiến trúc phần mềm hệ thống MPS/MMS",
+          "level_requirements": {
+            "1": 1,
+            "2": 3,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến trúc phần mềm hệ thống MPS/MMS",
+          "requirements_text": "Kiến thức:\n- Nắm được các loại tín hiệu giám sát máy động.\n- Nắm được kiến trúc phần mềm: nắm được các câu lệnh cấu hình trong Rack 3500.\n- Đọc hiểu bản vẽ Interlock và trình bày được sự hiện diện bên trong chương trình.\n- Nắm được phương thức kết nối/logic tác động với các hệ thống khác.\nKỹ năng\n- Sử dụng cơ bản phần mềm Rack 3500, System1 (Có thể cấu hình mới, MOC, Backup / Restore Configuration)\n- Sử dụng công cụ cầm tay để mô phỏng và đo đạc tín hiệu độ rung (CA150, Fluke744, oscilloscope)"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Phần cứng hệ thống DCS",
+          "stt": 23,
+          "nlcm_code": "ĐK_NLCM_028",
+          "competency_detail": "Kiến thức và kỹ năng liên quan đến phần cứng hệ thống DCS",
+          "level_requirements": {
+            "1": 1,
+            "2": 4,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến thức và kỹ năng liên quan đến phần cứng hệ thống DCS",
+          "requirements_text": "Kiến thức:\n- Nắm được kiến trúc phần cứng hệ thống DCS nhà máy Đạm Cà Mau, liệt kê các phần tử có trong SYS & Marshalling Cabinet, HIS nêu được chức năng từng phần tử\n- Mạng truyền thông hệ thống DCS\n- Đọc hiểu bản vẽ IO wiring, trình bày được đường đi của tín hiệu từ thiết bị hiện trường đến Card và ngược lại.\n- Nắm được chức năng từng loại card  và các phần tử phụ trợ\nKỹ năng:\n- Có thể lắp đặt, thay thế các phần tử trong hệ thống.\n- Có khả năng cấu hình phần cứng"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Phần mềm hệ thống DCS",
+          "stt": 24,
+          "nlcm_code": "ĐK_NLCM_029",
+          "competency_detail": "Kiến thức và kỹ năng liên quan đến phần mềm hệ thống DCS",
+          "level_requirements": {
+            "1": 1,
+            "2": 3,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 5,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến thức và kỹ năng liên quan đến phần mềm hệ thống DCS",
+          "requirements_text": "Kiến thức:\n- Nắm được kiến trúc phần mềm: hiểu các khối cơ bản có trong project nhà máy Đạm Cà Mau, cách thức tổ chức chương trình.\n- Nắm được các chuẩn truyền thông.\n- Đọc hiểu bản vẽ Interlock, instrument loop diagram.\n- Tích hợp hệ thống: Nắm được phương thức kết nối/logic tác động với các hệ thống khác\nKỹ năng:\n- Sử dụng cơ bản phần mềm System view (Project Creation/Attribution Utility  Project Common Definition, FCS Configuration, I/O Module Configuration  Software Switches Configuration  Message Configuration, Control Drawing Builder, HIS Configuration, Window Configuration, Graphic Builder, Diagnotic kiểm tra trạng thái: IO card, FCU, truyền thông)"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Phần cứng hệ thống F&G",
+          "stt": 25,
+          "nlcm_code": "ĐK_NLCM_030",
+          "competency_detail": "Kiến trúc phần cứng hệ thống F&G",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến trúc phần cứng hệ thống F&G",
+          "requirements_text": "Kiến thức:\n- Nắm được kiến trúc phần cứng: liệt kê các phần tử, nêu được chức năng từng phần tử\n- Đọc hiểu bản vẽ IO wiring, trình bày được đường đi của tín hiệu từ thiết bị hiện trường đến Card và ngược lại.\n- Nắm được chức năng từng loại card và các phần tử phụ trợ\nKỹ năng:\n- Có thể lắp đặt, thay thế các phần tử trong hệ thống."
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Phần mềm hệ thống F&G",
+          "stt": 26,
+          "nlcm_code": "ĐK_NLCM_031",
+          "competency_detail": "Kiến trúc phần mềm hệ thống F&G",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến trúc phần mềm hệ thống F&G",
+          "requirements_text": "Kiến thức:\n- Nắm được kiến trúc phần mềm: hiểu chức năng các khối cấu hình trong project nhà máy Đạm Cà Mau.\n- Đọc hiểu bản vẽ IO wiring và trình bày được sự hiện diện bên trong chương trình\n- Nắm được các chuẩn truyền thông\n- Nắm được phương thức kết nối/logic tác động với các hệ thống khác\nKỹ năng\n-  Sử dụng cơ bản phần mềm TriStation, Intouch WindowMarker"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Phần cứng hệ thống ESD",
+          "stt": 27,
+          "nlcm_code": "ĐK_NLCM_032",
+          "competency_detail": "Kiến trúc phần cứng hệ thống ESD",
+          "level_requirements": {
+            "1": 1,
+            "2": 4,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến trúc phần cứng hệ thống ESD",
+          "requirements_text": "Kiến thức:\n- Nắm được kiến trúc phần cứng: liệt kê các phần tử, nêu được chức năng từng phần tử\n- Đọc hiểu bản vẽ IO wiring, trình bày được đường đi của tín hiệu từ thiết bị hiện trường đến Card và ngược lại.\n-  Nắm được chức năng từng loại card  và các phần tử phụ trợ\nKỹ năng:\n- Có thể lắp đặt, thay thế các phần tử trong hệ thống."
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Phần mềm hệ thống ESD",
+          "stt": 28,
+          "nlcm_code": "ĐK_NLCM_033",
+          "competency_detail": "Kiến trúc phần mềm hệ thống ESD",
+          "level_requirements": {
+            "1": 1,
+            "2": 3,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến trúc phần mềm hệ thống ESD",
+          "requirements_text": "Kiến thức:\n- Nắm được kiến trúc phần mềm, lập trình trên Tristation, hiểu chức năng các khối cấu hình trong project nhà máy Đạm Cà Mau.\n- Đọc hiểu Cause & Effect của nhà máy Đạm Cà Mau\n- Đọc hiểu bản vẽ Interlock\n- Nắm được các chuẩn truyền thông\n- Tích hợp hệ thống: Nắm được phương thức kết nối/logic tác động với các hệ thống khác\nKỹ năng\n- Sử dụng cơ bản phần mềm TriStation, Intouch WindowMarker, SOE.\n- Force, bypass, MOS các tín hiệu"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Phần cứng hệ thống PLC",
+          "stt": 29,
+          "nlcm_code": "ĐK_NLCM_034",
+          "competency_detail": "Kiến thức và kỹ năng liên quan đến phần cứng hệ thống PLC",
+          "level_requirements": {
+            "1": 1,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 3,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến thức và kỹ năng liên quan đến phần cứng hệ thống PLC",
+          "requirements_text": "Kiến thức:\n- Nắm được kiến trúc phần cứng: liệt kê các phần tử có trong SYS & Marshalling Cabinet, nêu được chức năng từng phần tử.\n- Đọc hiểu bản vẽ wiring, trình bày được đường đi của tín hiệu từ thiết bị hiện trường đến Card và ngược lại.\n- Nắm được chức năng từng loại card và các phần tử phụ trợ\nKỹ năng:\n- Có thể lắp đặt, thay thế các phần tử trong hệ thống."
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Phần mềm hệ thống PLC",
+          "stt": 30,
+          "nlcm_code": "ĐK_NLCM_035",
+          "competency_detail": "Kiến trúc và kỹ năng liên quan đến phần mềm hệ thống PLC",
+          "level_requirements": {
+            "1": 1,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến trúc và kỹ năng liên quan đến phần mềm hệ thống PLC",
+          "requirements_text": "Kiến thức:\n- Khái niệm về: Biến và kiểu dữ liệu, address và indirect address, Cycle time, software/hardware interupt.\n- Nắm được kiến trúc phần mềm: Cách tổ chức chương trình Simens và Allen-Bradley.\n- Đọc hiểu được chương trình (Ngôn ngữ ladder, FBD và CFC)\n- Nắm được các chuẩn truyền thông trong nội tại hệ thống PLC\n- Tích hợp hệ thống: Nắm được phương thức kết nối/logic tác động với các hệ thống khác\nKỹ năng:\n- Backup, restore chương trình/HMI\n- Force, Bypass, MOS và simulate tín hiệu"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Hệ thống PLC nâng cao",
+          "stt": 31,
+          "nlcm_code": "ĐK_NLCM_036",
+          "competency_detail": "Kiến trúc và kỹ năng nâng cao liên quan đến hệ thống PLC",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến trúc và kỹ năng nâng cao liên quan đến hệ thống PLC",
+          "requirements_text": "Kiến thức:\n- Đọc hiểu được chương trình (Ngôn ngữ STL, SCL)\n- Nắm được các loop/logic điều khiển các hệ thống turbine/máy nén KT04421/K04421, KT04441/K04441, KT04431/K04431, KT06101/K06101 và BMS\n- Liên kết được hướng dẫn vận hành (Điều kiện công nghệ) với logic điều khiển\nKỹ năng:\n- Thành thạo môi trường engineering (Simatic, TriStation)\n- Phân tích root cause (RCA) sự cố hệ thống điều khiển"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Hệ thống DCS nâng cao",
+          "stt": 32,
+          "nlcm_code": "ĐK_NLCM_037",
+          "competency_detail": "Kiến thức và kỹ năng chuyên sâu liên quan đến hệ thống DCS",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 3,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến thức và kỹ năng chuyên sâu liên quan đến hệ thống DCS",
+          "requirements_text": "Kiến thức:\n- Thiết kế control logic phức tạp (interlock, permissive, trip)\n- Bảo mật cho hệ thống DCS\nKỹ năng:\n- Thành thạo môi trường engineering (System view)\n- Phân tích root cause (RCA) sự cố hệ thống điều khiển"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Hệ thống ESD nâng cao",
+          "stt": 33,
+          "nlcm_code": "ĐK_NLCM_038",
+          "competency_detail": "Kiến thức và kỹ năng chuyên sâu liên quan đến hệ thống ESD",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 5,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến thức và kỹ năng chuyên sâu liên quan đến hệ thống ESD",
+          "requirements_text": "Kiến thức:\n- Nắm được Cause & Effect của nhà máy Đạm Cà Mau\n- Nắm rõ các Safety Interlock tại nhà máy Đạm Cà Mau\n- Bảo mật cho hệ thống ESD\nKỹ năng:\n- Thành thạo môi trường engineering (TriStation, Intouch WindowMarker, SOE)\n- Phân tích root cause (RCA) sự cố hệ thống điều khiển"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Hệ thống MPS/MMS nâng cao",
+          "stt": 34,
+          "nlcm_code": "ĐK_NLCM_039",
+          "competency_detail": "Kiến trúc phần mềm hệ thống MPS/MMS nâng cao",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến trúc phần mềm hệ thống MPS/MMS",
+          "requirements_text": "Kiến thức:\n- Nắm rõ các  Interlock tại nhà máy Đạm Cà Mau\n- Bảo mật cho hệ thống MPS/S1\nKỹ năng:\n- Thành thạo môi trường engineering (Rack 3500, S1)\n- Phân tích root cause (RCA) sự cố hệ thống điều khiển"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Hệ thống AMS",
+          "stt": 35,
+          "nlcm_code": "ĐK_NLCM_040",
+          "competency_detail": "Kiến thức và kỹ năng liên quan đến hệ thống AMS",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến thức và kỹ năng liên quan đến hệ thống AMS",
+          "requirements_text": "Kiến thức:\n- Nắm được chức năng của hệ thống\n\nKỹ năng:\n- Sử dụng công cụ để backup/restore PC"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Hệ thống OPC",
+          "stt": 36,
+          "nlcm_code": "ĐK_NLCM_041",
+          "competency_detail": "Kiến thức và kỹ năng liên quan đến hệ thống OPC",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến thức và kỹ năng liên quan đến hệ thống OPC",
+          "requirements_text": "Kiến thức:\n- Nắm được chức năng của hệ thống\n\nKỹ năng:\n- Sử dụng công cụ để backup/restore PC"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Hệ thống OTS",
+          "stt": 37,
+          "nlcm_code": "ĐK_NLCM_042",
+          "competency_detail": "Kiến thức và kỹ năng liên quan đến hệ thống OTS",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến thức và kỹ năng liên quan đến hệ thống OTS",
+          "requirements_text": "Kiến thức:\n- Nắm được chức năng của hệ thống\n\nKỹ năng:\n- Sử dụng công cụ để backup/restore PC"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Hệ thống APC",
+          "stt": 38,
+          "nlcm_code": "ĐK_NLCM_043",
+          "competency_detail": "Kiến thức về hệ thống APC",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 3,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến thức về hệ thống APC",
+          "requirements_text": "Kiến thức:\n- Nắm được chức năng của hệ thống\n\nKỹ năng:\n- Sử dụng công cụ để backup/restore PC"
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "Quy trình làm việc nâng cao",
+          "stt": 39,
+          "nlcm_code": "ĐK_NLCM_054",
+          "competency_detail": "Kiến thức về quy trình làm việc nâng cao",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 3,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến thức về qui trình làm việc nâng cao",
+          "requirements_text": "- Quy trình quản lý thay đổi thiết bị công nghệ\n- Quy trình Điều tra sự cố"
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "Thiết kế và triển khai các dự án C&I quy mô nhỏ",
+          "stt": 40,
+          "nlcm_code": "ĐK_NLCM_055",
+          "competency_detail": "Tham gia thiết kế và triển khai các dự án C&I quy mô nhỏ",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 3,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Tham gia thiết kế và triển khai các dự án C&I quy mô nhỏ",
+          "requirements_text": "- Tiêu chuẩn thiết kế hệ thống điều khiển\n- Thiết kế tài liệu (Engineering Deliverables): Interlock, Instrument loop diagram, I/O wiring …"
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "An toàn điều khiển chức năng",
+          "stt": 41,
+          "nlcm_code": "ĐK_NLCM_056",
+          "competency_detail": "Kiến thức về an toàn điều khiển chức năng",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 3,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến thức về an toàn điều khiển chức năng",
+          "requirements_text": "- Nắm được Functional safety life cylce\n- Các hệ thống liên quan đến An toàn điều khiển chức năng\n- Nắm được các khái niệm cơ bản về SIL, MTBF, PFDavg, …\n- Định nghĩa rủi ro và phương pháp giảm thiểu\n- Tiêu chuẩn & quy định liên quan: IEC 61511"
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "Điều khiển nâng cao",
+          "stt": 42,
+          "nlcm_code": "ĐK_NLCM_057",
+          "competency_detail": "Kiến thức và kỹ năng liên quan đến điều khiển nâng cao",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 0,
+            "4": 0,
+            "5": 0,
+            "6": 0,
+            "7": 0,
+            "8": 0
+          },
+          "definition": "Kiến thức và kỹ năng liên quan đến điều khiển nâng cao",
+          "requirements_text": "- Turning các thông số bộ điều khiển PID\n- Hiểu về Cascade control, feedforward, split range control, ratio control, coupling control\n- Complex loop control tại nhà máy Đạm Cà Mau"
+        },
+        {
+          "category": "Nghiệp vụ hành chính",
+          "competency_name": "Quản lý hồ sơ, tài liệu/bản vẽ kỹ thuật",
+          "stt": 43,
+          "nlcm_code": "ĐK_NLCM_064",
+          "competency_detail": "Quản lý hồ sơ, tài liệu/bản vẽ kỹ thuật",
+          "level_requirements": {
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0,
+            "5": 0,
+            "6": 0,
+            "7": 0,
+            "8": 0
+          },
+          "definition": "Quản lý hồ sơ, tài liệu/bản vẽ kỹ thuật",
+          "requirements_text": null
+        },
+        {
+          "category": "Nghiệp vụ hành chính",
+          "competency_name": "Quản lý sử dụng vật tư tiêu hao, thiết bị, CCDC",
+          "stt": 44,
+          "nlcm_code": "ĐK_NLCM_065",
+          "competency_detail": "Quản lý sử dụng vật tư tiêu hao, thiết bị, CCDC",
+          "level_requirements": {
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0,
+            "5": 0,
+            "6": 0,
+            "7": 0,
+            "8": 0
+          },
+          "definition": "Quản lý sử dụng vật tư tiêu hao, thiết bị, CCDC",
+          "requirements_text": null
+        },
+        {
+          "category": "Nghiệp vụ hành chính",
+          "competency_name": "Nghiệp vụ SAP",
+          "stt": 45,
+          "nlcm_code": "ĐK_NLCM_066",
+          "competency_detail": "Kỹ năng sử dụng SAP",
+          "level_requirements": {
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0,
+            "5": 0,
+            "6": 0,
+            "7": 0,
+            "8": 0
+          },
+          "definition": "Kỹ năng sử dụng SAP",
+          "requirements_text": null
+        }
+      ]
+    },
+    {
+      "source_job_id": "knl-dk-12",
+      "code": "KNL_ĐK_12",
+      "title": "Kỹ thuật viên trực ca điều khiển",
+      "short_name": "KTV trực ca điều khiển",
+      "description": "Kỹ thuật viên phụ trách trực ca vận hành và giám sát hệ thống điều khiển tại Nhà máy Đạm Cà Mau.",
+      "icon": "🖥️",
+      "color": "#0369a1",
+      "source_totals": [
+        58,
+        68,
+        87,
+        104,
+        107,
+        111,
+        116,
+        116
+      ],
+      "items": [
+        {
+          "category": "Cơ bản",
+          "competency_name": "HSE cương vị",
+          "stt": 1,
+          "nlcm_code": "ĐK_NLCM_001",
+          "competency_detail": "Kiến thức về an toàn khi làm việc với các thiết bị đo lường tự động hóa",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức về an toàn khi làm việc với các thiết bị đo lường tự động hóa",
+          "requirements_text": "- Nội quy an toàn công ty\n- Sử dụng PPE phù hợp\n- Quy trình làm việc an toàn tại khu vực nguy hiểm\n- Nhận diện mối nguy hiện hữu\n- An toàn điện"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Quy trình làm việc",
+          "stt": 2,
+          "nlcm_code": "ĐK_NLCM_002",
+          "competency_detail": "Kiến thức về quy trình làm việc",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức về quy trình làm việc",
+          "requirements_text": "- Quy trình BDSC (BDĐK & SCĐX)\n- Quy trình cấp phép làm việc"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Nhận diện mối nguy và đánh giá rủi ro",
+          "stt": 3,
+          "nlcm_code": "ĐK_NLCM_003",
+          "competency_detail": "Nhận diện mối nguy và đánh giá rủi ro",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Nhận diện mối nguy và đánh giá rủi ro",
+          "requirements_text": "Phương pháp nhận diện mối nguy, đánh giá rủi ro và biện pháp giảm thiểu"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Nền tảng chuyên ngành đo lường điều khiển",
+          "stt": 4,
+          "nlcm_code": "ĐK_NLCM_004",
+          "competency_detail": "Kiến thức Điện - Điện tử cơ bản",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức Điện - Điện tử cơ bản",
+          "requirements_text": "- Kiến thức Điện cơ bản\n+ Hiểu các đại lượng: Điện áp, dòng điện, điện trở.\n+ Phân biệt AC/DC\n+ Các khí cụ điện: Relay, khởi động từ, Rờ le nhiệt, Timer cơ bản.\n- Kiến thức điện tử cơ bản: \n+ Nắm được chức năng, nguyên lý hoạt động của các linh kiện cơ bản như điện trở, tụ điện, cuộn cảm, transistor.\n+ Đại số Boole, hiểu nguyên lý hoạt động của các cổng logic\n- Kiến thức về tín hiệu:\n+ Phân biệt 2 loại tín hiệu Analog và Digital và mục đích sử dụng 0-10V, 0-5V, 4-20mA\n+ Phân biệt tín hiệu Sink, Source, tín hiệu tín hiệu NO/NC"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "P&ID",
+          "stt": 5,
+          "nlcm_code": "ĐK_NLCM_010",
+          "competency_detail": "Kiến thức và kỹ năng về P&ID",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về P&ID",
+          "requirements_text": "- Dựa vào  P&ID có thể nắm được thông số áp suất, nhiệt độ, môi chất trong đường ống.\n- Đọc hiểu các ký hiệu trên P&ID (Phân loại tín hiệu, ký hiệu thiết bị đo, phương pháp đo, khối chức năng, điều khiển,...).\n- Dựa trên P&ID có thể trình bày được chức năng của thiết bị đo, van điều khiển, control loop, Interlock, thiết bị kết nối với hệ thống nào.\nKỹ năng: \nPhát triển và triển khai bản vẽ liên quan đến đo lường điều khiển"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "IO wiring, Instrument junction box và cable schedule và Interlock",
+          "stt": 6,
+          "nlcm_code": "ĐK_NLCM_011",
+          "competency_detail": "Kiến thức về IO wiring, Instrument junction box và cable schedule, Interlock",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức về IO wiring, Instrument juction box và cable schedule, Interlock",
+          "requirements_text": "Đọc hiểu được các bản vẽ IO wiring,  Instrument juction box và cable schedule\nĐọc hiểu các Interlock cơ bản"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Công cụ, Dụng cụ cầm tay cho chuyên môn thiết bị Đo lường",
+          "stt": 7,
+          "nlcm_code": "ĐK_NLCM_012",
+          "competency_detail": "Kỹ năng sử dụng Công cụ, Dụng cụ cầm tay cho chuyên môn thiết bị Đo lường",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 3,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kỹ năng sử dụng Công cụ, Dụng cụ cầm tay cho chuyên môn thiết bị Đo lường",
+          "requirements_text": "Kiến thức:\nNắm và sử dụng đúng chức năng CCDC\nKỹ năng:\n- Sử dụng công cụ dụng cụ thuộc phạm vi Đội TBĐL\n- Đấu nối cable gland."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Công cụ, Dụng cụ cầm tay cho chuyên môn thiết bị van điều khiển",
+          "stt": 8,
+          "nlcm_code": "ĐK_NLCM_013",
+          "competency_detail": "Kỹ năng sử dụng Công cụ, Dụng cụ cầm tay cho chuyên môn thiết bị van điều khiển",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 3,
+            "4": 3,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kỹ năng sử dụng Công cụ, Dụng cụ cầm tay cho chuyên môn thiết bị van điều khiển",
+          "requirements_text": "Kiến thức:\nNắm và sử dụng đúng chức năng CCDC\nKỹ năng:\n- Sử dụng công cụ dụng cụ thuộc phạm vi Đội TBCH\n- Sử dụng thành thạo dụng cụ điện trong đấu nối và lắp đặt.\n- Đấu nối cable gland."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Vật lý cơ bản",
+          "stt": 9,
+          "nlcm_code": "ĐK_NLCM_014",
+          "competency_detail": "Kiến thức về vật lý và đại lượng đo lường cơ bản",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức về vật lý và đại lượng đo lường cơ bản",
+          "requirements_text": "- Định nghĩa áp suất, lưu lượng, nhiệt độ, độ rung.\n- Phân biệt áp suất tương đối, áp suất tuyệt đối\n- Định nghĩa Cột áp thủy tỉnh\n- Định nghĩa Zero value, calibration range, Span và Instrument range\n- Định nghĩa Độ chính xác (Accuracy), độ lặp lại (Precision), độ phân giải (Resolution), tuyến tính (Linearity), độ trễ (Hysteresis)\n- Các định luật: Ohm, Kirchhoff,  Faraday, Bernoulli, Seebeck, Pascal.\n- Hiện tượng vật lý: Ngưng tụ (condensation), bay hơi."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Lựa chọn fitting, tubing",
+          "stt": 10,
+          "nlcm_code": "ĐK_NLCM_015",
+          "competency_detail": "Kiến thức và kỹ năng liên quan đến lựa chọn fitting và tubing",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức và kỹ năng liên quan đến lựa chọn fitting và tubing",
+          "requirements_text": "Kiến thức:\n- Nắm vững các loại fitting và tubing tại NM ĐCM.\n- Tuân thủ các nguyên tắc, lựa chọn đúng kích thước tubing và fitting. (không sử dụng lẫn ferrule giữa các hãng khác nhau)\nKỹ năng:\n- Lắp đặt và uống ống Impluse line"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Công nghệ sản xuất",
+          "stt": 11,
+          "nlcm_code": "ĐK_NLCM_016",
+          "competency_detail": "Kiến thức cơ bản về quy trình công nghệ sản xuất tại Nhà máy Đạm Cà Mau từ khí đầu vào đến tạo hạt, đóng bao",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 3,
+            "7": 3,
+            "8": 3
+          },
+          "definition": "Kiến thức cơ bản về quy trình công nghệ sản xuất tại Nhà máy Đạm Cà Mau từ khí đầu vào đến tạo hạt, đóng bao.",
+          "requirements_text": "- Nắm tổng quan các phân Xưởng trong NM ĐCM: chức năng và vai trò.\n- Lưu đồ công nghệ về phân cụm: chức năng và vai trò."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Tổng quan Hệ thống điều khiển nhà máy Đạm Cà Mau",
+          "stt": 12,
+          "nlcm_code": "ĐK_NLCM_017",
+          "competency_detail": "Nắm được chức năng của các hệ thống điều khiển tại nhà máy Đạm Cà Mau bao gồm Hệ thống điều khiển phân tán, ESD, hệ thống điều khiển Turbine và máy nén, hệ thống MPS/MMS, hệ thống đóng bao xuất hàng",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Nắm được chức năng của các hệ thống điều khiển tại nhà máy Đạm Cà Mau bao gồm Hệ thống điều khiển phân tán, ESD, hệ thống điều khiển Turbine và máy nén, hệ thống MPS/MMS, hệ thống đóng bao xuất hàng",
+          "requirements_text": "- Nắm tổng quan Hệ thống điều khiển tại NM ĐCM: chức năng và vai trò của các hệ thống\n- Sự kết nối giữa các hệ thống, phương thức kết nối."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Tổng quan Thiết bị đo lường và van điều khiển nhà máy Đạm Cà Mau",
+          "stt": 13,
+          "nlcm_code": "ĐK_NLCM_018",
+          "competency_detail": "Kiến thức về thiết bị đo lường và van điều khiển tại nhà máy Đạm Cà Mau",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức về thiết bị đo lường và van điều khiển tại nhà máy Đạm Cà Mau",
+          "requirements_text": "- Biết được các thiết bị đo: Mức, áp, lưu lượng, nhiệt độ, đầu dò độ rung đang áp dụng tại NM ĐCM.\n- Biết được các loại van điều khiển đang được sử dụng tại NM ĐCM"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Kiến thức tổng quan về biện pháp phòng nổ (Ex protection)",
+          "stt": 14,
+          "nlcm_code": "ĐK_NLCM_019",
+          "competency_detail": "Kiến thức về vùng nguy hiểm",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức về vùng nguy hiểm",
+          "requirements_text": "- Khái niệm vùng nguy hiểm theo ATEX/IECEx, phân vùng nguy hiểm trong NM ĐCM.\n- Hiểu nguyên lý cháy nổ (tam giác cháy)"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Kiến thức tổng quan về biện pháp phòng nổ (Ex protection)",
+          "stt": 15,
+          "nlcm_code": "ĐK_NLCM_020",
+          "competency_detail": "Kiến thức về ký hiệu phòng nổ trên thiết bị",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức về ký hiệu phòng nổ trên thiết bị",
+          "requirements_text": "- Các phương pháp phòng nổ tại nhà máy Đạm Cà Mau\n- Sử dụng công cụ/tài liệu để đọc được Ex marking trên thiết bị"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Trí tuệ nhân tạo (AI)",
+          "stt": 16,
+          "nlcm_code": "ĐK_NLCM_024",
+          "competency_detail": "Kiến thức và kỹ năng liên về trí tuệ nhân tạo (AI)",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng liên về trí tuệ nhân tạo (AI)",
+          "requirements_text": "Kiến thức\n- Nắm được nguyên tắc hoạt động cơ bản của các công cụ AI hỗ trợ xử lý thông tin, phân tích dữ liệu và tạo nội dung.\n- Hiểu các giới hạn và rủi ro khi sử dụng AI, bao gồm độ chính xác thông tin và bảo mật dữ liệu.\n- Nhận biết các ứng dụng AI phổ biến trong công việc văn phòng và kỹ thuật như hỗ trợ viết báo cáo, phân tích dữ liệu, tra cứu tài liệu kỹ thuật.\nKỹ năng:\n- Sử dụng các công cụ AI để hỗ trợ tìm kiếm, tổng hợp và phân tích thông tin phục vụ công việc.\n- Ứng dụng AI trong soạn thảo tài liệu kỹ thuật, báo cáo và trình bày nội dung.\n- Biết đặt câu hỏi (prompt) rõ ràng để khai thác hiệu quả thông tin từ công cụ AI.\n- Kiểm tra, đánh giá và xác minh lại kết quả do AI cung cấp trước khi áp dụng vào thực tế.\n- Kết hợp AI với các công cụ làm việc khác (Excel, tài liệu kỹ thuật, hệ thống quản lý dữ liệu) để nâng cao hiệu quả công việc."
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Thiết bị đo nhiệt độ",
+          "stt": 17,
+          "nlcm_code": "ĐK_NLCM_044",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị đo nhiệt độ",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về thiết bị đo nhiệt độ",
+          "requirements_text": "Kiến thức:\n-  Các phương pháp đo nhiệt độ tại NM ĐCM và nguyên lý làm việc của từng phương pháp\n- Các nguyên tắc cơ bản lắp đặt thiết bị theo tiêu chuẩn ngành/tiêu chuẩn tại NM ĐCM\n- Nguyên lý làm việc/Chức năng của các phụ kiện: thermowell, Extension Cable.\n- Hiểu các thông số cơ bản khi cấu hình thiết bị: Damping, low cut, transfer function, display function.\nKỹ năng: \n- Lắp đặt thiết bị\n- Hiệu chuẩn thiết bị"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Thiết bị đo áp suất",
+          "stt": 18,
+          "nlcm_code": "ĐK_NLCM_045",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị đo áp suất",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về thiết bị đo áp suất",
+          "requirements_text": "Kiến thức:\n-  Các phương pháp đo áp suất tại NM ĐCM và nguyên lý làm việc của từng phương pháp\n- Các nguyên tắc cơ bản lắp đặt thiết bị theo tiêu chuẩn ngành/tiêu chuẩn tại NM ĐCM\n- Nguyên lý làm việc/Chức năng của các phụ kiện: manifold, bình ngưng.\n- Hiểu các thông số cơ bản khi cấu hình thiết bị: Damping, low cut, transfer function, display function.\nKỹ năng: \n- Đọc hiểu bản vẽ Hook up\n- Lắp đặt thiết bị\n- Hiệu chuẩn thiết bị"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Thiết bị đo mức theo nguyên lý chênh áp",
+          "stt": 19,
+          "nlcm_code": "ĐK_NLCM_046",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị đo mức theo nguyên lý chênh áp",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về thiết bị đo mức theo nguyên lý chênh áp",
+          "requirements_text": "Kiến thức:\n-  Các phương pháp đo mức tại NM ĐCM và nguyên lý làm việc của từng phương pháp\n- Các nguyên tắc cơ bản lắp đặt thiết bị theo tiêu chuẩn ngành/tiêu chuẩn tại NM ĐCM\n- Nguyên lý làm việc/Chức năng của các phụ kiện: manifold, bình ngưng.\n- Hiểu các thông số cơ bản khi cấu hình thiết bị: Damping, low cut, transfer function, display function.\nKỹ năng: \n- Đọc hiểu bản vẽ Hook up\n- Lắp đặt thiết bị\n- Hiệu chuẩn thiết bị"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Thiết bị đo lưu lượng theo nguyên lý chênh áp",
+          "stt": 20,
+          "nlcm_code": "ĐK_NLCM_047",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị đo lưu lượng theo nguyên lý chênh áp",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về thiết bị đo lưu lượng theo nguyên lý chênh áp",
+          "requirements_text": "Kiến thức:\n-  Các phương pháp đo lưu lượng tại NM ĐCM và nguyên lý làm việc của từng phương pháp\n- Các nguyên tắc cơ bản lắp đặt thiết bị theo tiêu chuẩn ngành/tiêu chuẩn tại NM ĐCM\n- Nguyên lý làm việc/Chức năng của các phụ kiện: manifold, bình ngưng.\n- Hiểu các thông số cơ bản khi cấu hình thiết bị: Damping, low cut, transfer function, display function.\n- Phương pháp bù áp, bù nhiệt  cơ bản tại NM ĐCM\nKỹ năng: \n- Đọc hiểu bản vẽ Hook up\n- Lắp đặt thiết bị\n- Hiệu chuẩn thiết bị"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Thiết bị đo giám sát máy động",
+          "stt": 21,
+          "nlcm_code": "ĐK_NLCM_048",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị đo giám sát máy động",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về thiết bị đo giám sát máy động",
+          "requirements_text": "Kiến thức:\n-  Nguyên lý đo độ rung dọc trục/hướng tâm, rung vận tốc, gia tốc, keyphasor, tốc độ.\n- Các nguyên tắc cơ bản lắp đặt thiết bị theo tiêu chuẩn ngành/tiêu chuẩn tại NM ĐCM\n- Nắm được chức năng các phần tử: Đầu dò, Tranducer, extension cable.\n- Nắm được khái niệm, ý nghĩa của các đại lượng: Điện áp GAP, Thrust direction, tranducer orientation, Scale factor,  Alert, Danger, Latching/NonLatching, X–Y probe  và Orbit\n- Trình bày được đường truyền tín hiệu từ hiện trường đến hệ thống điều khiển\nKỹ năng: \n- Lắp đặt đấu nối thiết bị.\n- Hiệu chuẩn thiết bị: Panme, kit calib chuyên dụng"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Van điều khiển với cơ cấu chấp hành khí nén (Pneumatic actuator)",
+          "stt": 22,
+          "nlcm_code": "ĐK_NLCM_049",
+          "competency_detail": "Kiến thức và kỹ năng về van điều khiển với cơ cấu chấp hành khí nén (Pneumatic actuator)",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về van điều khiển với cơ cấu chấp hành khí nén  (Pneumatic actuator)",
+          "requirements_text": "Kiến thức:\n-  Phân loại và nguyên lý làm việc \n- Các nguyên tắc cơ bản lắp đặt thiết bị theo tiêu chuẩn ngành/tiêu chuẩn tại NM ĐCM\n- Nguyên lý làm việc/chức năng/ký hiệu của các phụ kiện: Positioner, solenoid, quick exhaust, trip valve, air relay, lockup  valve, booster, regulator, limit switch.\n- Đọc hiểu sơ đồ mạch điều khiển khí nén.\n- Nắm được khái niệm, ý nghĩa của các đại lượng: bench set, stroke, Fail Position, Cv (Flow Coefficient), đặc tính van, dead Band, Leakage Class.\nKỹ năng: \n- Lắp đặt thiết bị\n- Cân chỉnh thiết bị"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Thiết bị phân tích, quan trắc môi trường",
+          "stt": 23,
+          "nlcm_code": "ĐK_NLCM_050",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị phân tích, quan trắc môi trường",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về thiết bị phân tích, quan trắc môi trường",
+          "requirements_text": "Kiến thức:\n-  Phân loại và nguyên lý làm việc của các thiết bị phân tích tại NM ĐCM: Mass spectrometer, gas chromatograph.\n- Chức năng hệ thống lấy mẫu (Sample Conditioning System – SCS).\n- Các loại khí chuẩn thường dùng tại NM ĐCM và vai trò trong hệ thống phân tích.\nKỹ năng: \n- Lắp đặt/thay thế thiết bị/phụ kiện\n- Hiệu chuẩn thiết bị"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Thiết bị dò khí cháy nổ và khí độc",
+          "stt": 24,
+          "nlcm_code": "ĐK_NLCM_051",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị dò khí cháy nổ và khí độc",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về thiết bị dò khí cháy nổ và khí độc",
+          "requirements_text": "Kiến thức:\n-  Phân loại và nguyên lý làm việc của các thiết bị dò khí cháy nổ và khí độc tại NM ĐCM: Electrochemical, Catalytic bead, IR.\n- Ý nghĩa các đại lượng: %LEL vs %Vol, ppm, T90 response time.\n- Nắm được các logic kích hoạt Đèn, còi, MIMIC.\nKỹ năng: \n- Lắp đặt/thay thế thiết bị\n- Hiệu chuẩn thiết bị"
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "Thiết bị đóng bao",
+          "stt": 25,
+          "nlcm_code": "ĐK_NLCM_052",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị đóng bao",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 3,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về thiết bị đóng bao",
+          "requirements_text": "Kiến thức:\n-  Phân loại và nguyên lý làm việc hệ thống cân đóng bao, cân đối chứng, cân định lượng, máy in, hệ thống đếm bao.\n- Nguyên lý làm việc của các phần tử cảm biến và cơ cấu chấp hành: Sensor, encorder, load cell, các phần tử khí nén (Xylanh, tiết lưu, regulaor, van  phân phối).\n- Đọc hiểu sơ đồ mạch điện/điều khiển\nKỹ năng: \n- Lắp đặt/thay thế thiết bị/phụ kiện\n- Cân chỉnh thiết bị"
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "Thiết bị vận chuyển, xuất hàng, lưu kho, nhập liệu",
+          "stt": 26,
+          "nlcm_code": "ĐK_NLCM_053",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị vận chuyển, xuất hàng, lưu kho, nhập liệu",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 3,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về thiết bị vận chuyển, xuất hàng, lưu  kho, nhập liệu",
+          "requirements_text": "Kiến thức:\n-  Nguyên lý làm việc của các hệ thống băng tải, gầu tải, shiploader, robot và tripper car.\n- Nguyên lý làm việc/chức năng của các phần tử cảm biến và cơ cấu chấp hành: Sensor, encorder, các phần tử khí nén (Xylanh, tiết lưu, regulaor, van  phân phối), safety rope, Limit switch.\n- Đọc hiểu sơ đồ mạch điện/điều khiển\nKỹ năng: \n- Lắp đặt/thay thế thiết bị/phụ kiện\n- Cân chỉnh thiết bị"
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "Thiết bị đo mức không theo nguyên lý chênh áp",
+          "stt": 27,
+          "nlcm_code": "ĐK_NLCM_058",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị đo mức không theo nguyên lý chênh áp",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 3,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về Thiết bị đo mức không theo nguyên lý chênh áp",
+          "requirements_text": "Kiến thức:\n-  Các phương pháp đo mức không theo nguyên lý chênh áp tại NM ĐCM và nguyên lý làm việc của từng phương pháp\n- Các nguyên tắc cơ bản lắp đặt thiết bị theo tiêu chuẩn ngành/tiêu chuẩn tại NM ĐCM\nKỹ năng: \n- Lắp đặt thiết bị\n- Hiệu chuẩn thiết bị"
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "Thiết bị đo lưu lượng không theo nguyên lý chênh áp",
+          "stt": 28,
+          "nlcm_code": "ĐK_NLCM_059",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị đo lưu lượng không theo nguyên lý chênh áp",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức và kỹ năng về Thiết bị đo lưu lượng  không theo nguyên lý chênh áp",
+          "requirements_text": "Kiến thức:\n-  Các phương pháp đo lưu lượng không theo nguyên lý chênh áp tại NM ĐCM và nguyên lý làm việc của từng phương pháp\n- Các nguyên tắc cơ bản lắp đặt thiết bị theo tiêu chuẩn ngành/tiêu chuẩn tại NM ĐCM\nKỹ năng: \n- Lắp đặt thiết bị\n- Hiệu chuẩn thiết bị"
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "Lựa chọn thiết bị đo lường",
+          "stt": 29,
+          "nlcm_code": "ĐK_NLCM_060",
+          "competency_detail": "Kiến thức liên quan đến lựa chọn thiết bị đo lường",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 3,
+            "5": 3,
+            "6": 3,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức liên quan đến lựa chọn thiết bị đo lường",
+          "requirements_text": "- Hiểu đặc tính của môi chất công nghệ: Nhiệt độ, áp suất, ăn mòn, cặn, khí cháy nổ,...\n- Nguyên lý đo của thiết bị\n- Điều kiện lắp đặt: Vị trí, rung động, nhiệt độ, từ trường,...\n- Yêu cầu hệ thống điều khiển: Tương thích với hệ thống, dạng tín hiệu, nguồn cấp,...\n- Tiêu chuẩn và chứng chỉ: Phòng nổ, SIL,...\n- Độ tin cậy và bảo trì: vật tư dự phòng,.."
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "Van điều khiển với cơ cấu chấp hành motor (MOV)",
+          "stt": 30,
+          "nlcm_code": "ĐK_NLCM_061",
+          "competency_detail": "Kiến thức và kỹ năng về van điều khiển với cơ cấu chấp hành motor (MOV)",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 2,
+            "5": 2,
+            "6": 3,
+            "7": 3,
+            "8": 3
+          },
+          "definition": "Kiến thức và kỹ năng về van điều khiển với cơ cấu chấp hành motor (MOV)",
+          "requirements_text": "Kiến thức:\n-  Phân loại và nguyên lý làm việc của MOV tại NM ĐCM\n-  Hiểu cấu tạo, chức năng, đọc hiểu sơ đồ mạch điện/điều khiển: Mạch đảo chiều quay motor, Contactor – relay – overload,  Heater, Local/Remote selector, gearbox.\n- Nắm ý nghĩa các thuật ngữ: Torque switch vs Limit switch.\nKỹ năng: \n- Lắp đặt/thay thế thiết bị/phụ kiện\n- Cân chỉnh thiết bị: Set limit/torque"
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "Van điều khiển với cơ cấu chấp hành thủy lực",
+          "stt": 31,
+          "nlcm_code": "ĐK_NLCM_062",
+          "competency_detail": "Kiến thức và kỹ năng về van điều khiển với cơ cấu chấp hành thủy lực",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức và kỹ năng về van điều khiển với cơ cấu chấp hành thủy lực",
+          "requirements_text": "Kiến thức:\n-  Phân loại và nguyên lý làm việc của van điều khiển với cơ cấu chấp hành thủy lực  tại NM ĐCM\n- Đặc tính thủy lực\n-  Hiểu cấu tạo, chức năng các phần tử, đọc hiểu sơ đồ mạch điều khiển các van Governor turbine KT04421, KT04431, KT04441 và KT06101.\nKỹ năng: \n- Lắp đặt/thay thế thiết bị/phụ kiện\n- Cân chỉnh van Governor, PCV."
+        },
+        {
+          "category": "Nghiệp vụ hành chính",
+          "competency_name": "Lựa chọn thiết bị van điều khiển",
+          "stt": 32,
+          "nlcm_code": "ĐK_NLCM_063",
+          "competency_detail": "Kiến thức liên quan đến lựa chọn thiết bị van điều khiển",
+          "level_requirements": {
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0,
+            "5": 0,
+            "6": 0,
+            "7": 0,
+            "8": 0
+          },
+          "definition": "Kiến thức liên quan đến lựa chọn thiết bị van điều khiển",
+          "requirements_text": "- Hiểu đặc tính của môi chất công nghệ: Nhiệt độ, áp suất, lưu lượng, ăn mòn, cặn, khí cháy nổ,...\n- Đặc tính điều khiển của van (Valve characteristic)\n- Loại actuator và phụ kiện\n- Điều kiện lắp đặt: Vị trí, rung động, nhiệt độ, từ trường,...\n- Yêu cầu hệ thống điều khiển: Tương thích với hệ thống, dạng tín hiệu, nguồn cấp,...\n- Tiêu chuẩn và chứng chỉ: Phòng nổ, SIL,..\n- Độ tin cậy và bảo trì: vật tư dự phòng,.."
+        },
+        {
+          "category": "Nghiệp vụ hành chính",
+          "competency_name": "Quản lý hồ sơ, tài liệu/bản vẽ kỹ thuật",
+          "stt": 33,
+          "nlcm_code": "ĐK_NLCM_064",
+          "competency_detail": "Quản lý hồ sơ, tài liệu/bản vẽ kỹ thuật",
+          "level_requirements": {
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0,
+            "5": 0,
+            "6": 0,
+            "7": 0,
+            "8": 0
+          },
+          "definition": "Quản lý hồ sơ, tài liệu/bản vẽ kỹ thuật",
+          "requirements_text": null
+        },
+        {
+          "category": "Nghiệp vụ hành chính",
+          "competency_name": "Quản lý sử dụng vật tư tiêu hao, thiết bị, CCDC",
+          "stt": 34,
+          "nlcm_code": "ĐK_NLCM_065",
+          "competency_detail": "Quản lý sử dụng vật tư tiêu hao, thiết bị, CCDC",
+          "level_requirements": {
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0,
+            "5": 0,
+            "6": 0,
+            "7": 0,
+            "8": 0
+          },
+          "definition": "Quản lý sử dụng vật tư tiêu hao, thiết bị, CCDC",
+          "requirements_text": null
+        }
+      ]
+    },
+    {
+      "source_job_id": "knl-dk-13",
+      "code": "KNL_ĐK_13",
+      "title": "Kỹ thuật viên BDSC thiết bị đo lường",
+      "short_name": "KTV BDSC thiết bị đo lường",
+      "description": "Kỹ thuật viên phụ trách bảo dưỡng sửa chữa thiết bị đo lường tại Nhà máy Đạm Cà Mau.",
+      "icon": "📏",
+      "color": "#7c3aed",
+      "source_totals": [
+        26,
+        58,
+        62,
+        65,
+        68,
+        70,
+        73,
+        75
+      ],
+      "items": [
+        {
+          "category": "Cơ bản",
+          "competency_name": "HSE cương vị",
+          "stt": 1,
+          "nlcm_code": "ĐK_NLCM_001",
+          "competency_detail": "Kiến thức về an toàn khi làm việc với các thiết bị đo lường tự động hóa",
+          "level_requirements": {
+            "1": 1,
+            "2": 4,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức về an toàn khi làm việc với các thiết bị đo lường tự động hóa",
+          "requirements_text": "- Nội quy an toàn công ty\n- Sử dụng PPE phù hợp\n- Quy trình làm việc an toàn tại khu vực nguy hiểm\n- Nhận diện mối nguy hiện hữu\n- An toàn điện"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Quy trình làm việc",
+          "stt": 2,
+          "nlcm_code": "ĐK_NLCM_002",
+          "competency_detail": "Kiến thức về quy trình làm việc",
+          "level_requirements": {
+            "1": 1,
+            "2": 4,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức về quy trình làm việc",
+          "requirements_text": "- Quy trình BDSC (BDĐK & SCĐX)\n- Quy trình cấp phép làm việc"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Nhận diện mối nguy và đánh giá rủi ro",
+          "stt": 3,
+          "nlcm_code": "ĐK_NLCM_003",
+          "competency_detail": "Nhận diện mối nguy và đánh giá rủi ro",
+          "level_requirements": {
+            "1": 1,
+            "2": 4,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Nhận diện mối nguy và đánh giá rủi ro",
+          "requirements_text": "Phương pháp nhận diện mối nguy, đánh giá rủi ro và biện pháp giảm thiểu"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Nền tảng chuyên ngành đo lường điều khiển",
+          "stt": 4,
+          "nlcm_code": "ĐK_NLCM_004",
+          "competency_detail": "Kiến thức Điện - Điện tử cơ bản",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức Điện - Điện tử cơ bản",
+          "requirements_text": "- Kiến thức Điện cơ bản\n+ Hiểu các đại lượng: Điện áp, dòng điện, điện trở.\n+ Phân biệt AC/DC\n+ Các khí cụ điện: Relay, khởi động từ, Rờ le nhiệt, Timer cơ bản.\n- Kiến thức điện tử cơ bản: \n+ Nắm được chức năng, nguyên lý hoạt động của các linh kiện cơ bản như điện trở, tụ điện, cuộn cảm, transistor.\n+ Đại số Boole, hiểu nguyên lý hoạt động của các cổng logic\n- Kiến thức về tín hiệu:\n+ Phân biệt 2 loại tín hiệu Analog và Digital và mục đích sử dụng 0-10V, 0-5V, 4-20mA\n+ Phân biệt tín hiệu Sink, Source, tín hiệu tín hiệu NO/NC"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "P&ID",
+          "stt": 5,
+          "nlcm_code": "ĐK_NLCM_010",
+          "competency_detail": "Kiến thức và kỹ năng về P&ID",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức và kỹ năng về P&ID",
+          "requirements_text": "- Dựa vào  P&ID có thể nắm được thông số áp suất, nhiệt độ, môi chất trong đường ống.\n- Đọc hiểu các ký hiệu trên P&ID (Phân loại tín hiệu, ký hiệu thiết bị đo, phương pháp đo, khối chức năng, điều khiển,...).\n- Dựa trên P&ID có thể trình bày được chức năng của thiết bị đo, van điều khiển, control loop, Interlock, thiết bị kết nối với hệ thống nào.\nKỹ năng: \nPhát triển và triển khai bản vẽ liên quan đến đo lường điều khiển"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "IO wiring, Instrument junction box và cable schedule và Interlock",
+          "stt": 6,
+          "nlcm_code": "ĐK_NLCM_011",
+          "competency_detail": "Kiến thức về IO wiring, Instrument junction box và cable schedule, Interlock",
+          "level_requirements": {
+            "1": 1,
+            "2": 4,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức về IO wiring, Instrument juction box và cable schedule, Interlock",
+          "requirements_text": "Đọc hiểu được các bản vẽ IO wiring,  Instrument juction box và cable schedule\nĐọc hiểu các Interlock cơ bản"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Công cụ, Dụng cụ cầm tay cho chuyên môn thiết bị Đo lường",
+          "stt": 7,
+          "nlcm_code": "ĐK_NLCM_012",
+          "competency_detail": "Kỹ năng sử dụng Công cụ, Dụng cụ cầm tay cho chuyên môn thiết bị Đo lường",
+          "level_requirements": {
+            "1": 1,
+            "2": 4,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kỹ năng sử dụng Công cụ, Dụng cụ cầm tay cho chuyên môn thiết bị Đo lường",
+          "requirements_text": "Kiến thức:\nNắm và sử dụng đúng chức năng CCDC\nKỹ năng:\n- Sử dụng công cụ dụng cụ thuộc phạm vi Đội TBĐL\n- Đấu nối cable gland."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Vật lý cơ bản",
+          "stt": 8,
+          "nlcm_code": "ĐK_NLCM_014",
+          "competency_detail": "Kiến thức về vật lý và đại lượng đo lường cơ bản",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức về vật lý và đại lượng đo lường cơ bản",
+          "requirements_text": "- Định nghĩa áp suất, lưu lượng, nhiệt độ, độ rung.\n- Phân biệt áp suất tương đối, áp suất tuyệt đối\n- Định nghĩa Cột áp thủy tỉnh\n- Định nghĩa Zero value, calibration range, Span và Instrument range\n- Định nghĩa Độ chính xác (Accuracy), độ lặp lại (Precision), độ phân giải (Resolution), tuyến tính (Linearity), độ trễ (Hysteresis)\n- Các định luật: Ohm, Kirchhoff,  Faraday, Bernoulli, Seebeck, Pascal.\n- Hiện tượng vật lý: Ngưng tụ (condensation), bay hơi."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Lựa chọn fitting, tubing",
+          "stt": 9,
+          "nlcm_code": "ĐK_NLCM_015",
+          "competency_detail": "Kiến thức và kỹ năng liên quan đến lựa chọn fitting và tubing",
+          "level_requirements": {
+            "1": 1,
+            "2": 3,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng liên quan đến lựa chọn fitting và tubing",
+          "requirements_text": "Kiến thức:\n- Nắm vững các loại fitting và tubing tại NM ĐCM.\n- Tuân thủ các nguyên tắc, lựa chọn đúng kích thước tubing và fitting. (không sử dụng lẫn ferrule giữa các hãng khác nhau)\nKỹ năng:\n- Lắp đặt và uống ống Impluse line"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Công nghệ sản xuất",
+          "stt": 10,
+          "nlcm_code": "ĐK_NLCM_016",
+          "competency_detail": "Kiến thức cơ bản về quy trình công nghệ sản xuất tại Nhà máy Đạm Cà Mau từ khí đầu vào đến tạo hạt, đóng bao",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức cơ bản về quy trình công nghệ sản xuất tại Nhà máy Đạm Cà Mau từ khí đầu vào đến tạo hạt, đóng bao.",
+          "requirements_text": "- Nắm tổng quan các phân Xưởng trong NM ĐCM: chức năng và vai trò.\n- Lưu đồ công nghệ về phân cụm: chức năng và vai trò."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Tổng quan Hệ thống điều khiển nhà máy Đạm Cà Mau",
+          "stt": 11,
+          "nlcm_code": "ĐK_NLCM_017",
+          "competency_detail": "Nắm được chức năng của các hệ thống điều khiển tại nhà máy Đạm Cà Mau bao gồm Hệ thống điều khiển phân tán, ESD, hệ thống điều khiển Turbine và máy nén, hệ thống MPS/MMS, hệ thống đóng bao xuất hàng",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Nắm được chức năng của các hệ thống điều khiển tại nhà máy Đạm Cà Mau bao gồm Hệ thống điều khiển phân tán, ESD, hệ thống điều khiển Turbine và máy nén, hệ thống MPS/MMS, hệ thống đóng bao xuất hàng",
+          "requirements_text": "- Nắm tổng quan Hệ thống điều khiển tại NM ĐCM: chức năng và vai trò của các hệ thống\n- Sự kết nối giữa các hệ thống, phương thức kết nối."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Tổng quan Thiết bị đo lường và van điều khiển nhà máy Đạm Cà Mau",
+          "stt": 12,
+          "nlcm_code": "ĐK_NLCM_018",
+          "competency_detail": "Kiến thức về thiết bị đo lường và van điều khiển tại nhà máy Đạm Cà Mau",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức về thiết bị đo lường và van điều khiển tại nhà máy Đạm Cà Mau",
+          "requirements_text": "- Biết được các thiết bị đo: Mức, áp, lưu lượng, nhiệt độ, đầu dò độ rung đang áp dụng tại NM ĐCM.\n- Biết được các loại van điều khiển đang được sử dụng tại NM ĐCM"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Kiến thức tổng quan về biện pháp phòng nổ (Ex protection)",
+          "stt": 13,
+          "nlcm_code": "ĐK_NLCM_019",
+          "competency_detail": "Kiến thức về vùng nguy hiểm",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức về vùng nguy hiểm",
+          "requirements_text": "- Khái niệm vùng nguy hiểm theo ATEX/IECEx, phân vùng nguy hiểm trong NM ĐCM.\n- Hiểu nguyên lý cháy nổ (tam giác cháy)"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Kiến thức tổng quan về biện pháp phòng nổ (Ex protection)",
+          "stt": 14,
+          "nlcm_code": "ĐK_NLCM_020",
+          "competency_detail": "Kiến thức về ký hiệu phòng nổ trên thiết bị",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức về ký hiệu phòng nổ trên thiết bị",
+          "requirements_text": "- Các phương pháp phòng nổ tại nhà máy Đạm Cà Mau\n- Sử dụng công cụ/tài liệu để đọc được Ex marking trên thiết bị"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Trí tuệ nhân tạo (AI)",
+          "stt": 15,
+          "nlcm_code": "ĐK_NLCM_024",
+          "competency_detail": "Kiến thức và kỹ năng liên về trí tuệ nhân tạo (AI)",
+          "level_requirements": {
+            "1": 2,
+            "2": 4,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng liên về trí tuệ nhân tạo (AI)",
+          "requirements_text": "Kiến thức\n- Nắm được nguyên tắc hoạt động cơ bản của các công cụ AI hỗ trợ xử lý thông tin, phân tích dữ liệu và tạo nội dung.\n- Hiểu các giới hạn và rủi ro khi sử dụng AI, bao gồm độ chính xác thông tin và bảo mật dữ liệu.\n- Nhận biết các ứng dụng AI phổ biến trong công việc văn phòng và kỹ thuật như hỗ trợ viết báo cáo, phân tích dữ liệu, tra cứu tài liệu kỹ thuật.\nKỹ năng:\n- Sử dụng các công cụ AI để hỗ trợ tìm kiếm, tổng hợp và phân tích thông tin phục vụ công việc.\n- Ứng dụng AI trong soạn thảo tài liệu kỹ thuật, báo cáo và trình bày nội dung.\n- Biết đặt câu hỏi (prompt) rõ ràng để khai thác hiệu quả thông tin từ công cụ AI.\n- Kiểm tra, đánh giá và xác minh lại kết quả do AI cung cấp trước khi áp dụng vào thực tế.\n- Kết hợp AI với các công cụ làm việc khác (Excel, tài liệu kỹ thuật, hệ thống quản lý dữ liệu) để nâng cao hiệu quả công việc."
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Thiết bị đo nhiệt độ",
+          "stt": 16,
+          "nlcm_code": "ĐK_NLCM_044",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị đo nhiệt độ",
+          "level_requirements": {
+            "1": 1,
+            "2": 4,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về thiết bị đo nhiệt độ",
+          "requirements_text": "Kiến thức:\n-  Các phương pháp đo nhiệt độ tại NM ĐCM và nguyên lý làm việc của từng phương pháp\n- Các nguyên tắc cơ bản lắp đặt thiết bị theo tiêu chuẩn ngành/tiêu chuẩn tại NM ĐCM\n- Nguyên lý làm việc/Chức năng của các phụ kiện: thermowell, Extension Cable.\n- Hiểu các thông số cơ bản khi cấu hình thiết bị: Damping, low cut, transfer function, display function.\nKỹ năng: \n- Lắp đặt thiết bị\n- Hiệu chuẩn thiết bị"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Thiết bị đo áp suất",
+          "stt": 17,
+          "nlcm_code": "ĐK_NLCM_045",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị đo áp suất",
+          "level_requirements": {
+            "1": 1,
+            "2": 3,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về thiết bị đo áp suất",
+          "requirements_text": "Kiến thức:\n-  Các phương pháp đo áp suất tại NM ĐCM và nguyên lý làm việc của từng phương pháp\n- Các nguyên tắc cơ bản lắp đặt thiết bị theo tiêu chuẩn ngành/tiêu chuẩn tại NM ĐCM\n- Nguyên lý làm việc/Chức năng của các phụ kiện: manifold, bình ngưng.\n- Hiểu các thông số cơ bản khi cấu hình thiết bị: Damping, low cut, transfer function, display function.\nKỹ năng: \n- Đọc hiểu bản vẽ Hook up\n- Lắp đặt thiết bị\n- Hiệu chuẩn thiết bị"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Thiết bị đo mức theo nguyên lý chênh áp",
+          "stt": 18,
+          "nlcm_code": "ĐK_NLCM_046",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị đo mức theo nguyên lý chênh áp",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về thiết bị đo mức theo nguyên lý chênh áp",
+          "requirements_text": "Kiến thức:\n-  Các phương pháp đo mức tại NM ĐCM và nguyên lý làm việc của từng phương pháp\n- Các nguyên tắc cơ bản lắp đặt thiết bị theo tiêu chuẩn ngành/tiêu chuẩn tại NM ĐCM\n- Nguyên lý làm việc/Chức năng của các phụ kiện: manifold, bình ngưng.\n- Hiểu các thông số cơ bản khi cấu hình thiết bị: Damping, low cut, transfer function, display function.\nKỹ năng: \n- Đọc hiểu bản vẽ Hook up\n- Lắp đặt thiết bị\n- Hiệu chuẩn thiết bị"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Thiết bị đo lưu lượng theo nguyên lý chênh áp",
+          "stt": 19,
+          "nlcm_code": "ĐK_NLCM_047",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị đo lưu lượng theo nguyên lý chênh áp",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 3,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về thiết bị đo lưu lượng theo nguyên lý chênh áp",
+          "requirements_text": "Kiến thức:\n-  Các phương pháp đo lưu lượng tại NM ĐCM và nguyên lý làm việc của từng phương pháp\n- Các nguyên tắc cơ bản lắp đặt thiết bị theo tiêu chuẩn ngành/tiêu chuẩn tại NM ĐCM\n- Nguyên lý làm việc/Chức năng của các phụ kiện: manifold, bình ngưng.\n- Hiểu các thông số cơ bản khi cấu hình thiết bị: Damping, low cut, transfer function, display function.\n- Phương pháp bù áp, bù nhiệt  cơ bản tại NM ĐCM\nKỹ năng: \n- Đọc hiểu bản vẽ Hook up\n- Lắp đặt thiết bị\n- Hiệu chuẩn thiết bị"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Thiết bị đo giám sát máy động",
+          "stt": 20,
+          "nlcm_code": "ĐK_NLCM_048",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị đo giám sát máy động",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1,
+            "5": 3,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về thiết bị đo giám sát máy động",
+          "requirements_text": "Kiến thức:\n-  Nguyên lý đo độ rung dọc trục/hướng tâm, rung vận tốc, gia tốc, keyphasor, tốc độ.\n- Các nguyên tắc cơ bản lắp đặt thiết bị theo tiêu chuẩn ngành/tiêu chuẩn tại NM ĐCM\n- Nắm được chức năng các phần tử: Đầu dò, Tranducer, extension cable.\n- Nắm được khái niệm, ý nghĩa của các đại lượng: Điện áp GAP, Thrust direction, tranducer orientation, Scale factor,  Alert, Danger, Latching/NonLatching, X–Y probe  và Orbit\n- Trình bày được đường truyền tín hiệu từ hiện trường đến hệ thống điều khiển\nKỹ năng: \n- Lắp đặt đấu nối thiết bị.\n- Hiệu chuẩn thiết bị: Panme, kit calib chuyên dụng"
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "Thiết bị đo mức không theo nguyên lý chênh áp",
+          "stt": 21,
+          "nlcm_code": "ĐK_NLCM_058",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị đo mức không theo nguyên lý chênh áp",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 3,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về Thiết bị đo mức không theo nguyên lý chênh áp",
+          "requirements_text": "Kiến thức:\n-  Các phương pháp đo mức không theo nguyên lý chênh áp tại NM ĐCM và nguyên lý làm việc của từng phương pháp\n- Các nguyên tắc cơ bản lắp đặt thiết bị theo tiêu chuẩn ngành/tiêu chuẩn tại NM ĐCM\nKỹ năng: \n- Lắp đặt thiết bị\n- Hiệu chuẩn thiết bị"
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "Thiết bị đo lưu lượng không theo nguyên lý chênh áp",
+          "stt": 22,
+          "nlcm_code": "ĐK_NLCM_059",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị đo lưu lượng không theo nguyên lý chênh áp",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 3,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về Thiết bị đo lưu lượng  không theo nguyên lý chênh áp",
+          "requirements_text": "Kiến thức:\n-  Các phương pháp đo lưu lượng không theo nguyên lý chênh áp tại NM ĐCM và nguyên lý làm việc của từng phương pháp\n- Các nguyên tắc cơ bản lắp đặt thiết bị theo tiêu chuẩn ngành/tiêu chuẩn tại NM ĐCM\nKỹ năng: \n- Lắp đặt thiết bị\n- Hiệu chuẩn thiết bị"
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "Lựa chọn thiết bị đo lường",
+          "stt": 23,
+          "nlcm_code": "ĐK_NLCM_060",
+          "competency_detail": "Kiến thức liên quan đến lựa chọn thiết bị đo lường",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1,
+            "5": 1,
+            "6": 1,
+            "7": 2,
+            "8": 3
+          },
+          "definition": "Kiến thức liên quan đến lựa chọn thiết bị đo lường",
+          "requirements_text": "- Hiểu đặc tính của môi chất công nghệ: Nhiệt độ, áp suất, ăn mòn, cặn, khí cháy nổ,...\n- Nguyên lý đo của thiết bị\n- Điều kiện lắp đặt: Vị trí, rung động, nhiệt độ, từ trường,...\n- Yêu cầu hệ thống điều khiển: Tương thích với hệ thống, dạng tín hiệu, nguồn cấp,...\n- Tiêu chuẩn và chứng chỉ: Phòng nổ, SIL,...\n- Độ tin cậy và bảo trì: vật tư dự phòng,.."
+        },
+        {
+          "category": "Nghiệp vụ hành chính",
+          "competency_name": "Quản lý hồ sơ, tài liệu/bản vẽ kỹ thuật",
+          "stt": 24,
+          "nlcm_code": "ĐK_NLCM_064",
+          "competency_detail": "Quản lý hồ sơ, tài liệu/bản vẽ kỹ thuật",
+          "level_requirements": {
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0,
+            "5": 0,
+            "6": 0,
+            "7": 0,
+            "8": 0
+          },
+          "definition": "Quản lý hồ sơ, tài liệu/bản vẽ kỹ thuật",
+          "requirements_text": null
+        },
+        {
+          "category": "Nghiệp vụ hành chính",
+          "competency_name": "Quản lý sử dụng vật tư tiêu hao, thiết bị, CCDC",
+          "stt": 25,
+          "nlcm_code": "ĐK_NLCM_065",
+          "competency_detail": "Quản lý sử dụng vật tư tiêu hao, thiết bị, CCDC",
+          "level_requirements": {
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0,
+            "5": 0,
+            "6": 0,
+            "7": 0,
+            "8": 0
+          },
+          "definition": "Quản lý sử dụng vật tư tiêu hao, thiết bị, CCDC",
+          "requirements_text": null
+        },
+        {
+          "category": "Nghiệp vụ hành chính",
+          "competency_name": "Nghiệp vụ SAP",
+          "stt": 26,
+          "nlcm_code": "ĐK_NLCM_066",
+          "competency_detail": "Kỹ năng sử dụng SAP",
+          "level_requirements": {
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0,
+            "5": 0,
+            "6": 0,
+            "7": 0,
+            "8": 0
+          },
+          "definition": "Kỹ năng sử dụng SAP",
+          "requirements_text": null
+        }
+      ]
+    },
+    {
+      "source_job_id": "knl-dk-14",
+      "code": "KNL_ĐK_14",
+      "title": "Kỹ thuật viên BDSC thiết bị hệ thống điều khiển",
+      "short_name": "KTV BDSC thiết bị HTĐK",
+      "description": "Kỹ thuật viên phụ trách bảo dưỡng sửa chữa thiết bị hệ thống điều khiển tại Nhà máy Đạm Cà Mau.",
+      "icon": "⚙️",
+      "color": "#b45309",
+      "source_totals": [
+        40,
+        68,
+        75,
+        85,
+        91,
+        97,
+        102,
+        104
+      ],
+      "items": [
+        {
+          "category": "Cơ bản",
+          "competency_name": "HSE cương vị",
+          "stt": 1,
+          "nlcm_code": "ĐK_NLCM_001",
+          "competency_detail": "Kiến thức về an toàn khi làm việc với các thiết bị đo lường tự động hóa",
+          "level_requirements": {
+            "1": 1,
+            "2": 4,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức về an toàn khi làm việc với các thiết bị đo lường tự động hóa",
+          "requirements_text": "- Nội quy an toàn công ty\n- Sử dụng PPE phù hợp\n- Quy trình làm việc an toàn tại khu vực nguy hiểm\n- Nhận diện mối nguy hiện hữu\n- An toàn điện"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Quy trình làm việc",
+          "stt": 2,
+          "nlcm_code": "ĐK_NLCM_002",
+          "competency_detail": "Kiến thức về quy trình làm việc",
+          "level_requirements": {
+            "1": 1,
+            "2": 4,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức về quy trình làm việc",
+          "requirements_text": "- Quy trình BDSC (BDĐK & SCĐX)\n- Quy trình cấp phép làm việc"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Nhận diện mối nguy và đánh giá rủi ro",
+          "stt": 3,
+          "nlcm_code": "ĐK_NLCM_003",
+          "competency_detail": "Nhận diện mối nguy và đánh giá rủi ro",
+          "level_requirements": {
+            "1": 1,
+            "2": 4,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Nhận diện mối nguy và đánh giá rủi ro",
+          "requirements_text": "Phương pháp nhận diện mối nguy, đánh giá rủi ro và biện pháp giảm thiểu"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Nền tảng chuyên ngành đo lường điều khiển",
+          "stt": 4,
+          "nlcm_code": "ĐK_NLCM_004",
+          "competency_detail": "Kiến thức Điện - Điện tử cơ bản",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức Điện - Điện tử cơ bản",
+          "requirements_text": "- Kiến thức Điện cơ bản\n+ Hiểu các đại lượng: Điện áp, dòng điện, điện trở.\n+ Phân biệt AC/DC\n+ Các khí cụ điện: Relay, khởi động từ, Rờ le nhiệt, Timer cơ bản.\n- Kiến thức điện tử cơ bản: \n+ Nắm được chức năng, nguyên lý hoạt động của các linh kiện cơ bản như điện trở, tụ điện, cuộn cảm, transistor.\n+ Đại số Boole, hiểu nguyên lý hoạt động của các cổng logic\n- Kiến thức về tín hiệu:\n+ Phân biệt 2 loại tín hiệu Analog và Digital và mục đích sử dụng 0-10V, 0-5V, 4-20mA\n+ Phân biệt tín hiệu Sink, Source, tín hiệu tín hiệu NO/NC"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Nền tảng chuyên ngành đo lường điều khiển",
+          "stt": 5,
+          "nlcm_code": "ĐK_NLCM_005",
+          "competency_detail": "Kiến thức và kỹ năng cơ bản về truyền thông công nghiệp",
+          "level_requirements": {
+            "1": 2,
+            "2": 4,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng cơ bản về truyền thông công nghiệp",
+          "requirements_text": "Kiến thức:\n- Kiến thức nền tảng về truyền thông\n+ Khái niệm: Master – Slave / Client – Server\n+ Tham số truyền thông: Baud rate, Bandwidth\n- Các chuẩn mạng công nghiệp:\n+ Ethernet: PROFINET, Modbus TCP\n+ Fieldbus: Profibus DP, Modbus RTU, Foundation Fieldbus, HART\n+ Serial: RS232, RS485\n- Địa chỉ mạng:\n+ Địa chỉ IP: IPv4, Subnet mask, Gateway\n+ Mac address\n- Kiến thức phần cứng mạng công nghiệp\n+ Thiết bị mạng: Switch, router, converter.\n+ Cáp & vật tư: Ethernet (CAT5e, CAT6), Cáp quang, Đầu RJ45, ODF, FOC.\n- Hiểu cơ bản cơ chế trao đổi dữ liệu: OPC, DDE.\nKỹ năng:\n- Thi công / đấu nối đầu RJ45, DP\n- Hàn cáp quang, kiểm tra suy hao & điểm đứt cáp quang\n- Lắp đặt/Cấu hình thiết bị mạng (Switch, access point)\n- Cấu hình đọc dữ liệu từ các giao thức RS232/RS485 TCP/IP."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Nền tảng chuyên ngành đo lường điều khiển",
+          "stt": 6,
+          "nlcm_code": "ĐK_NLCM_006",
+          "competency_detail": "Kiến thức về điều khiển",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức về điều khiển",
+          "requirements_text": "- Khái niệm: Open loop, Closse loop, các thành phần vòng điều khiển, SP, PV, MV.\n- Đặc tính cơ bản ảnh hưởng đến đáp ứng của process: Process Gain, Time Constant và Dead Time\n- Bộ điều khiển PID, ảnh hưởng của các thành phần và các chỉ tiêu chất lượng: Overshoot, Settling time, error."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Nền tảng chuyên ngành đo lường điều khiển",
+          "stt": 7,
+          "nlcm_code": "ĐK_NLCM_007",
+          "competency_detail": "Kiến thức và kỹ năng về hệ thống máy tính",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về hệ thống máy tính",
+          "requirements_text": "Kiến thức:\n- Nắm được chức năng các phần tử cơ bản: CPU, GPU, RAM, Hard disk, card Raid, card truyền thông, cổng giao tiếp cơ bản, UPS.\n- Nắm  được các loại cấu hình RAID, ưu nhược điểm của từng loại\n- Nắm cơ bản về an ninh mạng.\n- Phân biệt IT và OT\nKỹ năng:\n- Quản lý file, thư mục chương trình điều khiển\n- Cài đặt hệ điều hành\n- Nắm được các cách Backup và Restore máy tính\n- Kiểm tra/chuẩn đoán thay thế các phần tử (Ram, Hard disk, card truyền thông,...)\n- Xử lý lỗi mất kết nối"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Nền tảng chuyên ngành đo lường điều khiển",
+          "stt": 8,
+          "nlcm_code": "ĐK_NLCM_008",
+          "competency_detail": "Kiến thức về hệ thống nối đất",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức về hệ thống nối đất",
+          "requirements_text": "- Nguyên lý làm việc của hệ thống.\n- Các loại nối đất (Nối đất bảo vệ (PE), Nối đất chức năng (FE), Shield Ground), chức năng của từng loại\n- Kiến trúc hệ thống nối đất (Cọc tiếp địa, dây tiếp địa, thanh cái tiếp địa,…)\n- Kiến thức về điện trở đất"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Công cụ, Dụng cụ cầm tay cho chuyên môn thiết bị HTĐK",
+          "stt": 9,
+          "nlcm_code": "ĐK_NLCM_009",
+          "competency_detail": "Kiến thức và kỹ năng sử dụng công cụ dụng cụ cầm tay thuộc chuyên môn thiết bị HTĐK",
+          "level_requirements": {
+            "1": 1,
+            "2": 4,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng sử dụng công cụ dụng cụ cầm tay thuộc chuyên môn thiết bị HTĐK",
+          "requirements_text": "Kiến thức:\nNắm và sử dụng đúng chức năng CCDC\nKỹ năng:\n- Sử dụng công cụ dụng cụ thuộc phạm vi Đội TBHTĐK và Hart communicator\n- Sử dụng thành thạo dụng cụ điện trong đấu nối và lắp đặt.\n- Đấu nối cable gland."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "P&ID",
+          "stt": 10,
+          "nlcm_code": "ĐK_NLCM_010",
+          "competency_detail": "Kiến thức và kỹ năng về P&ID",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức và kỹ năng về P&ID",
+          "requirements_text": "- Dựa vào  P&ID có thể nắm được thông số áp suất, nhiệt độ, môi chất trong đường ống.\n- Đọc hiểu các ký hiệu trên P&ID (Phân loại tín hiệu, ký hiệu thiết bị đo, phương pháp đo, khối chức năng, điều khiển,...).\n- Dựa trên P&ID có thể trình bày được chức năng của thiết bị đo, van điều khiển, control loop, Interlock, thiết bị kết nối với hệ thống nào.\nKỹ năng: \nPhát triển và triển khai bản vẽ liên quan đến đo lường điều khiển"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Công nghệ sản xuất",
+          "stt": 11,
+          "nlcm_code": "ĐK_NLCM_016",
+          "competency_detail": "Kiến thức cơ bản về quy trình công nghệ sản xuất tại Nhà máy Đạm Cà Mau từ khí đầu vào đến tạo hạt, đóng bao",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức cơ bản về quy trình công nghệ sản xuất tại Nhà máy Đạm Cà Mau từ khí đầu vào đến tạo hạt, đóng bao.",
+          "requirements_text": "- Nắm tổng quan các phân Xưởng trong NM ĐCM: chức năng và vai trò.\n- Lưu đồ công nghệ về phân cụm: chức năng và vai trò."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Tổng quan Hệ thống điều khiển nhà máy Đạm Cà Mau",
+          "stt": 12,
+          "nlcm_code": "ĐK_NLCM_017",
+          "competency_detail": "Nắm được chức năng của các hệ thống điều khiển tại nhà máy Đạm Cà Mau bao gồm Hệ thống điều khiển phân tán, ESD, hệ thống điều khiển Turbine và máy nén, hệ thống MPS/MMS, hệ thống đóng bao xuất hàng",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Nắm được chức năng của các hệ thống điều khiển tại nhà máy Đạm Cà Mau bao gồm Hệ thống điều khiển phân tán, ESD, hệ thống điều khiển Turbine và máy nén, hệ thống MPS/MMS, hệ thống đóng bao xuất hàng",
+          "requirements_text": "- Nắm tổng quan Hệ thống điều khiển tại NM ĐCM: chức năng và vai trò của các hệ thống\n- Sự kết nối giữa các hệ thống, phương thức kết nối."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Tổng quan Thiết bị đo lường và van điều khiển nhà máy Đạm Cà Mau",
+          "stt": 13,
+          "nlcm_code": "ĐK_NLCM_018",
+          "competency_detail": "Kiến thức về thiết bị đo lường và van điều khiển tại nhà máy Đạm Cà Mau",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức về thiết bị đo lường và van điều khiển tại nhà máy Đạm Cà Mau",
+          "requirements_text": "- Biết được các thiết bị đo: Mức, áp, lưu lượng, nhiệt độ, đầu dò độ rung đang áp dụng tại NM ĐCM.\n- Biết được các loại van điều khiển đang được sử dụng tại NM ĐCM"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Kiến thức tổng quan về biện pháp phòng nổ (Ex protection)",
+          "stt": 14,
+          "nlcm_code": "ĐK_NLCM_019",
+          "competency_detail": "Kiến thức về vùng nguy hiểm",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức về vùng nguy hiểm",
+          "requirements_text": "- Khái niệm vùng nguy hiểm theo ATEX/IECEx, phân vùng nguy hiểm trong NM ĐCM.\n- Hiểu nguyên lý cháy nổ (tam giác cháy)"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Kiến thức tổng quan về biện pháp phòng nổ (Ex protection)",
+          "stt": 15,
+          "nlcm_code": "ĐK_NLCM_020",
+          "competency_detail": "Kiến thức về ký hiệu phòng nổ trên thiết bị",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức về ký hiệu phòng nổ trên thiết bị",
+          "requirements_text": "- Các phương pháp phòng nổ tại nhà máy Đạm Cà Mau\n- Sử dụng công cụ/tài liệu để đọc được Ex marking trên thiết bị"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Trí tuệ nhân tạo (AI)",
+          "stt": 16,
+          "nlcm_code": "ĐK_NLCM_024",
+          "competency_detail": "Kiến thức và kỹ năng liên về trí tuệ nhân tạo (AI)",
+          "level_requirements": {
+            "1": 3,
+            "2": 4,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng liên về trí tuệ nhân tạo (AI)",
+          "requirements_text": "Kiến thức\n- Nắm được nguyên tắc hoạt động cơ bản của các công cụ AI hỗ trợ xử lý thông tin, phân tích dữ liệu và tạo nội dung.\n- Hiểu các giới hạn và rủi ro khi sử dụng AI, bao gồm độ chính xác thông tin và bảo mật dữ liệu.\n- Nhận biết các ứng dụng AI phổ biến trong công việc văn phòng và kỹ thuật như hỗ trợ viết báo cáo, phân tích dữ liệu, tra cứu tài liệu kỹ thuật.\nKỹ năng:\n- Sử dụng các công cụ AI để hỗ trợ tìm kiếm, tổng hợp và phân tích thông tin phục vụ công việc.\n- Ứng dụng AI trong soạn thảo tài liệu kỹ thuật, báo cáo và trình bày nội dung.\n- Biết đặt câu hỏi (prompt) rõ ràng để khai thác hiệu quả thông tin từ công cụ AI.\n- Kiểm tra, đánh giá và xác minh lại kết quả do AI cung cấp trước khi áp dụng vào thực tế.\n- Kết hợp AI với các công cụ làm việc khác (Excel, tài liệu kỹ thuật, hệ thống quản lý dữ liệu) để nâng cao hiệu quả công việc."
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Hệ thống Fire Alarm - FA & Automatic Fire Fighting System - AFFS",
+          "stt": 17,
+          "nlcm_code": "ĐK_NLCM_025",
+          "competency_detail": "Kiến thức và kỹ năng liên quan đến hệ thống FA & AFFS",
+          "level_requirements": {
+            "1": 1,
+            "2": 4,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng liên quan đến hệ thống FA & AFFS",
+          "requirements_text": "Kiến thức:\n- Hệ thống báo cháy: FA\n+ Nguyên lý Đầu báo khói - nhiệt được sử dụng trong NM ĐCM\n+ Chức năng nút nhấn khẩn (Manual Call Point)\n+ Điều khiển chuông, còi, đèn, relay\n+ Bản vẽ đấu nối thiết bị, kết nối với hệ thống AFFS & Fire and Gas\n- Hệ thống chữa cháy tự động (AFFS): FM-200, CO2, Bọt Foam.\n+ Chức năng hệ thống\n+ Bản vẽ đấu nối thiết bị, kết nối với hệ thống FA\n- Tiêu chuẩn\n+ TCVN 3890 Trang bị, kiểm tra hệ thống báo cháy – chữa cháy\n+ TCVN 5760/5738 Hệ thống báo cháy tự động – thiết kế & lắp đặt\nKỹ năng:\n- Đấu nối dây loop & end-of-line (EOL)\t\n- Sử dụng cơ bản phần mềm Notifier Verifire Tool (Cấu hình khai báo mới, relay, còi, đèn, chuông, thiết lập Interlock, MOC)\n- Sử dụng công cụ để backup/restore hệ thống"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Phần cứng hệ thống MPS/MMS",
+          "stt": 18,
+          "nlcm_code": "ĐK_NLCM_026",
+          "competency_detail": "Kiến trúc phần cứng hệ thống MPS/MMS",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến trúc phần cứng hệ thống MPS/MMS",
+          "requirements_text": "Kiến thức nền tảng:\n- Nắm được kiến trúc phần cứng: liệt kê các phần tử, nêu được chức năng từng phần tử\n- Đọc hiểu bản vẽ IO wiring, trình bày được đường đi của tín hiệu từ thiết bị hiện trường đến Card và ngược lại.\n- Nắm được chức năng từng loại card.\nKỹ năng:\n- Có thể lắp đặt, đấu nối tín hiệu, thay thế các phần tử trong hệ thống."
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Phần mềm hệ thống MPS/MMS",
+          "stt": 19,
+          "nlcm_code": "ĐK_NLCM_027",
+          "competency_detail": "Kiến trúc phần mềm hệ thống MPS/MMS",
+          "level_requirements": {
+            "1": 1,
+            "2": 2,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến trúc phần mềm hệ thống MPS/MMS",
+          "requirements_text": "Kiến thức:\n- Nắm được các loại tín hiệu giám sát máy động.\n- Nắm được kiến trúc phần mềm: nắm được các câu lệnh cấu hình trong Rack 3500.\n- Đọc hiểu bản vẽ Interlock và trình bày được sự hiện diện bên trong chương trình.\n- Nắm được phương thức kết nối/logic tác động với các hệ thống khác.\nKỹ năng\n- Sử dụng cơ bản phần mềm Rack 3500, System1 (Có thể cấu hình mới, MOC, Backup / Restore Configuration)\n- Sử dụng công cụ cầm tay để mô phỏng và đo đạc tín hiệu độ rung (CA150, Fluke744, oscilloscope)"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Phần cứng hệ thống DCS",
+          "stt": 20,
+          "nlcm_code": "ĐK_NLCM_028",
+          "competency_detail": "Kiến thức và kỹ năng liên quan đến phần cứng hệ thống DCS",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 2,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng liên quan đến phần cứng hệ thống DCS",
+          "requirements_text": "Kiến thức:\n- Nắm được kiến trúc phần cứng hệ thống DCS nhà máy Đạm Cà Mau, liệt kê các phần tử có trong SYS & Marshalling Cabinet, HIS nêu được chức năng từng phần tử\n- Mạng truyền thông hệ thống DCS\n- Đọc hiểu bản vẽ IO wiring, trình bày được đường đi của tín hiệu từ thiết bị hiện trường đến Card và ngược lại.\n- Nắm được chức năng từng loại card  và các phần tử phụ trợ\nKỹ năng:\n- Có thể lắp đặt, thay thế các phần tử trong hệ thống.\n- Có khả năng cấu hình phần cứng"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Phần mềm hệ thống DCS",
+          "stt": 21,
+          "nlcm_code": "ĐK_NLCM_029",
+          "competency_detail": "Kiến thức và kỹ năng liên quan đến phần mềm hệ thống DCS",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 2,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng liên quan đến phần mềm hệ thống DCS",
+          "requirements_text": "Kiến thức:\n- Nắm được kiến trúc phần mềm: hiểu các khối cơ bản có trong project nhà máy Đạm Cà Mau, cách thức tổ chức chương trình.\n- Nắm được các chuẩn truyền thông.\n- Đọc hiểu bản vẽ Interlock, instrument loop diagram.\n- Tích hợp hệ thống: Nắm được phương thức kết nối/logic tác động với các hệ thống khác\nKỹ năng:\n- Sử dụng cơ bản phần mềm System view (Project Creation/Attribution Utility  Project Common Definition, FCS Configuration, I/O Module Configuration  Software Switches Configuration  Message Configuration, Control Drawing Builder, HIS Configuration, Window Configuration, Graphic Builder, Diagnotic kiểm tra trạng thái: IO card, FCU, truyền thông)"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Phần cứng hệ thống F&G",
+          "stt": 22,
+          "nlcm_code": "ĐK_NLCM_030",
+          "competency_detail": "Kiến trúc phần cứng hệ thống F&G",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 2,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến trúc phần cứng hệ thống F&G",
+          "requirements_text": "Kiến thức:\n- Nắm được kiến trúc phần cứng: liệt kê các phần tử, nêu được chức năng từng phần tử\n- Đọc hiểu bản vẽ IO wiring, trình bày được đường đi của tín hiệu từ thiết bị hiện trường đến Card và ngược lại.\n- Nắm được chức năng từng loại card và các phần tử phụ trợ\nKỹ năng:\n- Có thể lắp đặt, thay thế các phần tử trong hệ thống."
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Phần mềm hệ thống F&G",
+          "stt": 23,
+          "nlcm_code": "ĐK_NLCM_031",
+          "competency_detail": "Kiến trúc phần mềm hệ thống F&G",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 2,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến trúc phần mềm hệ thống F&G",
+          "requirements_text": "Kiến thức:\n- Nắm được kiến trúc phần mềm: hiểu chức năng các khối cấu hình trong project nhà máy Đạm Cà Mau.\n- Đọc hiểu bản vẽ IO wiring và trình bày được sự hiện diện bên trong chương trình\n- Nắm được các chuẩn truyền thông\n- Nắm được phương thức kết nối/logic tác động với các hệ thống khác\nKỹ năng\n-  Sử dụng cơ bản phần mềm TriStation, Intouch WindowMarker"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Phần cứng hệ thống ESD",
+          "stt": 24,
+          "nlcm_code": "ĐK_NLCM_032",
+          "competency_detail": "Kiến trúc phần cứng hệ thống ESD",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1,
+            "5": 2,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến trúc phần cứng hệ thống ESD",
+          "requirements_text": "Kiến thức:\n- Nắm được kiến trúc phần cứng: liệt kê các phần tử, nêu được chức năng từng phần tử\n- Đọc hiểu bản vẽ IO wiring, trình bày được đường đi của tín hiệu từ thiết bị hiện trường đến Card và ngược lại.\n-  Nắm được chức năng từng loại card  và các phần tử phụ trợ\nKỹ năng:\n- Có thể lắp đặt, thay thế các phần tử trong hệ thống."
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Phần mềm hệ thống ESD",
+          "stt": 25,
+          "nlcm_code": "ĐK_NLCM_033",
+          "competency_detail": "Kiến trúc phần mềm hệ thống ESD",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1,
+            "5": 2,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến trúc phần mềm hệ thống ESD",
+          "requirements_text": "Kiến thức:\n- Nắm được kiến trúc phần mềm, lập trình trên Tristation, hiểu chức năng các khối cấu hình trong project nhà máy Đạm Cà Mau.\n- Đọc hiểu Cause & Effect của nhà máy Đạm Cà Mau\n- Đọc hiểu bản vẽ Interlock\n- Nắm được các chuẩn truyền thông\n- Tích hợp hệ thống: Nắm được phương thức kết nối/logic tác động với các hệ thống khác\nKỹ năng\n- Sử dụng cơ bản phần mềm TriStation, Intouch WindowMarker, SOE.\n- Force, bypass, MOS các tín hiệu"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Phần cứng hệ thống PLC",
+          "stt": 26,
+          "nlcm_code": "ĐK_NLCM_034",
+          "competency_detail": "Kiến thức và kỹ năng liên quan đến phần cứng hệ thống PLC",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1,
+            "5": 1,
+            "6": 2,
+            "7": 3,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng liên quan đến phần cứng hệ thống PLC",
+          "requirements_text": "Kiến thức:\n- Nắm được kiến trúc phần cứng: liệt kê các phần tử có trong SYS & Marshalling Cabinet, nêu được chức năng từng phần tử.\n- Đọc hiểu bản vẽ wiring, trình bày được đường đi của tín hiệu từ thiết bị hiện trường đến Card và ngược lại.\n- Nắm được chức năng từng loại card và các phần tử phụ trợ\nKỹ năng:\n- Có thể lắp đặt, thay thế các phần tử trong hệ thống."
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Phần mềm hệ thống PLC",
+          "stt": 27,
+          "nlcm_code": "ĐK_NLCM_035",
+          "competency_detail": "Kiến trúc và kỹ năng liên quan đến phần mềm hệ thống PLC",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1,
+            "5": 1,
+            "6": 2,
+            "7": 3,
+            "8": 4
+          },
+          "definition": "Kiến trúc và kỹ năng liên quan đến phần mềm hệ thống PLC",
+          "requirements_text": "Kiến thức:\n- Khái niệm về: Biến và kiểu dữ liệu, address và indirect address, Cycle time, software/hardware interupt.\n- Nắm được kiến trúc phần mềm: Cách tổ chức chương trình Simens và Allen-Bradley.\n- Đọc hiểu được chương trình (Ngôn ngữ ladder, FBD và CFC)\n- Nắm được các chuẩn truyền thông trong nội tại hệ thống PLC\n- Tích hợp hệ thống: Nắm được phương thức kết nối/logic tác động với các hệ thống khác\nKỹ năng:\n- Backup, restore chương trình/HMI\n- Force, Bypass, MOS và simulate tín hiệu"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Hệ thống AMS",
+          "stt": 28,
+          "nlcm_code": "ĐK_NLCM_040",
+          "competency_detail": "Kiến thức và kỹ năng liên quan đến hệ thống AMS",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức và kỹ năng liên quan đến hệ thống AMS",
+          "requirements_text": "Kiến thức:\n- Nắm được chức năng của hệ thống\n\nKỹ năng:\n- Sử dụng công cụ để backup/restore PC"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Hệ thống OPC",
+          "stt": 29,
+          "nlcm_code": "ĐK_NLCM_041",
+          "competency_detail": "Kiến thức và kỹ năng liên quan đến hệ thống OPC",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức và kỹ năng liên quan đến hệ thống OPC",
+          "requirements_text": "Kiến thức:\n- Nắm được chức năng của hệ thống\n\nKỹ năng:\n- Sử dụng công cụ để backup/restore PC"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Hệ thống OTS",
+          "stt": 30,
+          "nlcm_code": "ĐK_NLCM_042",
+          "competency_detail": "Kiến thức và kỹ năng liên quan đến hệ thống OTS",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức và kỹ năng liên quan đến hệ thống OTS",
+          "requirements_text": "Kiến thức:\n- Nắm được chức năng của hệ thống\n\nKỹ năng:\n- Sử dụng công cụ để backup/restore PC"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Hệ thống APC",
+          "stt": 31,
+          "nlcm_code": "ĐK_NLCM_043",
+          "competency_detail": "Kiến thức về hệ thống APC",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức về hệ thống APC",
+          "requirements_text": "Kiến thức:\n- Nắm được chức năng của hệ thống\n\nKỹ năng:\n- Sử dụng công cụ để backup/restore PC"
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "Thiết kế và triển khai các dự án C&I quy mô nhỏ",
+          "stt": 32,
+          "nlcm_code": "ĐK_NLCM_055",
+          "competency_detail": "Tham gia thiết kế và triển khai các dự án C&I quy mô nhỏ",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1,
+            "5": 1,
+            "6": 1,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Tham gia thiết kế và triển khai các dự án C&I quy mô nhỏ",
+          "requirements_text": "- Tiêu chuẩn thiết kế hệ thống điều khiển\n- Thiết kế tài liệu (Engineering Deliverables): Interlock, Instrument loop diagram, I/O wiring …"
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "An toàn điều khiển chức năng",
+          "stt": 33,
+          "nlcm_code": "ĐK_NLCM_056",
+          "competency_detail": "Kiến thức về an toàn điều khiển chức năng",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1,
+            "5": 1,
+            "6": 1,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức về an toàn điều khiển chức năng",
+          "requirements_text": "- Nắm được Functional safety life cylce\n- Các hệ thống liên quan đến An toàn điều khiển chức năng\n- Nắm được các khái niệm cơ bản về SIL, MTBF, PFDavg, …\n- Định nghĩa rủi ro và phương pháp giảm thiểu\n- Tiêu chuẩn & quy định liên quan: IEC 61511"
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "Điều khiển nâng cao",
+          "stt": 34,
+          "nlcm_code": "ĐK_NLCM_057",
+          "competency_detail": "Kiến thức và kỹ năng liên quan đến điều khiển nâng cao",
+          "level_requirements": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1,
+            "5": 1,
+            "6": 1,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức và kỹ năng liên quan đến điều khiển nâng cao",
+          "requirements_text": "- Turning các thông số bộ điều khiển PID\n- Hiểu về Cascade control, feedforward, split range control, ratio control, coupling control\n- Complex loop control tại nhà máy Đạm Cà Mau"
+        },
+        {
+          "category": "Nghiệp vụ hành chính",
+          "competency_name": "Quản lý hồ sơ, tài liệu/bản vẽ kỹ thuật",
+          "stt": 35,
+          "nlcm_code": "ĐK_NLCM_064",
+          "competency_detail": "Quản lý hồ sơ, tài liệu/bản vẽ kỹ thuật",
+          "level_requirements": {
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0,
+            "5": 0,
+            "6": 0,
+            "7": 0,
+            "8": 0
+          },
+          "definition": "Quản lý hồ sơ, tài liệu/bản vẽ kỹ thuật",
+          "requirements_text": null
+        },
+        {
+          "category": "Nghiệp vụ hành chính",
+          "competency_name": "Quản lý sử dụng vật tư tiêu hao, thiết bị, CCDC",
+          "stt": 36,
+          "nlcm_code": "ĐK_NLCM_065",
+          "competency_detail": "Quản lý sử dụng vật tư tiêu hao, thiết bị, CCDC",
+          "level_requirements": {
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0,
+            "5": 0,
+            "6": 0,
+            "7": 0,
+            "8": 0
+          },
+          "definition": "Quản lý sử dụng vật tư tiêu hao, thiết bị, CCDC",
+          "requirements_text": null
+        },
+        {
+          "category": "Nghiệp vụ hành chính",
+          "competency_name": "Nghiệp vụ SAP",
+          "stt": 37,
+          "nlcm_code": "ĐK_NLCM_066",
+          "competency_detail": "Kỹ năng sử dụng SAP",
+          "level_requirements": {
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0,
+            "5": 0,
+            "6": 0,
+            "7": 0,
+            "8": 0
+          },
+          "definition": "Kỹ năng sử dụng SAP",
+          "requirements_text": null
+        }
+      ]
+    },
+    {
+      "source_job_id": "knl-dk-15",
+      "code": "KNL_ĐK_15",
+      "title": "Kỹ thuật viên BDSC thiết bị chấp hành",
+      "short_name": "KTV BDSC thiết bị chấp hành",
+      "description": "Kỹ thuật viên phụ trách bảo dưỡng sửa chữa thiết bị chấp hành tại Nhà máy Đạm Cà Mau.",
+      "icon": "🔧",
+      "color": "#be123c",
+      "source_totals": [
+        44,
+        59,
+        74,
+        79,
+        81,
+        85,
+        91,
+        101
+      ],
+      "items": [
+        {
+          "category": "Cơ bản",
+          "competency_name": "HSE cương vị",
+          "stt": 1,
+          "nlcm_code": "ĐK_NLCM_001",
+          "competency_detail": "Kiến thức về an toàn khi làm việc với các thiết bị đo lường tự động hóa",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 5,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến thức về an toàn khi làm việc với các thiết bị đo lường tự động hóa",
+          "requirements_text": "- Nội quy an toàn công ty\n- Sử dụng PPE phù hợp\n- Quy trình làm việc an toàn tại khu vực nguy hiểm\n- Nhận diện mối nguy hiện hữu\n- An toàn điện"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Quy trình làm việc",
+          "stt": 2,
+          "nlcm_code": "ĐK_NLCM_002",
+          "competency_detail": "Kiến thức về quy trình làm việc",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến thức về quy trình làm việc",
+          "requirements_text": "- Quy trình BDSC (BDĐK & SCĐX)\n- Quy trình cấp phép làm việc"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Nhận diện mối nguy và đánh giá rủi ro",
+          "stt": 3,
+          "nlcm_code": "ĐK_NLCM_003",
+          "competency_detail": "Nhận diện mối nguy và đánh giá rủi ro",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Nhận diện mối nguy và đánh giá rủi ro",
+          "requirements_text": "Phương pháp nhận diện mối nguy, đánh giá rủi ro và biện pháp giảm thiểu"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Nền tảng chuyên ngành đo lường điều khiển",
+          "stt": 4,
+          "nlcm_code": "ĐK_NLCM_004",
+          "competency_detail": "Kiến thức Điện - Điện tử cơ bản",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 5,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến thức Điện - Điện tử cơ bản",
+          "requirements_text": "- Kiến thức Điện cơ bản\n+ Hiểu các đại lượng: Điện áp, dòng điện, điện trở.\n+ Phân biệt AC/DC\n+ Các khí cụ điện: Relay, khởi động từ, Rờ le nhiệt, Timer cơ bản.\n- Kiến thức điện tử cơ bản: \n+ Nắm được chức năng, nguyên lý hoạt động của các linh kiện cơ bản như điện trở, tụ điện, cuộn cảm, transistor.\n+ Đại số Boole, hiểu nguyên lý hoạt động của các cổng logic\n- Kiến thức về tín hiệu:\n+ Phân biệt 2 loại tín hiệu Analog và Digital và mục đích sử dụng 0-10V, 0-5V, 4-20mA\n+ Phân biệt tín hiệu Sink, Source, tín hiệu tín hiệu NO/NC"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "P&ID",
+          "stt": 5,
+          "nlcm_code": "ĐK_NLCM_010",
+          "competency_detail": "Kiến thức và kỹ năng về P&ID",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến thức và kỹ năng về P&ID",
+          "requirements_text": "- Dựa vào  P&ID có thể nắm được thông số áp suất, nhiệt độ, môi chất trong đường ống.\n- Đọc hiểu các ký hiệu trên P&ID (Phân loại tín hiệu, ký hiệu thiết bị đo, phương pháp đo, khối chức năng, điều khiển,...).\n- Dựa trên P&ID có thể trình bày được chức năng của thiết bị đo, van điều khiển, control loop, Interlock, thiết bị kết nối với hệ thống nào.\nKỹ năng: \nPhát triển và triển khai bản vẽ liên quan đến đo lường điều khiển"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "IO wiring, Instrument junction box và cable schedule và Interlock",
+          "stt": 6,
+          "nlcm_code": "ĐK_NLCM_011",
+          "competency_detail": "Kiến thức về IO wiring, Instrument junction box và cable schedule, Interlock",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 5,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến thức về IO wiring, Instrument juction box và cable schedule, Interlock",
+          "requirements_text": "Đọc hiểu được các bản vẽ IO wiring,  Instrument juction box và cable schedule\nĐọc hiểu các Interlock cơ bản"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Công cụ, Dụng cụ cầm tay cho chuyên môn thiết bị van điều khiển",
+          "stt": 7,
+          "nlcm_code": "ĐK_NLCM_013",
+          "competency_detail": "Kỹ năng sử dụng Công cụ, Dụng cụ cầm tay cho chuyên môn thiết bị van điều khiển",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kỹ năng sử dụng Công cụ, Dụng cụ cầm tay cho chuyên môn thiết bị van điều khiển",
+          "requirements_text": "Kiến thức:\nNắm và sử dụng đúng chức năng CCDC\nKỹ năng:\n- Sử dụng công cụ dụng cụ thuộc phạm vi Đội TBCH\n- Sử dụng thành thạo dụng cụ điện trong đấu nối và lắp đặt.\n- Đấu nối cable gland."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Vật lý cơ bản",
+          "stt": 8,
+          "nlcm_code": "ĐK_NLCM_014",
+          "competency_detail": "Kiến thức về vật lý và đại lượng đo lường cơ bản",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 5,
+            "8": 5
+          },
+          "definition": "Kiến thức về vật lý và đại lượng đo lường cơ bản",
+          "requirements_text": "- Định nghĩa áp suất, lưu lượng, nhiệt độ, độ rung.\n- Phân biệt áp suất tương đối, áp suất tuyệt đối\n- Định nghĩa Cột áp thủy tỉnh\n- Định nghĩa Zero value, calibration range, Span và Instrument range\n- Định nghĩa Độ chính xác (Accuracy), độ lặp lại (Precision), độ phân giải (Resolution), tuyến tính (Linearity), độ trễ (Hysteresis)\n- Các định luật: Ohm, Kirchhoff,  Faraday, Bernoulli, Seebeck, Pascal.\n- Hiện tượng vật lý: Ngưng tụ (condensation), bay hơi."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Lựa chọn fitting, tubing",
+          "stt": 9,
+          "nlcm_code": "ĐK_NLCM_015",
+          "competency_detail": "Kiến thức và kỹ năng liên quan đến lựa chọn fitting và tubing",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức và kỹ năng liên quan đến lựa chọn fitting và tubing",
+          "requirements_text": "Kiến thức:\n- Nắm vững các loại fitting và tubing tại NM ĐCM.\n- Tuân thủ các nguyên tắc, lựa chọn đúng kích thước tubing và fitting. (không sử dụng lẫn ferrule giữa các hãng khác nhau)\nKỹ năng:\n- Lắp đặt và uống ống Impluse line"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Công nghệ sản xuất",
+          "stt": 10,
+          "nlcm_code": "ĐK_NLCM_016",
+          "competency_detail": "Kiến thức cơ bản về quy trình công nghệ sản xuất tại Nhà máy Đạm Cà Mau từ khí đầu vào đến tạo hạt, đóng bao",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 2,
+            "8": 2
+          },
+          "definition": "Kiến thức cơ bản về quy trình công nghệ sản xuất tại Nhà máy Đạm Cà Mau từ khí đầu vào đến tạo hạt, đóng bao.",
+          "requirements_text": "- Nắm tổng quan các phân Xưởng trong NM ĐCM: chức năng và vai trò.\n- Lưu đồ công nghệ về phân cụm: chức năng và vai trò."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Tổng quan Hệ thống điều khiển nhà máy Đạm Cà Mau",
+          "stt": 11,
+          "nlcm_code": "ĐK_NLCM_017",
+          "competency_detail": "Nắm được chức năng của các hệ thống điều khiển tại nhà máy Đạm Cà Mau bao gồm Hệ thống điều khiển phân tán, ESD, hệ thống điều khiển Turbine và máy nén, hệ thống MPS/MMS, hệ thống đóng bao xuất hàng",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Nắm được chức năng của các hệ thống điều khiển tại nhà máy Đạm Cà Mau bao gồm Hệ thống điều khiển phân tán, ESD, hệ thống điều khiển Turbine và máy nén, hệ thống MPS/MMS, hệ thống đóng bao xuất hàng",
+          "requirements_text": "- Nắm tổng quan Hệ thống điều khiển tại NM ĐCM: chức năng và vai trò của các hệ thống\n- Sự kết nối giữa các hệ thống, phương thức kết nối."
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Tổng quan Thiết bị đo lường và van điều khiển nhà máy Đạm Cà Mau",
+          "stt": 12,
+          "nlcm_code": "ĐK_NLCM_018",
+          "competency_detail": "Kiến thức về thiết bị đo lường và van điều khiển tại nhà máy Đạm Cà Mau",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 3,
+            "4": 3,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến thức về thiết bị đo lường và van điều khiển tại nhà máy Đạm Cà Mau",
+          "requirements_text": "- Biết được các thiết bị đo: Mức, áp, lưu lượng, nhiệt độ, đầu dò độ rung đang áp dụng tại NM ĐCM.\n- Biết được các loại van điều khiển đang được sử dụng tại NM ĐCM"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Kiến thức tổng quan về biện pháp phòng nổ (Ex protection)",
+          "stt": 13,
+          "nlcm_code": "ĐK_NLCM_019",
+          "competency_detail": "Kiến thức về vùng nguy hiểm",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 3,
+            "4": 3,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến thức về vùng nguy hiểm",
+          "requirements_text": "- Khái niệm vùng nguy hiểm theo ATEX/IECEx, phân vùng nguy hiểm trong NM ĐCM.\n- Hiểu nguyên lý cháy nổ (tam giác cháy)"
+        },
+        {
+          "category": "Cơ bản",
+          "competency_name": "Kiến thức tổng quan về biện pháp phòng nổ (Ex protection)",
+          "stt": 14,
+          "nlcm_code": "ĐK_NLCM_020",
+          "competency_detail": "Kiến thức về ký hiệu phòng nổ trên thiết bị",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến thức về ký hiệu phòng nổ trên thiết bị",
+          "requirements_text": "- Các phương pháp phòng nổ tại nhà máy Đạm Cà Mau\n- Sử dụng công cụ/tài liệu để đọc được Ex marking trên thiết bị"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Trí tuệ nhân tạo (AI)",
+          "stt": 15,
+          "nlcm_code": "ĐK_NLCM_024",
+          "competency_detail": "Kiến thức và kỹ năng liên về trí tuệ nhân tạo (AI)",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến thức và kỹ năng liên về trí tuệ nhân tạo (AI)",
+          "requirements_text": "Kiến thức\n- Nắm được nguyên tắc hoạt động cơ bản của các công cụ AI hỗ trợ xử lý thông tin, phân tích dữ liệu và tạo nội dung.\n- Hiểu các giới hạn và rủi ro khi sử dụng AI, bao gồm độ chính xác thông tin và bảo mật dữ liệu.\n- Nhận biết các ứng dụng AI phổ biến trong công việc văn phòng và kỹ thuật như hỗ trợ viết báo cáo, phân tích dữ liệu, tra cứu tài liệu kỹ thuật.\nKỹ năng:\n- Sử dụng các công cụ AI để hỗ trợ tìm kiếm, tổng hợp và phân tích thông tin phục vụ công việc.\n- Ứng dụng AI trong soạn thảo tài liệu kỹ thuật, báo cáo và trình bày nội dung.\n- Biết đặt câu hỏi (prompt) rõ ràng để khai thác hiệu quả thông tin từ công cụ AI.\n- Kiểm tra, đánh giá và xác minh lại kết quả do AI cung cấp trước khi áp dụng vào thực tế.\n- Kết hợp AI với các công cụ làm việc khác (Excel, tài liệu kỹ thuật, hệ thống quản lý dữ liệu) để nâng cao hiệu quả công việc."
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Van điều khiển với cơ cấu chấp hành khí nén (Pneumatic actuator)",
+          "stt": 16,
+          "nlcm_code": "ĐK_NLCM_049",
+          "competency_detail": "Kiến thức và kỹ năng về van điều khiển với cơ cấu chấp hành khí nén (Pneumatic actuator)",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến thức và kỹ năng về van điều khiển với cơ cấu chấp hành khí nén  (Pneumatic actuator)",
+          "requirements_text": "Kiến thức:\n-  Phân loại và nguyên lý làm việc \n- Các nguyên tắc cơ bản lắp đặt thiết bị theo tiêu chuẩn ngành/tiêu chuẩn tại NM ĐCM\n- Nguyên lý làm việc/chức năng/ký hiệu của các phụ kiện: Positioner, solenoid, quick exhaust, trip valve, air relay, lockup  valve, booster, regulator, limit switch.\n- Đọc hiểu sơ đồ mạch điều khiển khí nén.\n- Nắm được khái niệm, ý nghĩa của các đại lượng: bench set, stroke, Fail Position, Cv (Flow Coefficient), đặc tính van, dead Band, Leakage Class.\nKỹ năng: \n- Lắp đặt thiết bị\n- Cân chỉnh thiết bị"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Thiết bị phân tích, quan trắc môi trường",
+          "stt": 17,
+          "nlcm_code": "ĐK_NLCM_050",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị phân tích, quan trắc môi trường",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến thức và kỹ năng về thiết bị phân tích, quan trắc môi trường",
+          "requirements_text": "Kiến thức:\n-  Phân loại và nguyên lý làm việc của các thiết bị phân tích tại NM ĐCM: Mass spectrometer, gas chromatograph.\n- Chức năng hệ thống lấy mẫu (Sample Conditioning System – SCS).\n- Các loại khí chuẩn thường dùng tại NM ĐCM và vai trò trong hệ thống phân tích.\nKỹ năng: \n- Lắp đặt/thay thế thiết bị/phụ kiện\n- Hiệu chuẩn thiết bị"
+        },
+        {
+          "category": "Trung cấp",
+          "competency_name": "Thiết bị dò khí cháy nổ và khí độc",
+          "stt": 18,
+          "nlcm_code": "ĐK_NLCM_051",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị dò khí cháy nổ và khí độc",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến thức và kỹ năng về thiết bị dò khí cháy nổ và khí độc",
+          "requirements_text": "Kiến thức:\n-  Phân loại và nguyên lý làm việc của các thiết bị dò khí cháy nổ và khí độc tại NM ĐCM: Electrochemical, Catalytic bead, IR.\n- Ý nghĩa các đại lượng: %LEL vs %Vol, ppm, T90 response time.\n- Nắm được các logic kích hoạt Đèn, còi, MIMIC.\nKỹ năng: \n- Lắp đặt/thay thế thiết bị\n- Hiệu chuẩn thiết bị"
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "Thiết bị đóng bao",
+          "stt": 19,
+          "nlcm_code": "ĐK_NLCM_052",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị đóng bao",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 4,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 4
+          },
+          "definition": "Kiến thức và kỹ năng về thiết bị đóng bao",
+          "requirements_text": "Kiến thức:\n-  Phân loại và nguyên lý làm việc hệ thống cân đóng bao, cân đối chứng, cân định lượng, máy in, hệ thống đếm bao.\n- Nguyên lý làm việc của các phần tử cảm biến và cơ cấu chấp hành: Sensor, encorder, load cell, các phần tử khí nén (Xylanh, tiết lưu, regulaor, van  phân phối).\n- Đọc hiểu sơ đồ mạch điện/điều khiển\nKỹ năng: \n- Lắp đặt/thay thế thiết bị/phụ kiện\n- Cân chỉnh thiết bị"
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "Thiết bị vận chuyển, xuất hàng, lưu kho, nhập liệu",
+          "stt": 20,
+          "nlcm_code": "ĐK_NLCM_053",
+          "competency_detail": "Kiến thức và kỹ năng về thiết bị vận chuyển, xuất hàng, lưu kho, nhập liệu",
+          "level_requirements": {
+            "1": 2,
+            "2": 3,
+            "3": 3,
+            "4": 4,
+            "5": 4,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến thức và kỹ năng về thiết bị vận chuyển, xuất hàng, lưu  kho, nhập liệu",
+          "requirements_text": "Kiến thức:\n-  Nguyên lý làm việc của các hệ thống băng tải, gầu tải, shiploader, robot và tripper car.\n- Nguyên lý làm việc/chức năng của các phần tử cảm biến và cơ cấu chấp hành: Sensor, encorder, các phần tử khí nén (Xylanh, tiết lưu, regulaor, van  phân phối), safety rope, Limit switch.\n- Đọc hiểu sơ đồ mạch điện/điều khiển\nKỹ năng: \n- Lắp đặt/thay thế thiết bị/phụ kiện\n- Cân chỉnh thiết bị"
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "Van điều khiển với cơ cấu chấp hành motor (MOV)",
+          "stt": 21,
+          "nlcm_code": "ĐK_NLCM_061",
+          "competency_detail": "Kiến thức và kỹ năng về van điều khiển với cơ cấu chấp hành motor (MOV)",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 4,
+            "7": 4,
+            "8": 5
+          },
+          "definition": "Kiến thức và kỹ năng về van điều khiển với cơ cấu chấp hành motor (MOV)",
+          "requirements_text": "Kiến thức:\n-  Phân loại và nguyên lý làm việc của MOV tại NM ĐCM\n-  Hiểu cấu tạo, chức năng, đọc hiểu sơ đồ mạch điện/điều khiển: Mạch đảo chiều quay motor, Contactor – relay – overload,  Heater, Local/Remote selector, gearbox.\n- Nắm ý nghĩa các thuật ngữ: Torque switch vs Limit switch.\nKỹ năng: \n- Lắp đặt/thay thế thiết bị/phụ kiện\n- Cân chỉnh thiết bị: Set limit/torque"
+        },
+        {
+          "category": "Nâng cao",
+          "competency_name": "Van điều khiển với cơ cấu chấp hành thủy lực",
+          "stt": 22,
+          "nlcm_code": "ĐK_NLCM_062",
+          "competency_detail": "Kiến thức và kỹ năng về van điều khiển với cơ cấu chấp hành thủy lực",
+          "level_requirements": {
+            "1": 2,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 3,
+            "8": 3
+          },
+          "definition": "Kiến thức và kỹ năng về van điều khiển với cơ cấu chấp hành thủy lực",
+          "requirements_text": "Kiến thức:\n-  Phân loại và nguyên lý làm việc của van điều khiển với cơ cấu chấp hành thủy lực  tại NM ĐCM\n- Đặc tính thủy lực\n-  Hiểu cấu tạo, chức năng các phần tử, đọc hiểu sơ đồ mạch điều khiển các van Governor turbine KT04421, KT04431, KT04441 và KT06101.\nKỹ năng: \n- Lắp đặt/thay thế thiết bị/phụ kiện\n- Cân chỉnh van Governor, PCV."
+        },
+        {
+          "category": "Nghiệp vụ hành chính",
+          "competency_name": "Lựa chọn thiết bị van điều khiển",
+          "stt": 23,
+          "nlcm_code": "ĐK_NLCM_063",
+          "competency_detail": "Kiến thức liên quan đến lựa chọn thiết bị van điều khiển",
+          "level_requirements": {
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0,
+            "5": 0,
+            "6": 0,
+            "7": 0,
+            "8": 0
+          },
+          "definition": "Kiến thức liên quan đến lựa chọn thiết bị van điều khiển",
+          "requirements_text": "- Hiểu đặc tính của môi chất công nghệ: Nhiệt độ, áp suất, lưu lượng, ăn mòn, cặn, khí cháy nổ,...\n- Đặc tính điều khiển của van (Valve characteristic)\n- Loại actuator và phụ kiện\n- Điều kiện lắp đặt: Vị trí, rung động, nhiệt độ, từ trường,...\n- Yêu cầu hệ thống điều khiển: Tương thích với hệ thống, dạng tín hiệu, nguồn cấp,...\n- Tiêu chuẩn và chứng chỉ: Phòng nổ, SIL,..\n- Độ tin cậy và bảo trì: vật tư dự phòng,.."
+        },
+        {
+          "category": "Nghiệp vụ hành chính",
+          "competency_name": "Quản lý hồ sơ, tài liệu/bản vẽ kỹ thuật",
+          "stt": 24,
+          "nlcm_code": "ĐK_NLCM_064",
+          "competency_detail": "Quản lý hồ sơ, tài liệu/bản vẽ kỹ thuật",
+          "level_requirements": {
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0,
+            "5": 0,
+            "6": 0,
+            "7": 0,
+            "8": 0
+          },
+          "definition": "Quản lý hồ sơ, tài liệu/bản vẽ kỹ thuật",
+          "requirements_text": null
+        },
+        {
+          "category": "Nghiệp vụ hành chính",
+          "competency_name": "Quản lý sử dụng vật tư tiêu hao, thiết bị, CCDC",
+          "stt": 25,
+          "nlcm_code": "ĐK_NLCM_065",
+          "competency_detail": "Quản lý sử dụng vật tư tiêu hao, thiết bị, CCDC",
+          "level_requirements": {
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0,
+            "5": 0,
+            "6": 0,
+            "7": 0,
+            "8": 0
+          },
+          "definition": "Quản lý sử dụng vật tư tiêu hao, thiết bị, CCDC",
+          "requirements_text": null
+        }
+      ]
+    }
+  ]
+}

@@ -29,7 +29,7 @@ function defaultDashboardPeriod() {
   return { month: now.getMonth() + 1, year: now.getFullYear() };
 }
 
-export function OKRWorkspace({ role }: { role: string }) {
+export function OKRWorkspace({ role, editMode = true }: { role: string; editMode?: boolean }) {
   const [dashboard, setDashboard] = useState<DashboardPayload | null>(null);
   const [period, setPeriod] = useState(() => {
     const stored = readLastSelectedPeriod();
@@ -43,9 +43,10 @@ export function OKRWorkspace({ role }: { role: string }) {
   const [activeKr, setActiveKr] = useState<KRSummary | null>(null);
   const [activeObjective, setActiveObjective] = useState<{ objectiveCode: string; team?: { code: string; name: string } } | null>(null);
   const dashboardExportRef = useRef<HTMLDivElement | null>(null);
-  const canManageOkr = ["Admin", "Workshop_Leader"].includes(role);
-  const canUploadReport = role === "Admin";
+  const canManageOkr = ["Admin", "Workshop_Leader"].includes(role) && editMode;
+  const canUploadReport = role === "Admin" && editMode;
   const canExportDashboard = canManageOkr;
+  const showEditCommands = role !== "Admin" || editMode;
   const logDashboardDiagnostics = (dashboardData: DashboardPayload) => {
     const technicalWarnings = dashboardData.technical_metadata?.warnings ?? [];
     void api.clientDebugLog({
@@ -259,14 +260,16 @@ export function OKRWorkspace({ role }: { role: string }) {
             >
               <ImageDown size={17} />
             </button>
-            <button
-              disabled={resetting}
-              onClick={handleResetData}
-              title="Reset dữ liệu"
-              type="button"
-            >
-              <RotateCcw size={17} />
-            </button>
+            {showEditCommands && (
+              <button
+                disabled={resetting}
+                onClick={handleResetData}
+                title="Reset dữ liệu"
+                type="button"
+              >
+                <RotateCcw size={17} />
+              </button>
+            )}
           </div>
         </div>
         {error && <p className="error">{error}</p>}

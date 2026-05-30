@@ -20,13 +20,36 @@ import { api } from "../../api/client";
 
 const TEAMS = ["TBHTĐK", "TBCH", "TBĐL", "TCĐK"];
 const KR_ASSESSMENTS = ["Hoàn thành xuất sắc", "Hoàn thành tốt", "Hoàn thành", "Không hoàn thành", "N/A"];
+const ASSESSMENT_SHORT: Record<string, string> = {
+  "Hoàn thành xuất sắc": "Xuất sắc",
+  "Hoàn thành tốt": "Tốt",
+  "Hoàn thành": "Đạt",
+  "Không hoàn thành": "Không đạt",
+  "N/A": "N/A",
+};
+
+function assessmentTone(value: string | null | undefined): string {
+  switch (value) {
+    case "Hoàn thành xuất sắc":
+      return "tone-excellent";
+    case "Hoàn thành tốt":
+      return "tone-good";
+    case "Hoàn thành":
+      return "tone-pass";
+    case "Không hoàn thành":
+      return "tone-fail";
+    case "N/A":
+      return "tone-na";
+    default:
+      return "tone-pending";
+  }
+}
 const MONTHLY_ASSESSMENTS = [
   "Hoàn thành xuất sắc nhiệm vụ",
   "Hoàn thành tốt nhiệm vụ",
   "Hoàn thành nhiệm vụ",
   "Không hoàn thành nhiệm vụ"
 ];
-const OBJECTIVE_OVERRIDE_OPTIONS = ["", "Hoàn thành xuất sắc nhiệm vụ", "Hoàn thành tốt nhiệm vụ", "Hoàn thành nhiệm vụ", "Không hoàn thành nhiệm vụ", "Không có kế hoạch"];
 const OBJECTIVES = ["O1", "O2", "O3", "O4", "O5", "O6"];
 
 type KRMapping = {
@@ -146,10 +169,10 @@ function validateData(data: WebInputData): ValidationError[] {
     if (item.content.length > 2000) errors.push({ field: `arising-${index}-content`, message: `Công việc phát sinh #${index + 1} vượt 2.000 ký tự` });
   });
   if (data.monthly_conclusion.discipline_status === "NOK" && !data.monthly_conclusion.discipline_description.trim()) {
-    errors.push({ field: "discipline-description", message: "Cần mô tả khi kỷ luật là NOK" });
+    errors.push({ field: "discipline-description", message: "Cần mô tả khi tính tuân thủ là NOK" });
   }
   if (data.monthly_conclusion.discipline_status === "NOK" && data.monthly_conclusion.discipline_violators.length === 0) {
-    errors.push({ field: "discipline-violators", message: "Cần tag nhân sự vi phạm khi kỷ luật là NOK" });
+    errors.push({ field: "discipline-violators", message: "Cần tag nhân sự vi phạm khi tính tuân thủ là NOK" });
   }
   if (data.monthly_conclusion.overall_assessment === "Không hoàn thành nhiệm vụ" && data.monthly_conclusion.detailed_description.trim().length < 20) {
     errors.push({ field: "detailed-description", message: "Cần lý do ít nhất 20 ký tự khi Không hoàn thành nhiệm vụ" });
@@ -214,10 +237,12 @@ export function WebInputForm({
   role,
   currentUserId,
   currentTeam,
+  editMode = true,
 }: {
   role: string;
   currentUserId: string;
   currentTeam?: string | null;
+  editMode?: boolean;
 }) {
   const now = new Date();
   const teamFromAccount = currentTeam ?? currentUserId;
@@ -244,8 +269,9 @@ export function WebInputForm({
   const [hasSavedDraft, setHasSavedDraft] = useState(false);
   const autosaveTimer = useRef<number | null>(null);
 
-  const canWrite = role === "Admin" || (role === "Team_Account" && teamFromAccount === team);
+  const canWrite = (role === "Admin" && editMode) || (role === "Team_Account" && teamFromAccount === team);
   const readOnly = !canWrite || locked;
+  const showAdminEditCommands = role !== "Admin" || editMode;
   const emailText = useMemo(() => buildEmailText(team, month, data), [team, month, data]);
 
   const mappingByCode = useMemo(() => new Map(mapping.map((item) => [item.workshop_kr_code, item])), [mapping]);
@@ -497,26 +523,30 @@ export function WebInputForm({
         <div className="web-input-actions">
           <span className={unsaved ? "save-state unsaved" : "save-state"}>{saveLabel}</span>
           <button type="button" onClick={load} title="Tải lại"><RefreshCw size={17} /></button>
-          <button
-            type="button"
-            className={hasSavedDraft ? "btn-primary-soft is-saved" : "btn-primary-soft"}
-            onClick={() => saveDraft(true)}
-            disabled={readOnly || saving}
-            title={hasSavedDraft ? "Đã lưu đăng ký — bạn có thể gửi báo cáo" : "Lưu đăng ký trước khi gửi báo cáo"}
-          >
-            <Save size={17} />Lưu đăng ký
-          </button>
+          {showAdminEditCommands && (
+            <button
+              type="button"
+              className={hasSavedDraft ? "btn-primary-soft is-saved" : "btn-primary-soft"}
+              onClick={() => saveDraft(true)}
+              disabled={readOnly || saving}
+              title={hasSavedDraft ? "Đã lưu đăng ký — bạn có thể gửi báo cáo" : "Lưu đăng ký trước khi gửi báo cáo"}
+            >
+              <Save size={17} />Lưu đăng ký
+            </button>
+          )}
           <button type="button" onClick={preview}><Clipboard size={17} />Xem trước</button>
-          <button
-            type="button"
-            className={hasSavedDraft && !unsaved ? "btn-primary" : ""}
-            onClick={submit}
-            disabled={readOnly || saving || !hasSavedDraft || unsaved}
-            title={!hasSavedDraft || unsaved ? "Cần bấm Lưu đăng ký trước khi gửi báo cáo" : "Gửi báo cáo chính thức"}
-          >
-            <Send size={17} />Gửi báo cáo
-          </button>
-          {role === "Admin" && (
+          {showAdminEditCommands && (
+            <button
+              type="button"
+              className={hasSavedDraft && !unsaved ? "btn-primary" : ""}
+              onClick={submit}
+              disabled={readOnly || saving || !hasSavedDraft || unsaved}
+              title={!hasSavedDraft || unsaved ? "Cần bấm Lưu đăng ký trước khi gửi báo cáo" : "Gửi báo cáo chính thức"}
+            >
+              <Send size={17} />Gửi báo cáo
+            </button>
+          )}
+          {role === "Admin" && editMode && (
             <button type="button" onClick={() => toggleLock(!locked)}>{locked ? <Unlock size={17} /> : <Lock size={17} />}{locked ? "Mở chốt" : "Chốt"}</button>
           )}
         </div>
@@ -527,68 +557,142 @@ export function WebInputForm({
         {loading && <p className="muted">Đang tải dữ liệu...</p>}
       </section>
 
-      <section className="panel wide">
+      <section className="panel wide kr-input-panel">
         <div className="panel-header">
-          <h2>Danh sách KR</h2>
+          <div>
+            <h2>Danh sách KR</h2>
+            <p className="panel-sub">Chọn đánh giá và mô tả tình hình thực hiện từng KR</p>
+          </div>
           <div className="toolbar">
             <button type="button" onClick={() => setAllObjectives(true)}>Mở tất cả</button>
             <button type="button" onClick={() => setAllObjectives(false)}>Thu tất cả</button>
           </div>
         </div>
-        {OBJECTIVES.map((objective) => (
-          <div className="okr-accordion" key={objective}>
-            <button type="button" className="okr-accordion-title" onClick={() => toggleObjective(objective)}>
-              {expanded[objective] ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-              <strong>{objective}</strong>
-              <span>{grouped[objective]?.filter((item) => item.team_self_assessment).length ?? 0}/{grouped[objective]?.length ?? 0} KR đã nhập</span>
-            </button>
-            {expanded[objective] && (
-              <div className="okr-objective-body">
-                {grouped[objective]?.map((item) => {
-                  const mappingItem = mappingByCode.get(item.workshop_kr_code);
-                  const itemErrors = validationErrors.filter((err) => err.kr_code === item.workshop_kr_code);
-                  const itemWarnings = warnings.filter((warning) => warning.kr_code === item.workshop_kr_code);
-                  return (
-                    <div className={itemErrors.length ? "kr-row invalid" : "kr-row"} key={item.workshop_kr_code}>
-                      <div className="kr-readonly">
-                        <strong>{item.workshop_kr_code}</strong>
-                        <span>{mappingItem?.kr_name ?? item.workshop_kr_code}</span>
-                        <small>{mappingItem?.measurement_type || "-"} · {mappingItem?.target_value || "-"}</small>
-                      </div>
-                      <textarea
-                        data-field={`kr-${item.workshop_kr_code}-report`}
-                        value={item.implementation_report}
-                        maxLength={10000}
-                        disabled={readOnly}
-                        onChange={(event) => updateKr(item.workshop_kr_code, { implementation_report: event.target.value })}
-                        placeholder="Tình hình thực hiện"
-                      />
-                      <select
-                        data-field={`kr-${item.workshop_kr_code}-assessment`}
-                        value={item.team_self_assessment ?? ""}
-                        disabled={readOnly}
-                        onChange={(event) => updateKr(item.workshop_kr_code, { team_self_assessment: event.target.value || null })}
-                      >
-                        <option value="">Chọn đánh giá</option>
-                        {KR_ASSESSMENTS.map((value) => <option key={value} value={value}>{value}</option>)}
-                      </select>
-                      <textarea
-                        value={item.notes}
-                        maxLength={5000}
-                        disabled={readOnly}
-                        onChange={(event) => updateKr(item.workshop_kr_code, { notes: event.target.value })}
-                        placeholder="Ghi chú"
-                      />
-                      {[...itemErrors, ...itemWarnings.map((warning) => ({ message: warning.reason, field: "", kr_code: item.workshop_kr_code }))].map((err, index) => (
-                        <small className={index < itemErrors.length ? "error" : "warning-text"} key={`${err.message}-${index}`}>{err.message}</small>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        ))}
+        {OBJECTIVES.map((objective) => {
+          const objKrs = grouped[objective] || [];
+          const objDone = objKrs.filter((item) => item.team_self_assessment).length;
+          const objPct = objKrs.length ? Math.round((objDone / objKrs.length) * 100) : 0;
+          return (
+            <div className={`okr-accordion ${expanded[objective] ? "is-open" : ""}`} key={objective}>
+              <button type="button" className="okr-accordion-title" onClick={() => toggleObjective(objective)}>
+                <span className="okr-accordion-chevron">
+                  {expanded[objective] ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                </span>
+                <strong className="okr-accordion-badge">{objective}</strong>
+                <span className="okr-accordion-meta">
+                  <em>{objDone}</em>/{objKrs.length} KR đã đánh giá
+                </span>
+                <span className="okr-accordion-progress">
+                  <span style={{ width: `${objPct}%` }} />
+                </span>
+                <small className="okr-accordion-pct">{objPct}%</small>
+              </button>
+              {expanded[objective] && (
+                <div className="okr-objective-body">
+                  {objKrs.map((item) => {
+                    const mappingItem = mappingByCode.get(item.workshop_kr_code);
+                    const itemErrors = validationErrors.filter((err) => err.kr_code === item.workshop_kr_code);
+                    const itemWarnings = warnings.filter((warning) => warning.kr_code === item.workshop_kr_code);
+                    const assessment = item.team_self_assessment;
+                    const filled = assessment && (assessment === "N/A" || item.implementation_report.trim());
+                    const cardTone = itemErrors.length
+                      ? "tone-error"
+                      : assessment
+                        ? assessmentTone(assessment)
+                        : "tone-pending";
+                    return (
+                      <article className={`kr-card ${cardTone}`} key={item.workshop_kr_code}>
+                        <header className="kr-card-head">
+                          <div className="kr-card-id">
+                            <span className="kr-card-code">{item.workshop_kr_code}</span>
+                            {filled ? <CheckCircle2 className="kr-card-check" size={14} /> : null}
+                          </div>
+                          <div className="kr-card-title">
+                            <h4>{mappingItem?.kr_name ?? item.workshop_kr_code}</h4>
+                            <p>
+                              <span className="kr-meta-pill">{mappingItem?.measurement_type || "Chưa định kỳ"}</span>
+                              <span className="kr-meta-pill kr-meta-target">Mục tiêu: {mappingItem?.target_value || "—"}</span>
+                            </p>
+                          </div>
+                        </header>
+
+                        <div className="kr-card-grid">
+                          <label className="kr-field kr-field-report">
+                            <span className="kr-field-label">Tình hình thực hiện</span>
+                            <textarea
+                              data-field={`kr-${item.workshop_kr_code}-report`}
+                              value={item.implementation_report}
+                              maxLength={10000}
+                              disabled={readOnly}
+                              rows={3}
+                              onChange={(event) => updateKr(item.workshop_kr_code, { implementation_report: event.target.value })}
+                              placeholder="Mô tả kết quả, số liệu, nguyên nhân nếu lệch kế hoạch..."
+                            />
+                            <small className="kr-field-counter">{item.implementation_report.length}/10000</small>
+                          </label>
+
+                          <div className="kr-field kr-field-assessment">
+                            <span className="kr-field-label">Đánh giá KR</span>
+                            <div className="kr-assessment-grid" role="radiogroup" aria-label={`Đánh giá ${item.workshop_kr_code}`}>
+                              {KR_ASSESSMENTS.map((value) => {
+                                const tone = assessmentTone(value);
+                                const isActive = assessment === value;
+                                return (
+                                  <button
+                                    type="button"
+                                    key={value}
+                                    role="radio"
+                                    aria-checked={isActive}
+                                    className={`kr-assessment-pill ${tone} ${isActive ? "is-active" : ""}`}
+                                    onClick={() => updateKr(item.workshop_kr_code, { team_self_assessment: isActive ? null : value })}
+                                    disabled={readOnly}
+                                    data-field={isActive ? `kr-${item.workshop_kr_code}-assessment` : undefined}
+                                    title={value}
+                                  >
+                                    <span className="kr-assessment-pill-dot" />
+                                    <span className="kr-assessment-pill-label">{ASSESSMENT_SHORT[value]}</span>
+                                    <span className="kr-assessment-pill-full">{value}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          <label className="kr-field kr-field-notes">
+                            <span className="kr-field-label">Ghi chú</span>
+                            <textarea
+                              value={item.notes}
+                              maxLength={5000}
+                              disabled={readOnly}
+                              rows={2}
+                              onChange={(event) => updateKr(item.workshop_kr_code, { notes: event.target.value })}
+                              placeholder="Ghi chú thêm (nếu có)"
+                            />
+                          </label>
+                        </div>
+
+                        {(itemErrors.length || itemWarnings.length) ? (
+                          <div className="kr-card-messages">
+                            {itemErrors.map((err, index) => (
+                              <small className="kr-message kr-message-error" key={`err-${index}`}>
+                                <AlertTriangle size={12} /> {err.message}
+                              </small>
+                            ))}
+                            {itemWarnings.map((warning, index) => (
+                              <small className="kr-message kr-message-warning" key={`warn-${index}`}>
+                                <AlertTriangle size={12} /> {warning.reason}
+                              </small>
+                            ))}
+                          </div>
+                        ) : null}
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </section>
 
       <section className="panel">
@@ -634,13 +738,13 @@ export function WebInputForm({
       <section className="panel conclusion-panel">
         <div className="panel-header">
           <h2>Kết luận tháng</h2>
-          <span className="panel-sub">Đánh giá tổng quan và xử lý kỷ luật trong kỳ</span>
+          <span className="panel-sub">Đánh giá tổng quan và tính tuân thủ trong kỳ</span>
         </div>
         <div className={`conclusion-grid ${data.monthly_conclusion.discipline_status === "NOK" ? "has-violation" : ""}`}>
           <div className="conclusion-card discipline-card">
             <header>
-              <span className="conclusion-card-kicker"><ShieldAlert size={14} /> Kỷ luật vận hành</span>
-              <div className="discipline-toggle" role="radiogroup" aria-label="Trạng thái kỷ luật">
+              <span className="conclusion-card-kicker"><ShieldAlert size={14} /> Tính tuân thủ</span>
+              <div className="discipline-toggle" role="radiogroup" aria-label="Trạng thái tính tuân thủ">
                 <button
                   type="button"
                   className={`discipline-pill ${data.monthly_conclusion.discipline_status === "OK" ? "is-active tone-ok" : ""}`}
@@ -683,7 +787,7 @@ export function WebInputForm({
                     disabled={readOnly}
                     maxLength={2000}
                     onChange={(event) => mutate((current) => ({ ...current, monthly_conclusion: { ...current.monthly_conclusion, discipline_description: event.target.value } }))}
-                    placeholder="Mô tả ngắn gọn vi phạm và biện pháp xử lý..."
+                    placeholder="Mô tả ngắn gọn nội dung vi phạm..."
                     rows={3}
                   />
                 </label>
@@ -774,7 +878,7 @@ export function WebInputForm({
             </section>
             <section>
               <h2>Kết luận tháng</h2>
-              <p><strong>Kỷ luật:</strong> {data.monthly_conclusion.discipline_status}</p>
+              <p><strong>Tính tuân thủ:</strong> {data.monthly_conclusion.discipline_status}</p>
               {data.monthly_conclusion.discipline_status === "NOK" && data.monthly_conclusion.discipline_violators.length > 0 && (
                 <p>
                   <strong>Nhân sự vi phạm:</strong>{" "}

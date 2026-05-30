@@ -78,6 +78,8 @@ def create_schema() -> None:
     Base.metadata.create_all(bind=engine)
     _ensure_sqlite_web_input_columns()
     _ensure_user_extra_columns()
+    _ensure_personnel_extra_columns()
+    _ensure_competency_item_text_columns()
     _ensure_sk_ctkt_completed_at_column()
 
 
@@ -119,6 +121,40 @@ def _ensure_sk_ctkt_completed_at_column() -> None:
         connection.execute(text("ALTER TABLE sk_ctkt ADD COLUMN completed_at DATETIME"))
 
 
+def _ensure_personnel_extra_columns() -> None:
+    if engine.dialect.name != "sqlite":
+        return
+    inspector = inspect(engine)
+    if "personnel" not in inspector.get_table_names():
+        return
+    existing = {column["name"] for column in inspector.get_columns("personnel")}
+    statements = {
+        "role": "ALTER TABLE personnel ADD COLUMN role VARCHAR",
+        "salary_grade": "ALTER TABLE personnel ADD COLUMN salary_grade VARCHAR",
+    }
+    with engine.begin() as connection:
+        for column_name, statement in statements.items():
+            if column_name not in existing:
+                connection.execute(text(statement))
+
+
+def _ensure_competency_item_text_columns() -> None:
+    if engine.dialect.name != "sqlite":
+        return
+    inspector = inspect(engine)
+    if "competency_items" not in inspector.get_table_names():
+        return
+    existing = {column["name"] for column in inspector.get_columns("competency_items")}
+    statements = {
+        "definition": "ALTER TABLE competency_items ADD COLUMN definition TEXT",
+        "requirements_text": "ALTER TABLE competency_items ADD COLUMN requirements_text TEXT",
+    }
+    with engine.begin() as connection:
+        for column_name, statement in statements.items():
+            if column_name not in existing:
+                connection.execute(text(statement))
+
+
 def _ensure_user_extra_columns() -> None:
     inspector = inspect(engine)
     if "users" not in inspector.get_table_names():
@@ -138,9 +174,14 @@ def _ensure_user_extra_columns() -> None:
 
 
 def seed_baseline(db: Session) -> None:
+    _ensure_competency_item_text_columns()
     _seed_admin(db)
     db.flush()
     _seed_demo_users(db)
+    if settings.environment == "development":
+        from app.services.pvcfc_knl_seed import seed_pvcfc_knl_frameworks
+
+        seed_pvcfc_knl_frameworks(db, actor_id="admin")
     _seed_kr_mapping(db)
     _seed_headcounts(db)
     _seed_exemptions(db)

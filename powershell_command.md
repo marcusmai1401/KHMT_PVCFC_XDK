@@ -1,5 +1,5 @@
-cd "C:\Users\Admin\Desktop\KẾ HOẠCH MỤC TIÊU\KHMT Hàng tháng"
-.\start-dev.cmd -SkipInstall
+# Cách 1: Start lần đầu + seed prod-like tự động
+.\start-dev.cmd -SkipInstall -WithProdData -ResetUserPasswords
 
 Push code lên main và deploy luôn
 

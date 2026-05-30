@@ -181,7 +181,7 @@ def seed_baseline(db: Session) -> None:
     if settings.environment == "development":
         from app.services.pvcfc_knl_seed import seed_pvcfc_knl_frameworks
 
-        seed_pvcfc_knl_frameworks(db, actor_id="admin")
+        seed_pvcfc_knl_frameworks(db, actor_id="admin", audit_enabled=False)
     _seed_kr_mapping(db)
     _seed_headcounts(db)
     _seed_exemptions(db)

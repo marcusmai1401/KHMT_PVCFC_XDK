@@ -26,7 +26,12 @@ def load_pvcfc_knl_seed_data() -> dict[str, Any]:
     return json.loads(SEED_PATH.read_text(encoding="utf-8"))
 
 
-def seed_pvcfc_knl_frameworks(db: Session, actor_id: str = "admin", force: bool = False) -> dict[str, Any]:
+def seed_pvcfc_knl_frameworks(
+    db: Session,
+    actor_id: str = "admin",
+    force: bool = False,
+    audit_enabled: bool = True,
+) -> dict[str, Any]:
     data = load_pvcfc_knl_seed_data()
     source_commit = str(data["source_commit"])
     frameworks = list(data.get("frameworks") or [])
@@ -44,7 +49,7 @@ def seed_pvcfc_knl_frameworks(db: Session, actor_id: str = "admin", force: bool 
         framework, versioned = _get_or_create_seed_target(db, framework_data, actor, force=force)
         if versioned:
             result["versioned"] += 1
-        _apply_framework_snapshot(db, framework, framework_data, actor, source_commit)
+        _apply_framework_snapshot(db, framework, framework_data, actor, source_commit, audit_enabled=audit_enabled)
         result["frameworks"] += 1
         result["items"] += len(framework_data.get("items") or [])
 
@@ -163,6 +168,8 @@ def _apply_framework_snapshot(
     framework_data: dict[str, Any],
     actor: str,
     source_commit: str,
+    *,
+    audit_enabled: bool,
 ) -> None:
     framework.code = str(framework_data["code"])
     framework.title = str(framework_data["title"])
@@ -194,19 +201,20 @@ def _apply_framework_snapshot(
             db.delete(item)
 
     db.flush()
-    audit(
-        db,
-        actor,
-        "CompetencyFramework",
-        framework.id,
-        "seed_pvcfc_knl",
-        {
-            "source_commit": source_commit,
-            "code": framework.code,
-            "version": framework.version,
-            "item_count": len(framework_data.get("items") or []),
-        },
-    )
+    if audit_enabled:
+        audit(
+            db,
+            actor,
+            "CompetencyFramework",
+            framework.id,
+            "seed_pvcfc_knl",
+            {
+                "source_commit": source_commit,
+                "code": framework.code,
+                "version": framework.version,
+                "item_count": len(framework_data.get("items") or []),
+            },
+        )
 
 
 def _item_is_referenced(db: Session, item: CompetencyItem) -> bool:

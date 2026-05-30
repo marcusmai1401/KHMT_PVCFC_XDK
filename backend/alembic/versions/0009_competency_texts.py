@@ -1,6 +1,6 @@
 """add source definition texts to competency items
 
-Revision ID: 0009_competency_item_source_texts
+Revision ID: 0009_competency_texts
 Revises: 0008_personnel_role_salary_grade
 Create Date: 2026-05-28
 """
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0009_competency_item_source_texts"
+revision = "0009_competency_texts"
 down_revision = "0008_personnel_role_salary_grade"
 branch_labels = None
 depends_on = None

@@ -134,6 +134,7 @@ def remote_deploy_command(
     skip_import_bm01: bool,
     seed_users: bool,
     reset_user_passwords: bool,
+    seed_et_data: bool,
 ) -> str:
     compose = "docker compose --env-file .env.production -f docker-compose.prod.yml"
     import_commands = []
@@ -153,6 +154,15 @@ def remote_deploy_command(
         seed_block = f"echo \"Seeding 56 user accounts for Xưởng Điều khiển\"\n{compose} exec -T backend python scripts/seed_users_xuong_dk.py{reset_flag}"
     else:
         seed_block = "true"
+    if seed_et_data:
+        et_seed_block = "\n".join(
+            [
+                f"{compose} exec -T backend python scripts/seed_pvcfc_knl.py",
+                f"{compose} exec -T backend python scripts/seed_et_personnel.py",
+            ]
+        )
+    else:
+        et_seed_block = "true"
     return f"""
 set -euo pipefail
 mkdir -p {shlex.quote(remote_dir)} /backup/okr
@@ -186,6 +196,8 @@ echo "Running migrations"
 {compose} exec -T backend alembic upgrade head
 echo "Seeding user accounts"
 {seed_block}
+echo "Seeding ET competency frameworks and personnel"
+{et_seed_block}
 echo "Importing BM01 legacy rows"
 {import_block}
 echo "Checking services"
@@ -212,6 +224,11 @@ def main() -> int:
         "--no-reset-user-passwords",
         action="store_true",
         help="Khi seed user, KHÔNG reset password mặc định cho user đã tồn tại.",
+    )
+    parser.add_argument(
+        "--skip-et-seed",
+        action="store_true",
+        help="Bỏ qua bước seed Khung năng lực và Nhân sự ET production.",
     )
     parser.add_argument(
         "--accept-new-host-key",
@@ -245,6 +262,7 @@ def main() -> int:
                     args.skip_import_bm01,
                     seed_users=not args.skip_user_seed,
                     reset_user_passwords=not args.no_reset_user_passwords,
+                    seed_et_data=not args.skip_et_seed,
                 ),
             )
         finally:

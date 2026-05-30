@@ -708,24 +708,37 @@ function FrameworkView({ role, editMode, setError }: { role: string; editMode: b
 function PersonnelView({ role, editMode, setError }: { role: string; editMode: boolean; setError: (value: string) => void }) {
   const [rows, setRows] = useState<any[]>([]);
   const [summary, setSummary] = useState<any | null>(null);
+  const [frameworks, setFrameworks] = useState<any[]>([]);
   const [searchText, setSearchText] = useState("");
   const emptyPersonnelForm = { employee_code: "", full_name: "", role: "", position_code: "", team: "", current_level: "", salary_grade: "", status: "active", user_id: "" };
   const [form, setForm] = useState<any>(emptyPersonnelForm);
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const editable = canManage(role) && editMode;
+  const frameworkCodes = useMemo(() => new Set(frameworks.map((framework) => framework.code)), [frameworks]);
+  const isValidFrameworkCode = (value: string) => {
+    if (!value) return false;
+    return frameworkCodes.size ? frameworkCodes.has(value) : value.startsWith("KNL_");
+  };
 
   const load = () => {
     api.etPersonnel("?include_users=true").then(setRows).catch((err) => setError(err.message));
     api.etPersonnelSummary("?include_users=true").then(setSummary).catch(() => undefined);
+    api.etFrameworks().then(setFrameworks).catch(() => undefined);
   };
   useEffect(load, [editable]);
 
   const save = () => {
+    const positionCode = String(form.position_code ?? "").trim();
     const payload = {
       ...form,
       current_level: form.current_level === "" || form.current_level === null ? null : Number(form.current_level),
-      user_id: form.user_id || null
+      employee_code: String(form.employee_code ?? "").trim() || null,
+      role: String(form.role ?? "").trim() || null,
+      position_code: isValidFrameworkCode(positionCode) ? positionCode : null,
+      team: String(form.team ?? "").trim() || null,
+      salary_grade: String(form.salary_grade ?? "").trim() || null,
+      user_id: String(form.user_id ?? "").trim() || null
     };
     const request = form.id ? api.updateEtPersonnel(form.id, payload) : api.createEtPersonnel(payload);
     setSaving(true);
@@ -737,11 +750,14 @@ function PersonnelView({ role, editMode, setError }: { role: string; editMode: b
   };
 
   const editRow = (row: any) => {
+    const rowPositionCode = String(row.position_code ?? "").trim();
+    const validPositionCode = isValidFrameworkCode(rowPositionCode) ? rowPositionCode : "";
     if (row.source_type === "user") {
       setForm({
         ...emptyPersonnelForm,
         full_name: row.full_name ?? "",
         role: row.role ?? "",
+        position_code: validPositionCode,
         team: row.team ?? "",
         status: row.status ?? "active",
         user_id: row.user_id ?? "",
@@ -750,7 +766,7 @@ function PersonnelView({ role, editMode, setError }: { role: string; editMode: b
       setModalOpen(true);
       return;
     }
-    setForm({ ...row, current_level: row.current_level ?? "" });
+    setForm({ ...row, position_code: validPositionCode, current_level: row.current_level ?? "" });
     setModalOpen(true);
   };
 
@@ -929,7 +945,14 @@ function PersonnelView({ role, editMode, setError }: { role: string; editMode: b
               <div className="et-personnel-section-title">Thông tin đánh giá</div>
               <label>
                 Mã khung/vị trí đánh giá
-                <input value={form.position_code ?? ""} onChange={(event) => setForm({ ...form, position_code: event.target.value })} />
+                <select value={form.position_code ?? ""} onChange={(event) => setForm({ ...form, position_code: event.target.value })}>
+                  <option value="">ChÆ°a gÃ¡n khung</option>
+                  {frameworks.map((framework) => (
+                    <option key={framework.id} value={framework.code}>
+                      {framework.code} - {framework.title}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label>
                 Bậc năng lực

@@ -1,0 +1,125 @@
+{
+  "source": "local_et_personnel_snapshot_2026-05-30",
+  "personnel": [
+    {
+      "id": "etperson-de2a1652f3a8",
+      "employee_code": null,
+      "full_name": "Lâm Phùng Phước Vinh",
+      "role": "Staff",
+      "position_code": null,
+      "team": null,
+      "current_level": null,
+      "salary_grade": null,
+      "status": "active",
+      "user_id": "vinhlpp"
+    },
+    {
+      "id": "etperson-e4b6bd476b5c",
+      "employee_code": null,
+      "full_name": "Mai Thái Bảo",
+      "role": "Staff",
+      "position_code": null,
+      "team": null,
+      "current_level": null,
+      "salary_grade": null,
+      "status": "active",
+      "user_id": "baomt"
+    },
+    {
+      "id": "etperson-16c94cc76d2d",
+      "employee_code": null,
+      "full_name": "Nguyễn Hoàng Mai",
+      "role": "Staff",
+      "position_code": null,
+      "team": null,
+      "current_level": null,
+      "salary_grade": null,
+      "status": "active",
+      "user_id": "mainh"
+    },
+    {
+      "id": "etperson-d92713632f8e",
+      "employee_code": null,
+      "full_name": "Quách Kía",
+      "role": "Workshop_Leader",
+      "position_code": null,
+      "team": null,
+      "current_level": null,
+      "salary_grade": null,
+      "status": "active",
+      "user_id": "kiaq"
+    },
+    {
+      "id": "etperson-24224f6cc374",
+      "employee_code": null,
+      "full_name": "Trần Tuyết Quyên",
+      "role": "Staff",
+      "position_code": null,
+      "team": null,
+      "current_level": null,
+      "salary_grade": null,
+      "status": "active",
+      "user_id": "quyentt"
+    },
+    {
+      "id": "etperson-9ca7efdabf69",
+      "employee_code": null,
+      "full_name": "Phạm Thanh Quyền",
+      "role": "Nhân viên",
+      "position_code": null,
+      "team": "TBHTĐK",
+      "current_level": null,
+      "salary_grade": null,
+      "status": "active",
+      "user_id": "quyenpt"
+    },
+    {
+      "id": "etperson-c8278ab7a59c",
+      "employee_code": null,
+      "full_name": "Dương Quốc Thạnh",
+      "role": "Tổ trưởng",
+      "position_code": null,
+      "team": "TCĐK",
+      "current_level": null,
+      "salary_grade": null,
+      "status": "active",
+      "user_id": "thanhdq"
+    },
+    {
+      "id": "etperson-3d75c09bd8d9",
+      "employee_code": null,
+      "full_name": "Nguyễn Tấn Đời",
+      "role": "Tổ trưởng",
+      "position_code": null,
+      "team": "TCĐK",
+      "current_level": null,
+      "salary_grade": null,
+      "status": "active",
+      "user_id": "doint"
+    },
+    {
+      "id": "etperson-49d43d09d0a4",
+      "employee_code": null,
+      "full_name": "Phạm Quyết Chiến",
+      "role": "Tổ trưởng",
+      "position_code": null,
+      "team": "TCĐK",
+      "current_level": null,
+      "salary_grade": null,
+      "status": "active",
+      "user_id": "chienpq"
+    },
+    {
+      "id": "etperson-7c0e79e84d4a",
+      "employee_code": null,
+      "full_name": "Trịnh Thạnh Lợi",
+      "role": "Tổ trưởng",
+      "position_code": null,
+      "team": "TCĐK",
+      "current_level": null,
+      "salary_grade": null,
+      "status": "active",
+      "user_id": "loitt"
+    }
+  ]
+}

@@ -594,7 +594,6 @@ export function WebInputForm({
                     const itemErrors = validationErrors.filter((err) => err.kr_code === item.workshop_kr_code);
                     const itemWarnings = warnings.filter((warning) => warning.kr_code === item.workshop_kr_code);
                     const assessment = item.team_self_assessment;
-                    const filled = assessment && (assessment === "N/A" || item.implementation_report.trim());
                     const cardTone = itemErrors.length
                       ? "tone-error"
                       : assessment
@@ -603,17 +602,22 @@ export function WebInputForm({
                     return (
                       <article className={`kr-card ${cardTone}`} key={item.workshop_kr_code}>
                         <header className="kr-card-head">
-                          <div className="kr-card-id">
-                            <span className="kr-card-code">{item.workshop_kr_code}</span>
-                            {filled ? <CheckCircle2 className="kr-card-check" size={14} /> : null}
-                          </div>
+                          <span className="kr-card-code">{item.workshop_kr_code}</span>
                           <div className="kr-card-title">
                             <h4>{mappingItem?.kr_name ?? item.workshop_kr_code}</h4>
-                            <p>
+                            <div className="kr-card-meta">
                               <span className="kr-meta-pill">{mappingItem?.measurement_type || "Chưa định kỳ"}</span>
                               <span className="kr-meta-pill kr-meta-target">Mục tiêu: {mappingItem?.target_value || "—"}</span>
-                            </p>
+                            </div>
                           </div>
+                          {assessment ? (
+                            <span className={`kr-status-chip ${assessmentTone(assessment)}`}>
+                              <CheckCircle2 size={14} />
+                              {ASSESSMENT_SHORT[assessment]}
+                            </span>
+                          ) : (
+                            <span className="kr-status-chip is-pending">Chưa đánh giá</span>
+                          )}
                         </header>
 
                         <div className="kr-card-grid">
@@ -649,9 +653,8 @@ export function WebInputForm({
                                     data-field={isActive ? `kr-${item.workshop_kr_code}-assessment` : undefined}
                                     title={value}
                                   >
-                                    <span className="kr-assessment-pill-dot" />
+                                    {isActive ? <CheckCircle2 className="kr-assessment-pill-tick" size={16} /> : null}
                                     <span className="kr-assessment-pill-label">{ASSESSMENT_SHORT[value]}</span>
-                                    <span className="kr-assessment-pill-full">{value}</span>
                                   </button>
                                 );
                               })}

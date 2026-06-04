@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   CheckCircle2,
   Copy,
@@ -20,6 +21,8 @@ type Props = {
   role: string;
   currentUserId: string;
   editMode?: boolean;
+  // Node trong topbar (do App cung cấp) để render hàng tab lên chung với tiêu đề.
+  tabsHost?: HTMLElement | null;
 };
 
 type EtTab = "dashboard" | "frameworks" | "personnel" | "assessments" | "plans";
@@ -165,7 +168,7 @@ function personnelRoleRank(row: any) {
   return 3;
 }
 
-export function ETModule({ role, currentUserId, editMode = true }: Props) {
+export function ETModule({ role, currentUserId, editMode = true, tabsHost = null }: Props) {
   const visibleTabs = useMemo(() => {
     if (role === "FI_Coordinator") return ["dashboard"] as EtTab[];
     if (role === "Team_Account") return ["assessments", "plans"] as EtTab[];
@@ -181,29 +184,34 @@ export function ETModule({ role, currentUserId, editMode = true }: Props) {
   }, [tab, visibleTabs]);
 
   const snapshotName = etSnapshotNames[tab];
+  const tabsControl = (
+    <div className="segmented-control et-topbar-tabs" role="tablist" aria-label="Năng lực ET">
+      {visibleTabs.includes("dashboard") && (
+        <button role="tab" aria-selected={tab === "dashboard"} className={tab === "dashboard" ? "active" : ""} onClick={() => setTab("dashboard")}>Dashboard</button>
+      )}
+      {visibleTabs.includes("frameworks") && (
+        <button role="tab" aria-selected={tab === "frameworks"} className={tab === "frameworks" ? "active" : ""} onClick={() => setTab("frameworks")}>Khung năng lực</button>
+      )}
+      {visibleTabs.includes("personnel") && (
+        <button role="tab" aria-selected={tab === "personnel"} className={tab === "personnel" ? "active" : ""} onClick={() => setTab("personnel")}>Nhân sự</button>
+      )}
+      {visibleTabs.includes("assessments") && (
+        <button role="tab" aria-selected={tab === "assessments"} className={tab === "assessments" ? "active" : ""} onClick={() => setTab("assessments")}>Đánh giá</button>
+      )}
+      {visibleTabs.includes("plans") && (
+        <button role="tab" aria-selected={tab === "plans"} className={tab === "plans" ? "active" : ""} onClick={() => setTab("plans")}>Kế hoạch học tập</button>
+      )}
+    </div>
+  );
   return (
     <section
       className="et-shell"
       data-snapshot-target="true"
       data-snapshot-name={snapshotName}
     >
-      <div className="segmented-control">
-        {visibleTabs.includes("dashboard") && (
-          <button className={tab === "dashboard" ? "active" : ""} onClick={() => setTab("dashboard")}>Dashboard</button>
-        )}
-        {visibleTabs.includes("frameworks") && (
-          <button className={tab === "frameworks" ? "active" : ""} onClick={() => setTab("frameworks")}>Khung năng lực</button>
-        )}
-        {visibleTabs.includes("personnel") && (
-          <button className={tab === "personnel" ? "active" : ""} onClick={() => setTab("personnel")}>Nhân sự</button>
-        )}
-        {visibleTabs.includes("assessments") && (
-          <button className={tab === "assessments" ? "active" : ""} onClick={() => setTab("assessments")}>Đánh giá</button>
-        )}
-        {visibleTabs.includes("plans") && (
-          <button className={tab === "plans" ? "active" : ""} onClick={() => setTab("plans")}>Kế hoạch học tập</button>
-        )}
-      </div>
+      {/* Hàng tab được "portal" lên topbar để nằm chung hàng với tiêu đề "Năng lực ET".
+          Khi host chưa sẵn sàng (vd: render standalone) thì hiển thị tại chỗ. */}
+      {tabsHost ? createPortal(tabsControl, tabsHost) : tabsControl}
       {error && <p className="error">{error}</p>}
       {tab === "dashboard" && <DashboardView setError={setError} />}
       {tab === "frameworks" && <FrameworkView role={role} editMode={editMode} setError={setError} />}

@@ -30,6 +30,27 @@ function Quote-PowerShellString {
     return "'" + ($Value -replace "'", "''") + "'"
 }
 
+function Quote-NativeArgument {
+    param([string]$Value)
+    if ($null -eq $Value) {
+        return '""'
+    }
+    if ($Value -notmatch '[\s"]') {
+        return $Value
+    }
+    return '"' + ($Value -replace '"', '\"') + '"'
+}
+
+function Invoke-NativeProcess {
+    param(
+        [Parameter(Mandatory)][string]$FilePath,
+        [string[]]$Arguments = @()
+    )
+    $quotedArgs = @($Arguments | ForEach-Object { Quote-NativeArgument ([string]$_) })
+    $process = Start-Process -FilePath $FilePath -ArgumentList $quotedArgs -NoNewWindow -Wait -PassThru
+    return [int]$process.ExitCode
+}
+
 function Test-TcpPort {
     param([int]$Port)
     $client = New-Object System.Net.Sockets.TcpClient
@@ -112,7 +133,7 @@ function Receive-PrefixedJobOutput {
         [string]$Prefix,
         [ConsoleColor]$Color
     )
-    $lines = Receive-Job -Job $Job -ErrorAction SilentlyContinue
+    $lines = Receive-Job -Job $Job -ErrorAction Continue 2>&1
     foreach ($line in $lines) {
         if ($null -ne $line) {
             Write-Host "[$Prefix] " -NoNewline -ForegroundColor $Color
@@ -188,12 +209,8 @@ function Invoke-BackendPython {
     if ($StepLabel) { Write-Step $StepLabel }
     $env:PYTHONIOENCODING = "utf-8"
     Push-Location $BackendDir
-    $prevPref = $ErrorActionPreference
     try {
-        $ErrorActionPreference = "Continue"
-        & $BackendPython @Arguments 2>&1 | ForEach-Object { Write-Host $_ }
-        $exit = $LASTEXITCODE
-        $ErrorActionPreference = $prevPref
+        $exit = Invoke-NativeProcess -FilePath $BackendPython -Arguments $Arguments
         if ($exit -ne 0) {
             if ($WarnOnFail) {
                 Write-Warning "$StepLabel - exit code $exit (kiem tra log o tren)."
@@ -202,7 +219,6 @@ function Invoke-BackendPython {
             }
         }
     } finally {
-        $ErrorActionPreference = $prevPref
         Pop-Location
     }
 }
@@ -213,22 +229,16 @@ function Invoke-AlembicUpgradeHead {
     Write-Step "Running Alembic migrations (alembic upgrade head)"
     $env:PYTHONIOENCODING = "utf-8"
     Push-Location $BackendDir
-    $prevPref = $ErrorActionPreference
     try {
-        $ErrorActionPreference = "Continue"
-        & $BackendPython -m alembic upgrade head 2>&1 | ForEach-Object { Write-Host $_ }
-        $upgradeExit = $LASTEXITCODE
+        $upgradeExit = Invoke-NativeProcess -FilePath $BackendPython -Arguments @("-m", "alembic", "upgrade", "head")
         if ($upgradeExit -ne 0) {
             Write-Warning "alembic upgrade exit $upgradeExit - schema co the da o head do bootstrap.py them column. Stamp head."
-            & $BackendPython -m alembic stamp head 2>&1 | ForEach-Object { Write-Host $_ }
-            $stampExit = $LASTEXITCODE
+            $stampExit = Invoke-NativeProcess -FilePath $BackendPython -Arguments @("-m", "alembic", "stamp", "head")
             if ($stampExit -ne 0) {
-                $ErrorActionPreference = $prevPref
                 throw "Alembic stamp head failed with exit code $stampExit"
             }
         }
     } finally {
-        $ErrorActionPreference = $prevPref
         Pop-Location
     }
 }
@@ -330,6 +340,22 @@ $npmCommand = "npm"
 if (Get-Command npm.cmd -ErrorAction SilentlyContinue) {
     $npmCommand = (Get-Command npm.cmd).Source
 }
+$nodeCommand = $null
+if (Get-Command node.exe -ErrorAction SilentlyContinue) {
+    $nodeCommand = (Get-Command node.exe).Source
+} else {
+    $nodeFromNpm = Join-Path (Split-Path -Parent $npmCommand) "node.exe"
+    if (Test-Path $nodeFromNpm) {
+        $nodeCommand = $nodeFromNpm
+    }
+}
+if (-not $nodeCommand) {
+    throw "Node.js executable not found. Install Node.js, then rerun this script."
+}
+$viteScript = Join-Path $FrontendDir "node_modules\vite\bin\vite.js"
+if (-not (Test-Path $viteScript)) {
+    throw "Vite not found at $viteScript. Rerun without -SkipInstall first."
+}
 
 if ($SeparateWindows) {
     $BackendRunning = Test-TcpPort $BackendPort
@@ -358,7 +384,7 @@ Set-Location -LiteralPath $(Quote-PowerShellString $BackendDir)
         $frontendCmd = @"
 `$Host.UI.RawUI.WindowTitle = 'OKR Frontend :$FrontendPort'
 Set-Location -LiteralPath $(Quote-PowerShellString $FrontendDir)
-& $(Quote-PowerShellString $npmCommand) run dev -- --host 0.0.0.0 --port $FrontendPort
+& $(Quote-PowerShellString $nodeCommand) $(Quote-PowerShellString $viteScript) --host 0.0.0.0 --port $FrontendPort
 "@
         Start-Process powershell.exe -ArgumentList @(
             "-NoExit",
@@ -417,10 +443,10 @@ try {
     } else {
         Write-Step "Starting frontend on $FrontendUrl in this terminal"
         $FrontendJob = Start-Job -Name "OKR Frontend" -ScriptBlock {
-            param($WorkingDir, $NpmExe, $Port)
+            param($WorkingDir, $NodeExe, $ViteEntry, $Port)
             Set-Location -LiteralPath $WorkingDir
-            & $NpmExe run dev -- --host 0.0.0.0 --port $Port 2>&1
-        } -ArgumentList $FrontendDir, $npmCommand, $FrontendPort
+            & $NodeExe $ViteEntry --host 0.0.0.0 --port $Port 2>&1
+        } -ArgumentList $FrontendDir, $nodeCommand, $viteScript, $FrontendPort
     }
 
     Write-Step "Waiting for dev servers"

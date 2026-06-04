@@ -95,8 +95,12 @@ def create(
         team = principal.get("team")
         if not team:
             raise HTTPException(status_code=400, detail="Tài khoản chưa được gán đội/tổ")
-        # Buộc tác giả và team theo account đăng nhập, không cho ghi đè qua payload.
-        data["author_name"] = _principal_author_name(principal)
+        # Tác giả mặc định theo account đăng nhập, nhưng cho phép "đăng ký giúp người
+        # khác": nếu payload có author_name thì tôn trọng (chỉ là phần ghi công hiển thị).
+        # Team và author_user_id vẫn gắn với account đăng nhập để giữ nguyên phân quyền,
+        # luồng xét duyệt và ràng buộc xung đột lợi ích (FI tự duyệt SK của mình).
+        submitted_author = str(data.get("author_name") or "").strip()
+        data["author_name"] = submitted_author or _principal_author_name(principal)
         data["team"] = team
         data["author_user_id"] = principal["user_id"]
     elif not data.get("author_name") or not data.get("team"):

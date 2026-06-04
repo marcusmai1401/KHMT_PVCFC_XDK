@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   Bell,
@@ -143,6 +143,29 @@ export function App() {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
   });
+  // Vùng neo (DOM node) trong topbar để các module (OKR / Năng lực ET / FI) "portal"
+  // hàng tab lên chung hàng với tiêu đề. Dùng callback ref + state để node sẵn sàng
+  // ngay sau khi mount (tránh nhấp nháy vị trí tab khi chuyển tab).
+  const [topbarTabsHost, setTopbarTabsHost] = useState<HTMLDivElement | null>(null);
+
+  // Đo chiều cao topbar (có thể đổi khi tab xuống hàng hoặc đổi vai trò) và đưa vào
+  // biến CSS --app-topbar-h, để vùng bộ lọc sticky của Lịch sử FI luôn ghim đúng
+  // ngay dưới topbar dù topbar 1 hay 2 hàng.
+  const topbarObserverRef = useRef<ResizeObserver | null>(null);
+  const attachTopbarMeasure = useCallback((el: HTMLElement | null) => {
+    topbarObserverRef.current?.disconnect();
+    topbarObserverRef.current = null;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const apply = () =>
+      document.documentElement.style.setProperty(
+        "--app-topbar-h",
+        `${Math.round(el.getBoundingClientRect().height)}px`,
+      );
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(el);
+    topbarObserverRef.current = observer;
+  }, []);
 
   const applySession = (response: LoginResponse, fallbackUserId: string) => {
     setToken(response.access_token);
@@ -643,6 +666,45 @@ export function App() {
             </button>
           </div>
         </div>
+        {sandbox && (
+          <div className="sidebar-sandbox">
+            <div className="sidebar-sandbox-head">
+              <FlaskConical size={14} />
+              <span>Môi trường kiểm thử</span>
+            </div>
+            <label className="sidebar-sandbox-field">
+              <span>Giả lập tài khoản</span>
+              <select
+                value={currentUserId}
+                onChange={(event) => switchSandboxRole(event.target.value)}
+                aria-label="Giả lập tài khoản"
+              >
+                {groupedIdentities.length === 0 && (
+                  <option value={currentUserId}>{currentDisplayName ?? currentUserId}</option>
+                )}
+                {groupedIdentities.map((group) => (
+                  <optgroup key={group.role} label={displayRole(group.role)}>
+                    {group.items.map((identity) => (
+                      <option key={identity.id} value={identity.id}>
+                        {identity.display_name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+            <button
+              className="sidebar-sandbox-reset"
+              onClick={resetSandbox}
+              disabled={resettingSandbox}
+              title="Reset toàn bộ dữ liệu kiểm thử"
+              type="button"
+            >
+              <RotateCcw size={15} />
+              <span>{resettingSandbox ? "Đang reset..." : "Reset dữ liệu kiểm thử"}</span>
+            </button>
+          </div>
+        )}
         <nav>
           <button className={tab === "okr" ? "active" : ""} onClick={() => setTab("okr")} title="OKR">
             <BarChart3 size={18} />
@@ -667,39 +729,18 @@ export function App() {
         </nav>
       </aside>
       <section className={`workspace ${tab === "fi" ? "fi-workspace-shell" : ""}`}>
-        <header className="topbar">
-          <div>
+        <header className="topbar" ref={attachTopbarMeasure}>
+          <div className="topbar-heading">
             <h1>{tabTitles[tab]}</h1>
             <p>Vai trò: {displayRole(role)}{currentTeam ? ` · ${displayTeam(currentTeam)}` : ""}</p>
           </div>
+          {(tab === "okr" || tab === "et" || tab === "fi") && (
+            // Hàng tab của module hiện tại (OKR / Năng lực ET / Luồng SK-CTKT) được
+            // chính module đó render vào đây (portal) để nằm chung hàng với tiêu đề,
+            // thay cho hàng tab riêng bên dưới.
+            <div className="topbar-tabs" ref={setTopbarTabsHost} />
+          )}
           <div className="topbar-tools">
-            {sandbox && (
-              <div className="sandbox-toolbar" title="Đang ở môi trường kiểm thử">
-                <span className="sandbox-pill"><FlaskConical size={14} /> Kiểm thử</span>
-                <select
-                  value={currentUserId}
-                  onChange={(event) => switchSandboxRole(event.target.value)}
-                  aria-label="Giả lập tài khoản"
-                >
-                  {groupedIdentities.length === 0 && (
-                    <option value={currentUserId}>{currentDisplayName ?? currentUserId}</option>
-                  )}
-                  {groupedIdentities.map((group) => (
-                    <optgroup key={group.role} label={displayRole(group.role)}>
-                      {group.items.map((identity) => (
-                        <option key={identity.id} value={identity.id}>
-                          {identity.display_name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-                <button onClick={resetSandbox} disabled={resettingSandbox} title="Reset dữ liệu kiểm thử">
-                  <RotateCcw size={16} />
-                  {resettingSandbox ? "Đang reset..." : "Reset"}
-                </button>
-              </div>
-            )}
             {role === "Admin" && (
               <button
                 aria-pressed={adminEditMode}
@@ -751,9 +792,9 @@ export function App() {
           data-snapshot-name={tabSnapshotNames[tab]}
           key={workspaceVersion}
         >
-          {tab === "okr" && <OKRModule role={role} currentUserId={currentUserId} currentTeam={currentTeam} editMode={effectiveEditMode} />}
-          {tab === "et" && <ETModule role={role} currentUserId={currentUserId} editMode={effectiveEditMode} />}
-          {tab === "fi" && <FIWorkspace role={role} currentUserId={currentUserId} currentTeam={currentTeam} displayName={currentDisplayName} editMode={effectiveEditMode} />}
+          {tab === "okr" && <OKRModule role={role} currentUserId={currentUserId} currentTeam={currentTeam} editMode={effectiveEditMode} tabsHost={topbarTabsHost} />}
+          {tab === "et" && <ETModule role={role} currentUserId={currentUserId} editMode={effectiveEditMode} tabsHost={topbarTabsHost} />}
+          {tab === "fi" && <FIWorkspace role={role} currentUserId={currentUserId} currentTeam={currentTeam} displayName={currentDisplayName} editMode={effectiveEditMode} tabsHost={topbarTabsHost} />}
           {tab === "admin" && <AdminPanel />}
         </div>
       </section>

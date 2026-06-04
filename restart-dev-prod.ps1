@@ -135,10 +135,14 @@ if ($StopFrontend) {
 }
 
 Write-Step "Starting dev with production-like data"
-$startDevArgs = @("-SkipInstall", "-WithProdData", "-ResetUserPasswords")
-if ($SeparateWindows) {
-    $startDevArgs += "-SeparateWindows"
+$startDevParams = @{
+    BackendPort = $BackendPort
+    FrontendPort = $FrontendPort
+    SkipInstall = $true
+    WithProdData = $true
+    ResetUserPasswords = $true
+    SeparateWindows = $true
 }
 
-& $StartDevScript @startDevArgs
+& $StartDevScript @startDevParams
 exit $LASTEXITCODE

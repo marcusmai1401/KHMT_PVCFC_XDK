@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   BarChart3,
   CalendarDays,
@@ -179,6 +180,16 @@ function addMonths(date: Date, months: number) {
   const copy = new Date(date);
   copy.setMonth(copy.getMonth() + months);
   return copy;
+}
+
+// Chuẩn hoá chuỗi để tìm tác giả không phân biệt dấu/hoa-thường: gõ "Vo", "Võ",
+// "vo" đều khớp "Võ"; gõ "do" khớp "Đỗ" (đ → d). Dùng cho bộ lọc combobox tác giả.
+function normalizeAuthorQuery(value: string | null | undefined) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/đ/g, "d");
 }
 
 function parseCompletionPlan(value: string | null | undefined, completedAt?: string | null): { date: string; done: boolean } | null {
@@ -1043,12 +1054,15 @@ export function FIWorkspace({
   currentTeam,
   displayName,
   editMode = true,
+  tabsHost = null,
 }: {
   role: string;
   currentUserId: string;
   currentTeam?: string | null;
   displayName?: string | null;
   editMode?: boolean;
+  // Node trong topbar (do App cung cấp) để render hàng tab lên chung với tiêu đề.
+  tabsHost?: HTMLElement | null;
 }) {
   const teamFromAccount = currentTeam ?? (AUTHOR_ROLES.includes(role) ? currentUserId : null);
   const isLockedToTeam = AUTHOR_ROLES.includes(role) && teamFromAccount && FI_TEAMS.includes(teamFromAccount);
@@ -1108,6 +1122,14 @@ export function FIWorkspace({
   const [uploadingImages, setUploadingImages] = useState(false);
   const [imagePreviewIndex, setImagePreviewIndex] = useState<number | null>(null);
   const [notice, setNotice] = useState("");
+  // Combobox chọn tác giả: mặc định là chính chủ tài khoản, nhưng cho phép tìm và
+  // chọn người khác khi "đăng ký giúp". authorQuery là từ khoá đang gõ; tên đã chốt
+  // nằm ở form.author_name.
+  const [authorOptions, setAuthorOptions] = useState<
+    Array<{ id: string; display_name: string; full_name: string; team: string | null; role: string }>
+  >([]);
+  const [authorPickerOpen, setAuthorPickerOpen] = useState(false);
+  const [authorQuery, setAuthorQuery] = useState("");
 
   const reload = () => {
     setDashboardLoading(true);
@@ -1133,7 +1155,91 @@ export function FIWorkspace({
       author_name: accountAuthorName,
       team: accountTeam ?? current.team,
     }));
+    setAuthorQuery(accountAuthorName);
   }, [role, accountAuthorName, accountTeam]);
+
+  // Nạp danh sách nhân sự cho combobox tác giả (chỉ với vai trò được phép đăng ký).
+  // Nếu không tải được vẫn cho nhập tay tên tác giả nên lỗi được bỏ qua êm.
+  useEffect(() => {
+    if (!AUTHOR_ROLES.includes(role)) return;
+    let active = true;
+    api.listTaggableEmployees()
+      .then((rows) => {
+        if (active) setAuthorOptions(rows);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [role]);
+
+  // Sắp xếp: chính mình lên đầu → cùng đội/tổ → còn lại theo bảng chữ cái (tiếng Việt).
+  const sortedAuthorOptions = useMemo(() => {
+    const selfRank = (row: { id: string }) => (row.id === currentUserId ? 0 : 1);
+    const teamRank = (row: { team: string | null }) => (accountTeam && row.team === accountTeam ? 0 : 1);
+    return [...authorOptions].sort(
+      (a, b) =>
+        selfRank(a) - selfRank(b) ||
+        teamRank(a) - teamRank(b) ||
+        String(a.full_name || "").localeCompare(String(b.full_name || ""), "vi"),
+    );
+  }, [authorOptions, currentUserId, accountTeam]);
+
+  const filteredAuthors = useMemo(() => {
+    const term = normalizeAuthorQuery(authorQuery).trim();
+    const committed = normalizeAuthorQuery(form.author_name).trim();
+    // Khi ô đang hiển thị đúng tên đã chốt (chưa gõ để tìm) thì cho xem toàn bộ danh sách.
+    if (!term || term === committed) return sortedAuthorOptions;
+    const tokens = term.split(/\s+/).filter(Boolean);
+    return sortedAuthorOptions.filter((row) => {
+      // Cho tìm theo cả mã tài khoản (vd "baomt" ↔ Mai Thái Bảo, "minhvq" ↔ Võ Quang Minh).
+      const haystack = normalizeAuthorQuery(`${row.full_name} ${row.display_name} ${row.id} ${displayTeam(row.team)}`);
+      return tokens.every((token) => haystack.includes(token));
+    });
+  }, [sortedAuthorOptions, authorQuery, form.author_name]);
+
+  const isProxyAuthor =
+    AUTHOR_ROLES.includes(role) &&
+    form.author_name.trim().length > 0 &&
+    normalizeAuthorQuery(form.author_name) !== normalizeAuthorQuery(accountAuthorName);
+
+  const chooseAuthor = (row: { full_name: string; display_name: string }) => {
+    const name = row.full_name || row.display_name || "";
+    setForm((current) => ({ ...current, author_name: name }));
+    setAuthorQuery(name);
+    setAuthorPickerOpen(false);
+  };
+
+  const resetAuthorToSelf = () => {
+    setForm((current) => ({ ...current, author_name: accountAuthorName }));
+    setAuthorQuery(accountAuthorName);
+    setAuthorPickerOpen(false);
+  };
+
+  // Đóng dropdown và "chốt" lựa chọn khi rời ô / nhấn Enter. CHỈ tự nhận một nhân sự khi
+  // chuỗi gõ trùng ĐẦY ĐỦ & CHÍNH XÁC mã tài khoản ("baomt", "minhvq") hoặc đúng họ tên.
+  // Gõ dở/mảnh ngắn (vd "vq", "vo") thì KHÔNG tự thành người nào — trả ô về tên đã chốt
+  // trước đó. Muốn chọn nhanh từ gợi ý thì bấm trực tiếp vào danh sách.
+  const commitAuthorQuery = () => {
+    setAuthorPickerOpen(false);
+    const norm = normalizeAuthorQuery(authorQuery.trim());
+    const exact = norm
+      ? sortedAuthorOptions.find(
+          (option) =>
+            normalizeAuthorQuery(option.id) === norm ||
+            normalizeAuthorQuery(option.full_name) === norm ||
+            normalizeAuthorQuery(option.display_name) === norm,
+        )
+      : null;
+    if (exact) {
+      const name = exact.full_name || exact.display_name;
+      setForm((current) => ({ ...current, author_name: name }));
+      setAuthorQuery(name);
+    } else {
+      // Không khớp đầy đủ → giữ nguyên tên tác giả đã chốt, đưa ô về đúng giá trị đó.
+      setAuthorQuery(form.author_name);
+    }
+  };
 
   // Reset tab nếu role thay đổi và tab hiện tại không còn hợp lệ
   // (vd: Admin đang ở "review" → giả lập Team_Account thì canReview = false).
@@ -1155,7 +1261,10 @@ export function FIWorkspace({
     if (role === ADMIN_ROLE && !editMode) return;
     // Client-side validation: prevent submitting empty registrations.
     const missing: string[] = [];
-    const authorName = AUTHOR_ROLES.includes(role) ? accountAuthorName : form.author_name;
+    // Tác giả: với vai trò đăng ký, dùng tên đã chọn/nhập; trống thì quay về chính chủ.
+    const authorName = AUTHOR_ROLES.includes(role)
+      ? form.author_name.trim() || accountAuthorName
+      : form.author_name;
     const team = AUTHOR_ROLES.includes(role) ? accountTeam : form.team;
     if (!authorName.trim()) missing.push("Tác giả");
     if (!team?.trim()) missing.push("Đội/tổ trên tài khoản");
@@ -1201,17 +1310,19 @@ export function FIWorkspace({
         setError(`Đã lưu đăng ký nhưng ${failedFiles.length}/${filesToUpload.length} ảnh chưa tải lên được. Có thể thử tải lại trong phần chi tiết hồ sơ.`);
       } else {
         setNotice(filesToUpload.length > 0 ? `Đã lưu đăng ký và tải lên ${filesToUpload.length} ảnh bằng chứng.` : "Đã lưu đăng ký.");
-        // Reset form for next entry after successful save
+        // Reset form for next entry after successful save. Tác giả quay về chính chủ
+        // để lần đăng ký kế tiếp mặc định là của mình (tránh giữ lại tên người được giúp).
         const today = new Date();
         setForm((current) => ({
           ...current,
-          author_name: AUTHOR_ROLES.includes(role) ? authorName : "",
+          author_name: AUTHOR_ROLES.includes(role) ? accountAuthorName : "",
           team: AUTHOR_ROLES.includes(role) ? team ?? current.team : current.team,
           title: "",
           content_description: "",
           completion_done: false,
           completion_plan_date: isoDateInput(addMonths(today, 1)),
         }));
+        if (AUTHOR_ROLES.includes(role)) setAuthorQuery(accountAuthorName);
       }
     } catch (err: any) {
       setError(err.message);
@@ -1798,59 +1909,64 @@ export function FIWorkspace({
         onChange={handleDetailImageSelection}
       />
 
-      <div className="fi-workspace-tabs" role="tablist" aria-label="Luồng SK-CTKT">
-        <div className="segmented-control">
-          {canRegister && (
+      {/* Hàng tab được "portal" lên topbar để nằm chung hàng với tiêu đề
+          "Luồng SK-CTKT". Khi host chưa sẵn sàng (1 frame đầu lúc mount) thì
+          không render để tránh nhấp nháy vị trí. */}
+      {tabsHost &&
+        createPortal(
+          <div className="segmented-control fi-topbar-tabs" role="tablist" aria-label="Luồng SK-CTKT">
+            {canRegister && (
+              <button
+                aria-selected={activeTab === "register"}
+                className={activeTab === "register" ? "active" : ""}
+                onClick={() => selectTab("register")}
+                role="tab"
+                type="button"
+              >
+                <ClipboardCheck size={16} />
+                Đăng ký SK-CTKT
+              </button>
+            )}
+            {canReview && (
+              <button
+                aria-selected={activeTab === "review"}
+                className={activeTab === "review" ? "active" : ""}
+                onClick={() => selectTab("review")}
+                role="tab"
+                type="button"
+              >
+                <ClipboardList size={16} />
+                Xét duyệt SK-CTKT
+                {reviewCounts.pending > 0 && (
+                  <span className="tab-badge" aria-label={`${reviewCounts.pending} SK đang chờ`}>
+                    {reviewCounts.pending}
+                  </span>
+                )}
+              </button>
+            )}
             <button
-              aria-selected={activeTab === "register"}
-              className={activeTab === "register" ? "active" : ""}
-              onClick={() => selectTab("register")}
+              aria-selected={activeTab === "dashboard"}
+              className={activeTab === "dashboard" ? "active" : ""}
+              onClick={() => selectTab("dashboard")}
               role="tab"
               type="button"
             >
-              <ClipboardCheck size={16} />
-              Đăng ký SK-CTKT
+              <BarChart3 size={16} />
+              FI Dashboard
             </button>
-          )}
-          {canReview && (
             <button
-              aria-selected={activeTab === "review"}
-              className={activeTab === "review" ? "active" : ""}
-              onClick={() => selectTab("review")}
+              aria-selected={activeTab === "history"}
+              className={activeTab === "history" ? "active" : ""}
+              onClick={() => selectTab("history")}
               role="tab"
               type="button"
             >
-              <ClipboardList size={16} />
-              Xét duyệt SK-CTKT
-              {reviewCounts.pending > 0 && (
-                <span className="tab-badge" aria-label={`${reviewCounts.pending} SK đang chờ`}>
-                  {reviewCounts.pending}
-                </span>
-              )}
+              <History size={16} />
+              Lịch sử FI
             </button>
-          )}
-          <button
-            aria-selected={activeTab === "dashboard"}
-            className={activeTab === "dashboard" ? "active" : ""}
-            onClick={() => selectTab("dashboard")}
-            role="tab"
-            type="button"
-          >
-            <BarChart3 size={16} />
-            FI Dashboard
-          </button>
-          <button
-            aria-selected={activeTab === "history"}
-            className={activeTab === "history" ? "active" : ""}
-            onClick={() => selectTab("history")}
-            role="tab"
-            type="button"
-          >
-            <History size={16} />
-            Lịch sử FI
-          </button>
-        </div>
-      </div>
+          </div>,
+          tabsHost,
+        )}
 
       {editTarget && (
         <div
@@ -1999,9 +2115,106 @@ export function FIWorkspace({
 	          <div className="form-stack">
 	            {AUTHOR_ROLES.includes(role) ? (
 	              <div className="fi-account-source" aria-label="Thông tin tài khoản đăng ký">
-	                <div>
-	                  <span>Người đăng ký</span>
-	                  <strong>{accountAuthorName}</strong>
+	                <div className="fi-author-cell">
+	                  <span>Tác giả</span>
+	                  <div
+	                    className="fi-author-picker"
+	                    onBlur={(event) => {
+	                      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+	                        commitAuthorQuery();
+	                      }
+	                    }}
+	                  >
+	                    <UserRound size={15} className="fi-author-picker-icon" aria-hidden="true" />
+	                    <input
+	                      id="fi-author-name"
+	                      role="combobox"
+	                      aria-expanded={authorPickerOpen}
+	                      aria-controls="fi-author-list"
+	                      aria-autocomplete="list"
+	                      autoComplete="off"
+	                      placeholder="Nhập tên hoặc mã tài khoản để tìm…"
+	                      value={authorPickerOpen ? authorQuery : form.author_name}
+	                      onFocus={(event) => {
+	                        setAuthorPickerOpen(true);
+	                        setAuthorQuery(form.author_name);
+	                        event.target.select();
+	                      }}
+	                      onChange={(event) => {
+	                        setAuthorPickerOpen(true);
+	                        setAuthorQuery(event.target.value);
+	                      }}
+	                      onKeyDown={(event) => {
+	                        if (event.key === "Escape") {
+	                          setAuthorQuery(form.author_name);
+	                          setAuthorPickerOpen(false);
+	                        } else if (event.key === "Enter") {
+	                          // Chỉ "ăn" khi gõ đủ mã tài khoản / đúng họ tên (commitAuthorQuery tự
+	                          // kiểm tra). Muốn chọn từ gợi ý thì bấm trực tiếp vào danh sách.
+	                          event.preventDefault();
+	                          commitAuthorQuery();
+	                        } else if (event.key === "ArrowDown" && !authorPickerOpen) {
+	                          setAuthorPickerOpen(true);
+	                        }
+	                      }}
+	                    />
+	                    {(authorPickerOpen ? authorQuery : form.author_name) && (
+	                      <button
+	                        type="button"
+	                        className="fi-author-clear"
+	                        title="Xóa tên"
+	                        tabIndex={-1}
+	                        onMouseDown={(event) => event.preventDefault()}
+	                        onClick={() => {
+	                          setForm((current) => ({ ...current, author_name: "" }));
+	                          setAuthorQuery("");
+	                          setAuthorPickerOpen(true);
+	                        }}
+	                      >
+	                        <X size={14} />
+	                      </button>
+	                    )}
+	                    {authorPickerOpen && (
+	                      <div id="fi-author-list" className="fi-author-list" role="listbox" aria-label="Danh sách tác giả">
+	                        {filteredAuthors.length > 0 ? (
+	                          filteredAuthors.map((row) => (
+	                            <button
+	                              key={row.id}
+	                              type="button"
+	                              role="option"
+	                              aria-selected={normalizeAuthorQuery(form.author_name) === normalizeAuthorQuery(row.full_name)}
+	                              onMouseDown={(event) => event.preventDefault()}
+	                              onClick={() => chooseAuthor(row)}
+	                            >
+	                              <strong>
+	                                {row.full_name}
+	                                {row.id === currentUserId && <span className="fi-author-self-badge">Bạn</span>}
+	                              </strong>
+	                              <span>
+	                                <span className="fi-author-acct">{row.id}</span>
+	                                {displayTeam(row.team) ? ` · ${displayTeam(row.team)}` : ""}
+	                              </span>
+	                            </button>
+	                          ))
+	                        ) : (
+	                          <div className="fi-author-empty">
+	                            {authorQuery.trim() ? (
+	                              <>Không tìm thấy ai khớp “<strong>{authorQuery.trim()}</strong>”. Thử nhập đủ họ tên hoặc mã tài khoản.</>
+	                            ) : (
+	                              "Không có nhân sự để chọn."
+	                            )}
+	                          </div>
+	                        )}
+	                      </div>
+	                    )}
+	                  </div>
+	                  {isProxyAuthor && (
+	                    <small className="fi-author-proxy">
+	                      <Info size={13} aria-hidden="true" />
+	                      <span>Đang đăng ký giúp · người gửi: <strong>{accountAuthorName}</strong></span>
+	                      <button type="button" onClick={resetAuthorToSelf}>Chọn lại tôi</button>
+	                    </small>
+	                  )}
 	                </div>
 	                <div>
 	                  <span>Đội/tổ</span>
@@ -2709,33 +2922,6 @@ export function FIWorkspace({
       {activeTab === "history" && (
       <section className="panel wide legacy-sk-panel fi-history-panel">
         <div className="legacy-sticky-controls fi-history-controls">
-          <div className="panel-header fi-history-header">
-            <div className="fi-history-headline">
-              <h2>Lịch sử FI</h2>
-              <p className="muted">
-                {historyActiveFilterCount > 0 ? (
-                  <>
-                    Hiển thị <strong>{filteredHistoryItems.length}</strong>/{historyItems.length} SK-CTKT
-                  </>
-                ) : (
-                  <>
-                    <strong>{historyItems.length}</strong> SK-CTKT đã ghi nhận
-                  </>
-                )}
-              </p>
-            </div>
-            <div className="toolbar fi-history-actions">
-              <button
-                className="fi-history-reload"
-                onClick={reload}
-                title="Tải lại lịch sử FI"
-                type="button"
-              >
-                <RefreshCw size={17} />
-              </button>
-            </div>
-          </div>
-
           <div className="fi-history-toolbar" role="group" aria-label="Bộ lọc lịch sử FI">
             <span className="fi-history-toolbar-lead" aria-hidden="true">
               <SlidersHorizontal size={14} />
@@ -2799,18 +2985,39 @@ export function FIWorkspace({
               onChange={changeHistoryCompletion}
               emptyLabel="Tất cả"
             />
-            {historyActiveFilterCount > 0 && (
+            <div className="fi-history-toolbar-tail">
+              {historyActiveFilterCount > 0 && (
+                <button
+                  type="button"
+                  className="fi-history-filter-reset"
+                  onClick={resetHistoryFilters}
+                  title="Xóa toàn bộ bộ lọc"
+                >
+                  <X size={13} />
+                  Xóa bộ lọc
+                  <span className="fi-history-filter-reset-count">{historyActiveFilterCount}</span>
+                </button>
+              )}
+              <span className="fi-history-toolbar-count" aria-live="polite">
+                {historyActiveFilterCount > 0 ? (
+                  <>
+                    Hiển thị <strong>{filteredHistoryItems.length}</strong>/{historyItems.length}
+                  </>
+                ) : (
+                  <>
+                    <strong>{historyItems.length}</strong> SK-CTKT
+                  </>
+                )}
+              </span>
               <button
+                className="fi-history-reload"
+                onClick={reload}
+                title="Tải lại lịch sử FI"
                 type="button"
-                className="fi-history-filter-reset"
-                onClick={resetHistoryFilters}
-                title="Xóa toàn bộ bộ lọc"
               >
-                <X size={13} />
-                Xóa bộ lọc
-                <span className="fi-history-filter-reset-count">{historyActiveFilterCount}</span>
+                <RefreshCw size={17} />
               </button>
-            )}
+            </div>
           </div>
 
           {historyTeamSummary && (() => {

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { ClipboardCheck, FileText, Gauge, Scale } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { WebInputForm } from "../web-input/WebInputForm";
@@ -26,15 +27,39 @@ export function OKRModule({
   currentUserId,
   currentTeam,
   editMode = true,
+  tabsHost = null,
 }: {
   role: string;
   currentUserId: string;
   currentTeam?: string | null;
   editMode?: boolean;
+  // Node trong topbar (do App cung cấp) để render hàng tab lên chung với tiêu đề.
+  tabsHost?: HTMLElement | null;
 }) {
   const [activeTab, setActiveTab] = useState<OKRTab>("dashboard");
   // Staff chỉ được xem dashboard + reference; ẩn tab nhập liệu OKR.
   const visibleTabs = okrTabs.filter((tab) => !(role === "Staff" && tab.id === "web-input"));
+
+  const tabsControl = (
+    <div className="segmented-control okr-topbar-tabs" role="tablist" aria-label="OKR">
+      {visibleTabs.map((tab) => {
+        const Icon = tab.icon;
+        return (
+          <button
+            aria-selected={activeTab === tab.id}
+            className={activeTab === tab.id ? "active" : ""}
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            role="tab"
+            type="button"
+          >
+            <Icon size={16} />
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div
@@ -42,26 +67,11 @@ export function OKRModule({
       data-snapshot-target="true"
       data-snapshot-name={snapshotNames[activeTab]}
     >
-      <div className="okr-module-tabs" role="tablist" aria-label="OKR">
-        <div className="segmented-control">
-          {visibleTabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                aria-selected={activeTab === tab.id}
-                className={activeTab === tab.id ? "active" : ""}
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                role="tab"
-                type="button"
-              >
-                <Icon size={16} />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      {/* Hàng tab được "portal" lên topbar để nằm chung hàng với tiêu đề "OKR".
+          Khi host chưa sẵn sàng (vd: render standalone) thì hiển thị tại chỗ. */}
+      {tabsHost
+        ? createPortal(tabsControl, tabsHost)
+        : <div className="okr-module-tabs">{tabsControl}</div>}
       {activeTab === "dashboard" && <OKRWorkspace role={role} editMode={editMode} />}
       {activeTab === "web-input" && role !== "Staff" && (
         <WebInputForm role={role} currentUserId={currentUserId} currentTeam={currentTeam} editMode={editMode} />

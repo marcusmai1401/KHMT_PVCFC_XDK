@@ -325,6 +325,84 @@ textarea:focus-visible {
   border-color: rgba(255, 255, 255, 0.3);
 }
 
+/* Khối điều khiển kiểm thử trong sidebar (giả lập tài khoản + reset),
+   chuyển từ topbar xuống để nhường chỗ cho hàng tab Luồng SK-CTKT. */
+.sidebar-sandbox {
+  display: grid;
+  gap: 8px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.sidebar-sandbox-head {
+  align-items: center;
+  color: #fbbf24;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 6px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.sidebar-sandbox-field {
+  display: grid;
+  gap: 4px;
+}
+
+.sidebar-sandbox-field span {
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.sidebar-sandbox-field select {
+  background: #ffffff;
+  border: 1px solid #fcd9a3;
+  border-radius: var(--radius-sm);
+  color: #0f172a;
+  min-height: 34px;
+  padding: 6px 10px;
+  width: 100%;
+  transition: var(--transition);
+}
+
+.sidebar-sandbox-field select:focus {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+  outline: none;
+}
+
+.sidebar-sandbox-reset {
+  align-items: center;
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: var(--radius-sm);
+  color: #fde68a;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 6px;
+  justify-content: center;
+  min-height: 34px;
+  padding: 6px 10px;
+  transition: var(--transition);
+}
+
+.sidebar-sandbox-reset:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.26);
+  border-color: rgba(245, 158, 11, 0.6);
+  color: #ffffff;
+}
+
+.sidebar-sandbox-reset:disabled {
+  cursor: progress;
+  opacity: 0.65;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 260px 1fr;
@@ -481,6 +559,175 @@ textarea:focus-visible {
   overflow-wrap: anywhere;
 }
 
+/* Combobox chọn tác giả (cho phép "đăng ký giúp người khác"). */
+.fi-account-source .fi-author-cell {
+  position: relative;
+  z-index: 2;
+}
+
+.fi-author-picker {
+  align-items: center;
+  display: flex;
+  position: relative;
+}
+
+.fi-author-picker-icon {
+  color: #64748b;
+  left: 11px;
+  pointer-events: none;
+  position: absolute;
+}
+
+.fi-author-picker input {
+  padding-left: 34px;
+  padding-right: 32px;
+}
+
+.fi-author-clear {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: #94a3b8;
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 0;
+  padding: 4px;
+  position: absolute;
+  right: 6px;
+}
+
+.fi-author-clear:hover {
+  background: #eef2f7;
+  color: #475569;
+}
+
+.fi-author-list {
+  background: #ffffff;
+  border: 1px solid #d8e2ec;
+  border-radius: 8px;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16);
+  display: grid;
+  left: 0;
+  max-height: 264px;
+  min-width: 248px;
+  overflow: auto;
+  padding: 6px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+}
+
+.fi-author-list button {
+  align-items: flex-start;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: #172033;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  min-height: 0;
+  padding: 8px 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.fi-author-list button:hover,
+.fi-author-list button:focus,
+.fi-author-list button[aria-selected="true"] {
+  background: #eef5ff;
+  outline: none;
+}
+
+.fi-author-list button strong {
+  align-items: center;
+  color: #172033;
+  display: inline-flex;
+  font-size: 13.5px;
+  font-weight: 700;
+  gap: 7px;
+}
+
+.fi-author-list button span {
+  color: #607087;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Mã tài khoản (vd "baomt") hiển thị dạng code nhẹ để phân biệt với đội/tổ. */
+.fi-author-cell .fi-author-acct {
+  color: #475569;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+}
+
+.fi-author-cell .fi-author-self-badge {
+  background: #dbeafe;
+  border-radius: 999px;
+  color: #1d4ed8;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 1px 7px;
+}
+
+.fi-author-empty {
+  color: #607087;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 10px;
+}
+
+.fi-author-cell .fi-author-empty strong {
+  color: #0f172a;
+  font-size: 12px;
+}
+
+.fi-author-proxy {
+  align-items: center;
+  color: #b45309;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 4px 8px;
+  margin-top: 6px;
+}
+
+.fi-author-proxy svg {
+  flex-shrink: 0;
+}
+
+.fi-author-cell .fi-author-proxy span {
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.fi-author-cell .fi-author-proxy strong {
+  color: #92400e;
+  font-size: 12px;
+}
+
+.fi-author-proxy button {
+  background: transparent;
+  border: 0;
+  color: #1d4ed8;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  min-height: 0;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.fi-author-proxy button:hover {
+  color: #1e40af;
+}
+
 nav {
   display: grid;
   gap: 6px;
@@ -521,6 +768,7 @@ nav button.active {
 
 .app-shell.sidebar-collapsed .sidebar .brand div,
 .app-shell.sidebar-collapsed .sidebar .field,
+.app-shell.sidebar-collapsed .sidebar .sidebar-sandbox,
 .app-shell.sidebar-collapsed nav button span {
   display: none;
 }
@@ -542,15 +790,66 @@ nav button.active {
   background: #ffffff;
   border-bottom: 1px solid var(--border);
   display: flex;
-  justify-content: space-between;
-  padding: 16px 28px;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  justify-content: flex-start;
+  padding: 14px 28px;
   box-shadow: var(--shadow-sm);
+}
+
+.topbar-heading {
+  flex-shrink: 0;
 }
 
 .fi-workspace-shell .topbar {
   position: sticky;
   top: 0;
   z-index: 40;
+}
+
+/* Hàng tab của module hiện tại (OKR / Năng lực ET / Luồng SK-CTKT) nằm chung hàng
+   với tiêu đề (được các module portal lên đây). */
+.topbar-tabs {
+  align-items: center;
+  display: inline-flex;
+  min-width: 0;
+}
+
+.topbar-tabs .segmented-control {
+  background: #eef2f7;
+  box-shadow: none;
+  flex-wrap: nowrap;
+  max-width: 100%;
+}
+
+.topbar-tabs .segmented-control button {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  justify-content: center;
+  min-width: 0;
+  padding: 6px 14px;
+  white-space: nowrap;
+}
+
+.topbar-tabs .segmented-control button svg {
+  flex-shrink: 0;
+}
+
+/* Dưới ~1200px: dồn tab xuống hàng riêng (full-width) để topbar không quá chật. */
+@media (max-width: 1200px) {
+  .topbar-tabs {
+    flex-basis: 100%;
+    order: 3;
+  }
+
+  .topbar-tabs .segmented-control {
+    width: 100%;
+  }
+
+  .topbar-tabs .segmented-control button {
+    flex: 1 1 0;
+  }
 }
 
 h1,
@@ -586,31 +885,9 @@ h2 {
   gap: 12px;
 }
 
-.sandbox-toolbar {
-  align-items: center;
-  background: #eef6ff;
-  border: 1px solid #bfdbfe;
-  border-radius: 8px;
-  color: #1e40af;
-  display: flex;
-  gap: 8px;
-  padding: 5px;
-}
-
-.sandbox-toolbar select {
-  background: #ffffff;
-  border: 1px solid #bfdbfe;
-  border-radius: 6px;
-  color: #0f172a;
-  min-height: 32px;
-  padding: 5px 8px;
-}
-
-.sandbox-toolbar button {
-  border-color: #bfdbfe;
-  color: #1e40af;
-  min-height: 32px;
-  padding: 5px 8px;
+.topbar-tools {
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .topbar-snapshot-btn {
@@ -820,34 +1097,6 @@ h2 {
   border-color: var(--border);
   box-shadow: var(--shadow-sm);
   color: var(--accent);
-}
-
-.fi-workspace-tabs {
-  align-items: center;
-  display: flex;
-  grid-column: 1 / -1;
-  justify-content: flex-start;
-  min-width: 0;
-}
-
-.fi-workspace-shell .fi-workspace-tabs {
-  background: var(--bg-main);
-  border-bottom: 1px solid transparent;
-  margin: -20px -28px 0;
-  padding: 20px 28px 12px;
-  position: sticky;
-  top: 73px;
-  z-index: 35;
-}
-
-.fi-workspace-tabs .segmented-control {
-  background: #ffffff;
-  box-shadow: var(--shadow-sm);
-}
-
-.fi-workspace-tabs button {
-  justify-content: center;
-  min-width: 150px;
 }
 
 .tab-badge {
@@ -1200,13 +1449,13 @@ h2 {
     width: 100%;
   }
 
-  .fi-workspace-tabs .segmented-control {
+  .topbar-tabs .segmented-control {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
   }
 
-  .fi-workspace-tabs button,
+  .topbar-tabs .segmented-control button,
   .okr-module-tabs button {
     min-width: 0;
   }
@@ -4353,9 +4602,11 @@ th {
   display: grid;
   gap: 12px;
   margin: -20px -20px 0;
-  padding: 20px 20px 12px;
+  padding: 16px 20px 12px;
   position: sticky;
-  top: 137px;
+  /* Ghim ngay dưới topbar (đã gộp hàng tab vào topbar). Chiều cao topbar được đo
+     động qua --app-topbar-h (1 hay 2 hàng đều đúng); fallback 72px. */
+  top: var(--app-topbar-h, 72px);
   z-index: 30;
 }
 
@@ -4363,41 +4614,24 @@ th {
   max-width: 100%;
 }
 
-/* === FI History — Header === */
-.fi-history-header {
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  row-gap: 10px;
-}
-
-.fi-history-headline {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.fi-history-headline h2 {
-  margin: 0;
-}
-
-.fi-history-headline p {
-  color: #64748b;
-  font-size: 12.5px;
-  line-height: 1.45;
-  margin: 0;
-}
-
-.fi-history-headline p strong {
-  color: #0f172a;
-  font-weight: 700;
-}
-
-.fi-history-actions {
+/* === FI History — cụm phải của thanh bộ lọc (đếm + tải lại) === */
+.fi-history-toolbar-tail {
   align-items: center;
   display: inline-flex;
-  flex-wrap: wrap;
   gap: 8px;
+  margin-left: auto;
+}
+
+.fi-history-toolbar-count {
+  color: #607087;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.fi-history-toolbar-count strong {
+  color: #0f172a;
+  font-weight: 700;
 }
 
 .fi-history-reload {
@@ -4408,10 +4642,10 @@ th {
   color: #475569;
   cursor: pointer;
   display: inline-flex;
-  height: 38px;
+  height: 34px;
   justify-content: center;
-  min-width: 38px;
-  padding: 0 10px;
+  min-width: 34px;
+  padding: 0 9px;
   transition: var(--transition);
 }
 
@@ -4793,7 +5027,6 @@ th {
   font-weight: 600;
   gap: 6px;
   height: 34px;
-  margin-left: auto;
   padding: 0 10px;
   transition: var(--transition);
 }
@@ -5324,20 +5557,8 @@ th {
    width, so it adapts the moment the sidebar is collapsed/expanded — not only
    on viewport changes. */
 @container fi-history (max-width: 920px) {
-  .fi-history-header {
-    align-items: flex-start;
-  }
-
-  .fi-history-actions {
-    width: 100%;
-  }
-
   .legacy-team-picker {
     flex-wrap: wrap;
-  }
-
-  .fi-history-filter-reset {
-    margin-left: 0;
   }
 }
 
@@ -6076,8 +6297,8 @@ th {
 
 .web-input-shell {
   display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  grid-template-columns: 1fr;
   padding: 16px;
 }
 
@@ -6101,7 +6322,8 @@ th {
 .web-input-controls span,
 .objective-override span {
   color: #607087;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .web-input-controls select,
@@ -6110,9 +6332,10 @@ th {
 .arising-item select {
   background: #ffffff;
   border: 1px solid #c9d2dc;
-  border-radius: 6px;
-  min-height: 36px;
-  padding: 7px 10px;
+  border-radius: 7px;
+  font-size: 15px;
+  min-height: 40px;
+  padding: 8px 12px;
 }
 
 .status-badge,
@@ -6121,9 +6344,9 @@ th {
   border: 1px solid #cbd5e1;
   border-radius: 999px;
   display: inline-flex;
-  font-size: 12px;
-  min-height: 30px;
-  padding: 4px 10px;
+  font-size: 13px;
+  min-height: 32px;
+  padding: 5px 12px;
 }
 
 .save-state.unsaved {
@@ -7540,9 +7763,11 @@ th {
 .email-preview {
   background: #ffffff;
   border: 1px solid #c9d2dc;
-  border-radius: 6px;
+  border-radius: 7px;
+  font-size: 15px;
+  line-height: 1.55;
   min-height: 72px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   resize: vertical;
   width: 100%;
 }
@@ -9417,6 +9642,10 @@ pre {
     justify-content: space-between;
   }
 
+  .app-shell.sidebar-collapsed .sidebar .sidebar-sandbox {
+    display: grid;
+  }
+
   .app-shell.sidebar-collapsed .sidebar .brand div,
   .app-shell.sidebar-collapsed .sidebar .field,
   .app-shell.sidebar-collapsed nav button span {
@@ -9438,19 +9667,13 @@ pre {
 
   .sandbox-login,
   .topbar,
-  .topbar-tools,
-  .sandbox-toolbar {
+  .topbar-tools {
     align-items: stretch;
     flex-direction: column;
   }
 
   .sandbox-login {
     display: flex;
-  }
-
-  .sandbox-toolbar select,
-  .sandbox-toolbar button {
-    width: 100%;
   }
 
   .web-input-shell,
@@ -10459,37 +10682,6 @@ pre {
 .auth-boot p {
   margin: 0;
   letter-spacing: 0.02em;
-}
-
-/* Sandbox pill in topbar */
-.sandbox-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: #ffffff;
-  font-size: 11.5px;
-  font-weight: 700;
-  border-radius: 999px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.35);
-}
-
-.sandbox-toolbar {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  border-radius: 10px;
-}
-
-.sandbox-toolbar select {
-  min-width: 180px;
-  max-width: 280px;
 }
 
 /* Responsive layout */
@@ -12028,8 +12220,8 @@ pre {
 
 .conclusion-grid {
   display: grid;
-  gap: 14px;
-  grid-template-columns: minmax(280px, 0.95fr) minmax(280px, 1.05fr);
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
 }
 
 .conclusion-card {
@@ -12069,13 +12261,12 @@ pre {
 
 .conclusion-card-kicker {
   align-items: center;
-  color: #475569;
+  color: #334155;
   display: inline-flex;
-  font-size: 11.5px;
-  font-weight: 800;
-  gap: 6px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 13.5px;
+  font-weight: 700;
+  gap: 7px;
+  letter-spacing: 0;
 }
 
 .conclusion-grid.has-violation .discipline-card .conclusion-card-kicker {
@@ -12094,14 +12285,15 @@ pre {
   align-items: center;
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: 7px;
   color: #475569;
   cursor: pointer;
   display: inline-flex;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
-  gap: 5px;
-  padding: 6px 10px;
+  gap: 6px;
+  min-height: 38px;
+  padding: 8px 16px;
   transition: all 0.15s ease;
 }
 
@@ -12133,20 +12325,20 @@ pre {
 
 .discipline-field > span {
   align-items: center;
-  color: #475569;
+  color: #334155;
   display: inline-flex;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  gap: 5px;
+  gap: 6px;
 }
 
 .discipline-field textarea {
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border: 1px solid #d8e0ea;
+  border-radius: 9px;
   font-family: inherit;
-  font-size: 13px;
-  line-height: 1.5;
-  padding: 9px 11px;
+  font-size: 15px;
+  line-height: 1.55;
+  padding: 11px 13px;
   resize: vertical;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   width: 100%;
@@ -12161,19 +12353,20 @@ pre {
 .assessment-select {
   background: #ffffff;
   border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: 9px;
+  font-size: 15px;
   font-weight: 700;
-  padding: 6px 10px;
+  min-height: 40px;
+  padding: 8px 12px;
 }
 
 .assessment-card textarea {
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border: 1px solid #d8e0ea;
+  border-radius: 9px;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.55;
-  padding: 10px 12px;
+  padding: 11px 13px;
   resize: vertical;
   width: 100%;
 }
@@ -12486,13 +12679,13 @@ pre {
 
 .okr-accordion-meta {
   color: #475569;
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
 }
 
 .okr-accordion-meta em {
   color: #0f172a;
-  font-size: 14px;
+  font-size: 15px;
   font-style: normal;
   font-weight: 800;
 }
@@ -12529,342 +12722,241 @@ pre {
   padding: 14px;
 }
 
-.kr-card {
+/* === Nhập liệu OKR — thẻ KR (scope dưới .kr-input-panel để không đụng card
+   dashboard cùng tên .kr-card-head). Thẻ nền trắng phẳng, trạng thái chỉ thể
+   hiện bằng viền trái mảnh + 1 chip; không gradient, không hiệu ứng nhấc. === */
+.kr-input-panel .kr-card {
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-left: 3px solid #cbd5e1;
+  border: 1px solid #e4e9f0;
+  border-left: 4px solid #cbd5e1;
   border-radius: 12px;
   display: grid;
-  gap: 12px;
-  padding: 14px;
-  transition: all 0.2s ease;
+  gap: 14px;
+  padding: 16px 18px;
 }
 
-.kr-card:hover {
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
-  transform: translateY(-1px);
-}
+.kr-input-panel .kr-card.tone-pending { border-left-color: #cbd5e1; }
+.kr-input-panel .kr-card.tone-excellent { border-left-color: #15803d; }
+.kr-input-panel .kr-card.tone-good { border-left-color: #1d4ed8; }
+.kr-input-panel .kr-card.tone-pass { border-left-color: #0d9488; }
+.kr-input-panel .kr-card.tone-fail { border-left-color: #dc2626; }
+.kr-input-panel .kr-card.tone-na { border-left-color: #64748b; }
+.kr-input-panel .kr-card.tone-error { border-left-color: #d97706; border-color: #fcd9a3; }
 
-.kr-card.tone-pending {
-  border-left-color: #cbd5e1;
-}
-
-.kr-card.tone-excellent {
-  border-left-color: #10b981;
-  background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%);
-}
-
-.kr-card.tone-good {
-  border-left-color: #0ea5e9;
-  background: linear-gradient(180deg, #ffffff 0%, #f0f9ff 100%);
-}
-
-.kr-card.tone-pass {
-  border-left-color: #22c55e;
-  background: linear-gradient(180deg, #ffffff 0%, #f7fee7 100%);
-}
-
-.kr-card.tone-fail {
-  border-left-color: #ef4444;
-  background: linear-gradient(180deg, #ffffff 0%, #fef2f2 100%);
-}
-
-.kr-card.tone-na {
-  border-left-color: #94a3b8;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-}
-
-.kr-card.tone-error {
-  border-left-color: #f59e0b;
-  border-color: #fde68a;
-  background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%);
-}
-
-.kr-card-head {
-  align-items: flex-start;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: auto minmax(0, 1fr);
-}
-
-.kr-card-id {
+.kr-input-panel .kr-card-head {
   align-items: center;
-  display: inline-flex;
-  gap: 4px;
-}
-
-.kr-card-code {
-  background: #0f172a;
-  border-radius: 6px;
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  padding: 4px 9px;
-}
-
-.kr-card.tone-excellent .kr-card-code { background: #047857; }
-.kr-card.tone-good .kr-card-code { background: #0369a1; }
-.kr-card.tone-pass .kr-card-code { background: #16a34a; }
-.kr-card.tone-fail .kr-card-code { background: #b91c1c; }
-.kr-card.tone-na .kr-card-code { background: #64748b; }
-
-.kr-card-check {
-  color: #16a34a;
-}
-
-.kr-card-title {
   display: grid;
-  gap: 4px;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.kr-input-panel .kr-card-code {
+  background: #0f172a;
+  border-radius: 7px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 5px 11px;
+  white-space: nowrap;
+}
+
+.kr-input-panel .kr-card-title {
+  display: grid;
+  gap: 5px;
   min-width: 0;
 }
 
-.kr-card-title h4 {
+.kr-input-panel .kr-card-title h4 {
   color: #0f172a;
-  font-size: 13.5px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 1.4;
   margin: 0;
 }
 
-.kr-card-title p {
+.kr-input-panel .kr-card-meta {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   margin: 0;
 }
 
-.kr-meta-pill {
-  background: #f1f5f9;
+.kr-input-panel .kr-meta-pill {
+  background: #eef2f7;
   border-radius: 6px;
   color: #475569;
-  font-size: 10.5px;
-  font-weight: 700;
-  padding: 2px 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 3px 9px;
 }
 
-.kr-meta-pill.kr-meta-target {
+.kr-input-panel .kr-meta-pill.kr-meta-target {
   background: #eff6ff;
   color: #1d4ed8;
+  font-weight: 700;
 }
 
-.kr-card-grid {
+/* Chip trạng thái ở đầu thẻ — điểm màu duy nhất khi đã đánh giá */
+.kr-input-panel .kr-status-chip {
+  align-items: center;
+  align-self: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 5px;
+  padding: 5px 12px;
+  white-space: nowrap;
+}
+.kr-input-panel .kr-status-chip.is-pending { background: #f1f5f9; color: #64748b; }
+.kr-input-panel .kr-status-chip.tone-excellent { background: #dcfce7; color: #15803d; }
+.kr-input-panel .kr-status-chip.tone-good { background: #dbeafe; color: #1d4ed8; }
+.kr-input-panel .kr-status-chip.tone-pass { background: #ccfbf1; color: #0f766e; }
+.kr-input-panel .kr-status-chip.tone-fail { background: #fee2e2; color: #b91c1c; }
+.kr-input-panel .kr-status-chip.tone-na { background: #e2e8f0; color: #475569; }
+
+.kr-input-panel .kr-card-grid {
   display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 16px;
+  grid-template-columns: 1fr;
 }
 
-.kr-field {
+.kr-input-panel .kr-field {
   display: grid;
-  gap: 6px;
+  gap: 7px;
   min-width: 0;
   position: relative;
 }
 
-.kr-field-report {
-  grid-column: 1;
-  grid-row: 1 / span 2;
-}
-
-.kr-field-assessment {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.kr-field-notes {
-  grid-column: 2;
-  grid-row: 2;
-}
-
-.kr-field-label {
+.kr-input-panel .kr-field-label {
   align-items: center;
-  color: #475569;
+  color: #334155;
   display: inline-flex;
-  font-size: 11.5px;
+  gap: 6px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
-.kr-field textarea {
+.kr-input-panel .kr-field-label small {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.kr-input-panel .kr-field textarea {
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border: 1px solid #d8e0ea;
+  border-radius: 9px;
+  color: #1e293b;
   font-family: inherit;
-  font-size: 13px;
-  line-height: 1.5;
-  padding: 10px 12px;
+  font-size: 15px;
+  line-height: 1.55;
+  padding: 11px 13px;
   resize: vertical;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
   width: 100%;
 }
 
-.kr-field textarea:focus {
-  background: #ffffff;
+.kr-input-panel .kr-field textarea::placeholder { color: #9aa7b8; }
+
+.kr-input-panel .kr-field textarea:focus {
   border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
   outline: none;
 }
 
-.kr-card.tone-excellent .kr-field textarea:focus,
-.kr-card.tone-pass .kr-field textarea:focus { border-color: #16a34a; box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.14); }
-.kr-card.tone-good .kr-field textarea:focus { border-color: #0ea5e9; box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.14); }
-.kr-card.tone-fail .kr-field textarea:focus { border-color: #ef4444; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14); }
+.kr-input-panel .kr-field-report textarea { min-height: 92px; }
+.kr-input-panel .kr-field-notes textarea { min-height: 60px; }
 
-.kr-field-counter {
+.kr-input-panel .kr-field-counter {
   color: #94a3b8;
-  font-size: 10.5px;
+  font-size: 12px;
   position: absolute;
-  right: 6px;
-  bottom: 4px;
+  right: 10px;
+  bottom: 8px;
   font-variant-numeric: tabular-nums;
 }
 
-.kr-assessment-grid {
+.kr-input-panel .kr-assessment-grid {
   display: grid;
-  gap: 6px;
-  grid-template-columns: repeat(auto-fit, minmax(98px, 1fr));
+  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
-.kr-assessment-pill {
+.kr-input-panel .kr-assessment-pill {
   align-items: center;
   background: #ffffff;
-  border: 1.5px solid #e2e8f0;
+  border: 1.5px solid #d8e0ea;
   border-radius: 10px;
-  color: #475569;
+  color: #334155;
   cursor: pointer;
-  display: grid;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  gap: 4px;
-  grid-template-columns: 8px minmax(0, 1fr);
-  padding: 8px 10px;
-  text-align: left;
-  transition: all 0.15s ease;
-}
-
-.kr-assessment-pill:hover:not(:disabled):not(.is-active) {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  transform: translateY(-1px);
-}
-
-.kr-assessment-pill:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.kr-assessment-pill-dot {
-  background: #cbd5e1;
-  border-radius: 50%;
-  display: block;
-  grid-row: 1 / span 2;
-  height: 8px;
-  width: 8px;
-}
-
-.kr-assessment-pill-label {
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.2;
-}
-
-.kr-assessment-pill-full {
-  color: #94a3b8;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1.1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Excellent — Emerald */
-.kr-assessment-pill.tone-excellent .kr-assessment-pill-dot { background: #10b981; }
-.kr-assessment-pill.tone-excellent.is-active {
-  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-  border-color: #10b981;
-  color: #047857;
-  box-shadow: 0 3px 10px rgba(16, 185, 129, 0.18);
-}
-.kr-assessment-pill.tone-excellent.is-active .kr-assessment-pill-full { color: #047857; }
-
-/* Good — Sky */
-.kr-assessment-pill.tone-good .kr-assessment-pill-dot { background: #0ea5e9; }
-.kr-assessment-pill.tone-good.is-active {
-  background: linear-gradient(135deg, #f0f9ff 0%, #bae6fd 100%);
-  border-color: #0ea5e9;
-  color: #0369a1;
-  box-shadow: 0 3px 10px rgba(14, 165, 233, 0.18);
-}
-.kr-assessment-pill.tone-good.is-active .kr-assessment-pill-full { color: #0369a1; }
-
-/* Pass — Lime/Green */
-.kr-assessment-pill.tone-pass .kr-assessment-pill-dot { background: #22c55e; }
-.kr-assessment-pill.tone-pass.is-active {
-  background: linear-gradient(135deg, #f7fee7 0%, #d9f99d 100%);
-  border-color: #22c55e;
-  color: #15803d;
-  box-shadow: 0 3px 10px rgba(34, 197, 94, 0.16);
-}
-.kr-assessment-pill.tone-pass.is-active .kr-assessment-pill-full { color: #15803d; }
-
-/* Fail — Red */
-.kr-assessment-pill.tone-fail .kr-assessment-pill-dot { background: #ef4444; }
-.kr-assessment-pill.tone-fail.is-active {
-  background: linear-gradient(135deg, #fef2f2 0%, #fecaca 100%);
-  border-color: #ef4444;
-  color: #b91c1c;
-  box-shadow: 0 3px 10px rgba(239, 68, 68, 0.18);
-}
-.kr-assessment-pill.tone-fail.is-active .kr-assessment-pill-full { color: #b91c1c; }
-
-/* N/A — Slate */
-.kr-assessment-pill.tone-na .kr-assessment-pill-dot { background: #94a3b8; }
-.kr-assessment-pill.tone-na.is-active {
-  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
-  border-color: #94a3b8;
-  color: #475569;
-  box-shadow: 0 2px 6px rgba(100, 116, 139, 0.12);
-}
-.kr-assessment-pill.tone-na.is-active .kr-assessment-pill-full { color: #475569; }
-
-.kr-card-messages {
-  display: grid;
-  gap: 4px;
-}
-
-.kr-message {
-  align-items: center;
-  border-radius: 6px;
   display: inline-flex;
-  font-size: 11.5px;
+  font-family: inherit;
+  font-size: 14px;
   font-weight: 600;
   gap: 6px;
-  padding: 5px 9px;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 12px;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-.kr-message-error {
+.kr-input-panel .kr-assessment-pill:hover:not(:disabled):not(.is-active) {
+  background: #f6f9fc;
+  border-color: #94a3b8;
+}
+
+.kr-input-panel .kr-assessment-pill:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.kr-input-panel .kr-assessment-pill-label { line-height: 1.2; }
+.kr-input-panel .kr-assessment-pill-tick { flex-shrink: 0; }
+
+/* Chỉ nút đang chọn được tô màu đặc — giảm tối đa rối mắt, tick rõ ràng */
+.kr-input-panel .kr-assessment-pill.is-active {
+  border-color: transparent;
+  color: #ffffff;
+  font-weight: 700;
+}
+.kr-input-panel .kr-assessment-pill.tone-excellent.is-active { background: #15803d; }
+.kr-input-panel .kr-assessment-pill.tone-good.is-active { background: #1d4ed8; }
+.kr-input-panel .kr-assessment-pill.tone-pass.is-active { background: #0d9488; }
+.kr-input-panel .kr-assessment-pill.tone-fail.is-active { background: #dc2626; }
+.kr-input-panel .kr-assessment-pill.tone-na.is-active { background: #64748b; }
+
+.kr-input-panel .kr-card-messages {
+  display: grid;
+  gap: 6px;
+}
+
+.kr-input-panel .kr-message {
+  align-items: center;
+  border-radius: 7px;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 6px;
+  padding: 7px 11px;
+}
+
+.kr-input-panel .kr-message-error {
   background: #fef2f2;
   color: #b91c1c;
 }
 
-.kr-message-warning {
+.kr-input-panel .kr-message-warning {
   background: #fef3c7;
   color: #b45309;
 }
 
 @media (max-width: 1024px) {
-  .kr-card-grid {
-    grid-template-columns: 1fr;
-  }
-  .kr-field-report,
-  .kr-field-assessment,
-  .kr-field-notes {
-    grid-column: 1;
-    grid-row: auto;
+  .kr-input-panel .kr-assessment-grid {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   }
   .okr-accordion-title {
     grid-template-columns: 20px auto 1fr;

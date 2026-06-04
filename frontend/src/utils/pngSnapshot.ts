@@ -86,7 +86,7 @@ function injectSnapshotCss(clonedDocument: Document, exportId: string) {
       visibility: hidden !important;
     }
     [data-png-export-id="${exportId}"] th,
-    [data-png-export-id="${exportId}"] .fi-workspace-tabs {
+    [data-png-export-id="${exportId}"] .legacy-sticky-controls {
       position: static !important;
       top: auto !important;
     }

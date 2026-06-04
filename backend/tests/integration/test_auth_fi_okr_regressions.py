@@ -128,11 +128,51 @@ def test_team_account_create_is_locked_to_own_team(client):
         },
     )
     assert created.status_code == 200, created.text
+    # Đội/tổ và author_user_id LUÔN khoá theo tài khoản đăng nhập: không cho khai đội
+    # khác, không cho gán tác giả-id cho người khác (giữ phân quyền + xung đột lợi ích).
     assert created.json()["team"] == "TBCH"
     assert created.json()["author_user_id"] == "TBCH"
-    assert created.json()["author_name"] == "TBCH"
+    # author_name thì CHO PHÉP khai tên khác (đăng ký giúp người khác) — chỉ là phần ghi
+    # công hiển thị. Xem test_team_account_can_register_on_behalf_of_other.
+    assert created.json()["author_name"] == "Đội TBCH"
     assert created.json()["sk_code"].startswith("FI/")
     assert "-TBCH-" in created.json()["sk_code"]
+
+
+def test_team_account_can_register_on_behalf_of_other(client):
+    """Đăng ký giúp người khác: author_name nhận theo payload, nhưng team và
+    author_user_id vẫn gắn với tài khoản đăng nhập. Bỏ trống thì tự lấy tên tài khoản."""
+    team_headers = _login(client, "TBCH", "tbch-pass")
+
+    proxy = client.post(
+        "/api/v1/fi/sk-ctkt",
+        headers=team_headers,
+        json={
+            "author_name": "Võ Quang Minh",
+            "title": "Đăng ký giúp đồng nghiệp",
+            "content_description": "Nội dung",
+            "completion_plan": "T6/2026",
+        },
+    )
+    assert proxy.status_code == 200, proxy.text
+    assert proxy.json()["author_name"] == "Võ Quang Minh"
+    assert proxy.json()["team"] == "TBCH"
+    assert proxy.json()["author_user_id"] == "TBCH"
+
+    # Bỏ trống author_name -> tự lấy họ tên của tài khoản đăng nhập.
+    fallback = client.post(
+        "/api/v1/fi/sk-ctkt",
+        headers=team_headers,
+        json={
+            "author_name": "",
+            "title": "Tự đăng ký",
+            "content_description": "Nội dung",
+            "completion_plan": "T6/2026",
+        },
+    )
+    assert fallback.status_code == 200, fallback.text
+    assert fallback.json()["author_name"] == "TBCH"
+    assert fallback.json()["author_user_id"] == "TBCH"
 
 
 def test_fi_team_draft_is_private_until_submitted(client, admin_headers):

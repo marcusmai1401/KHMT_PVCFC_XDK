@@ -10,16 +10,19 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.security import Role, require_role
 from app.db.session import get_db
-from app.models.domain import SKCTKTModel, SKImageModel
+from app.models.domain import SKCTKTModel, SKImageModel, User
 from app.schemas.common import KHMTAssignRequest, SKCreate, SKUpdate, TransitionRequest
 from app.services.cache import cache_delete_prefix, cache_get, cache_set
 from app.services.fi.service import (
+    AUTHOR_CONTENT_EDITABLE_STATUSES,
+    AUTHOR_ROLES as FI_AUTHOR_ROLES,
     assign_khmt,
     can_view_sk,
     count_for_okr,
     create_sk_ctkt,
     delete_sk_ctkt,
     fi_dashboard,
+    is_author_or_submitter,
     require_visible,
     transition_sk_ctkt,
     update_sk_ctkt,
@@ -84,6 +87,30 @@ def _principal_author_name(principal: dict) -> str:
     return display_name or principal["user_id"]
 
 
+def _author_user_or_400(db: Session, user_id: str) -> User:
+    user = db.get(User, user_id)
+    if user is None or not user.is_active or user.role not in FI_AUTHOR_ROLES:
+        raise HTTPException(status_code=400, detail="Tác giả được chọn không hợp lệ hoặc đã bị khóa")
+    if not user.team:
+        raise HTTPException(status_code=400, detail="Tài khoản tác giả chưa được gán đội/tổ")
+    return user
+
+
+def _apply_selected_author(data: dict, principal: dict, db: Session) -> None:
+    selected_author_id = str(data.get("author_user_id") or "").strip()
+    if principal["role"] in {Role.TEAM_ACCOUNT.value, Role.STAFF.value, Role.FI_COORDINATOR.value}:
+        author = _author_user_or_400(db, selected_author_id or principal["user_id"])
+        data["author_name"] = author.full_name or author.display_name or _principal_author_name(principal)
+        data["team"] = author.team
+        data["author_user_id"] = author.id
+        return
+    if selected_author_id:
+        author = _author_user_or_400(db, selected_author_id)
+        data["author_name"] = author.full_name or author.display_name
+        data["team"] = author.team
+        data["author_user_id"] = author.id
+
+
 @router.post("/sk-ctkt")
 def create(
     payload: SKCreate,
@@ -91,22 +118,12 @@ def create(
     db: Session = Depends(get_db),
 ):
     data = payload.model_dump()
-    if principal["role"] in {Role.TEAM_ACCOUNT.value, Role.STAFF.value, Role.FI_COORDINATOR.value}:
-        team = principal.get("team")
-        if not team:
-            raise HTTPException(status_code=400, detail="Tài khoản chưa được gán đội/tổ")
-        # Tác giả mặc định theo account đăng nhập, nhưng cho phép "đăng ký giúp người
-        # khác": nếu payload có author_name thì tôn trọng (chỉ là phần ghi công hiển thị).
-        # Team và author_user_id vẫn gắn với account đăng nhập để giữ nguyên phân quyền,
-        # luồng xét duyệt và ràng buộc xung đột lợi ích (FI tự duyệt SK của mình).
-        submitted_author = str(data.get("author_name") or "").strip()
-        data["author_name"] = submitted_author or _principal_author_name(principal)
-        data["team"] = team
-        data["author_user_id"] = principal["user_id"]
-    elif not data.get("author_name") or not data.get("team"):
+    _apply_selected_author(data, principal, db)
+    if not data.get("author_name") or not data.get("team"):
         raise HTTPException(status_code=400, detail="Thiếu tác giả hoặc đội/tổ")
-    result = model_to_dict(create_sk_ctkt(db, data, principal["user_id"]))
+    result = model_to_dict(create_sk_ctkt(db, data, principal["user_id"], submit_immediately=True))
     cache_delete_prefix("fi:public_sk")
+    cache_delete_prefix("okr:dashboard")
     return result
 
 
@@ -352,7 +369,7 @@ def assign(
 async def upload_image(record_id: str, file: UploadFile = File(...), principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.ADMIN)), db: Session = Depends(get_db)):
     record = _record_or_404(db, record_id)
     if principal["role"] in {Role.TEAM_ACCOUNT.value, Role.STAFF.value, Role.FI_COORDINATOR.value}:
-        if record.author_user_id != principal["user_id"] or record.status not in {"Draft", "NeedMoreInfo"}:
+        if not is_author_or_submitter(record, principal["user_id"]) or record.status not in AUTHOR_CONTENT_EDITABLE_STATUSES:
             raise HTTPException(status_code=403, detail="Only owner can upload images for editable entries")
     safe_name = _safe_filename(file.filename)
     content_type = _validate_image_upload(safe_name, file.content_type)
@@ -409,7 +426,7 @@ def delete_image(record_id: str, image_id: str, principal: dict = Depends(requir
     if image is None or image.sk_ctkt_id != record_id:
         raise HTTPException(status_code=404, detail="Image not found")
     if principal["role"] in {Role.TEAM_ACCOUNT.value, Role.STAFF.value, Role.FI_COORDINATOR.value}:
-        if record.author_user_id != principal["user_id"] or record.status not in {"Draft", "NeedMoreInfo"}:
+        if not is_author_or_submitter(record, principal["user_id"]) or record.status not in AUTHOR_CONTENT_EDITABLE_STATUSES:
             raise HTTPException(status_code=403, detail="Only owner can delete images for editable entries")
     try:
         Path(image.file_path).unlink(missing_ok=True)

@@ -28,6 +28,9 @@ class FIAction(StrEnum):
 TRANSITIONS = {
     (SKStatus.DRAFT, FIAction.SUBMIT): SKStatus.SUBMITTED,
     (SKStatus.DRAFT, FIAction.CANCEL): SKStatus.CANCELLED,
+    # Backward-compatible no-op for older clients that still call /submit after
+    # the create endpoint has already presented the SK for review.
+    (SKStatus.SUBMITTED, FIAction.SUBMIT): SKStatus.SUBMITTED,
     (SKStatus.SUBMITTED, FIAction.REQUEST_INFO): SKStatus.NEED_MORE_INFO,
     (SKStatus.SUBMITTED, FIAction.REVIEW): SKStatus.REVIEWED,
     (SKStatus.SUBMITTED, FIAction.APPROVE): SKStatus.APPROVED,

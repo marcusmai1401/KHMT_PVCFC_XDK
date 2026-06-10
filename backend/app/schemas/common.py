@@ -26,7 +26,7 @@ class ChangePasswordRequest(BaseModel):
 class SKCreate(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
-            "description": "Create the SK-CTKT draft fields only. Supporting images are managed via the /images endpoints after creation."
+            "description": "Create and submit an SK-CTKT registration for review. Supporting images are managed via the /images endpoints after creation."
         }
     )
 

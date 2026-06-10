@@ -121,34 +121,56 @@ def test_team_account_create_is_locked_to_own_team(client):
         json={
             "author_name": "Đội TBCH",
             "team": "TBĐL",
-            "author_user_id": "someone-else",
             "title": "Không được khai đội khác",
             "content_description": "Nội dung",
             "completion_plan": "T6/2026",
         },
     )
     assert created.status_code == 200, created.text
-    # Đội/tổ và author_user_id LUÔN khoá theo tài khoản đăng nhập: không cho khai đội
-    # khác, không cho gán tác giả-id cho người khác (giữ phân quyền + xung đột lợi ích).
     assert created.json()["team"] == "TBCH"
     assert created.json()["author_user_id"] == "TBCH"
-    # author_name thì CHO PHÉP khai tên khác (đăng ký giúp người khác) — chỉ là phần ghi
-    # công hiển thị. Xem test_team_account_can_register_on_behalf_of_other.
-    assert created.json()["author_name"] == "Đội TBCH"
+    assert created.json()["author_name"] == "TBCH"
+    assert created.json()["status"] == "Submitted"
     assert created.json()["sk_code"].startswith("FI/")
     assert "-TBCH-" in created.json()["sk_code"]
 
+    invalid_author = client.post(
+        "/api/v1/fi/sk-ctkt",
+        headers=team_headers,
+        json={
+            "author_user_id": "someone-else",
+            "title": "Tác giả không tồn tại",
+            "content_description": "Nội dung",
+            "completion_plan": "T6/2026",
+        },
+    )
+    assert invalid_author.status_code == 400
 
-def test_team_account_can_register_on_behalf_of_other(client):
-    """Đăng ký giúp người khác: author_name nhận theo payload, nhưng team và
-    author_user_id vẫn gắn với tài khoản đăng nhập. Bỏ trống thì tự lấy tên tài khoản."""
+
+def test_team_account_can_register_on_behalf_of_other(client, admin_headers):
+    """Đăng ký giúp người khác: SK thuộc account tác giả, còn người gửi lưu ở history."""
     team_headers = _login(client, "TBCH", "tbch-pass")
+    created_user = client.post(
+        "/api/v1/admin/users",
+        headers=admin_headers,
+        json={
+            "id": "minhvq",
+            "display_name": "Võ Quang Minh",
+            "full_name": "Võ Quang Minh",
+            "password": "pw",
+            "role": "Staff",
+            "team": "TBĐL",
+        },
+    )
+    assert created_user.status_code == 200, created_user.text
+    minh_headers = _login(client, "minhvq", "pw")
 
     proxy = client.post(
         "/api/v1/fi/sk-ctkt",
         headers=team_headers,
         json={
-            "author_name": "Võ Quang Minh",
+            "author_name": "Tên payload sẽ bị chuẩn hóa theo tài khoản",
+            "author_user_id": "minhvq",
             "title": "Đăng ký giúp đồng nghiệp",
             "content_description": "Nội dung",
             "completion_plan": "T6/2026",
@@ -156,8 +178,27 @@ def test_team_account_can_register_on_behalf_of_other(client):
     )
     assert proxy.status_code == 200, proxy.text
     assert proxy.json()["author_name"] == "Võ Quang Minh"
-    assert proxy.json()["team"] == "TBCH"
-    assert proxy.json()["author_user_id"] == "TBCH"
+    assert proxy.json()["team"] == "TBĐL"
+    assert proxy.json()["author_user_id"] == "minhvq"
+    assert proxy.json()["status_history"][0]["comments"]["submitted_by"] == "TBCH"
+    assert proxy.json()["status"] == "Submitted"
+    minh_list = client.get("/api/v1/fi/sk-ctkt", headers=minh_headers)
+    assert proxy.json()["id"] in {item["id"] for item in minh_list.json()}
+
+    assert client.delete(f"/api/v1/fi/sk-ctkt/{proxy.json()['id']}", headers=team_headers).status_code == 200
+
+    proxy_for_author_delete = client.post(
+        "/api/v1/fi/sk-ctkt",
+        headers=team_headers,
+        json={
+            "author_user_id": "minhvq",
+            "title": "Đăng ký giúp để tác giả xóa",
+            "content_description": "Nội dung",
+            "completion_plan": "T6/2026",
+        },
+    )
+    assert proxy_for_author_delete.status_code == 200, proxy_for_author_delete.text
+    assert client.delete(f"/api/v1/fi/sk-ctkt/{proxy_for_author_delete.json()['id']}", headers=minh_headers).status_code == 200
 
     # Bỏ trống author_name -> tự lấy họ tên của tài khoản đăng nhập.
     fallback = client.post(
@@ -175,7 +216,7 @@ def test_team_account_can_register_on_behalf_of_other(client):
     assert fallback.json()["author_user_id"] == "TBCH"
 
 
-def test_fi_team_draft_is_private_until_submitted(client, admin_headers):
+def test_fi_team_create_is_submitted_immediately(client, admin_headers):
     team_headers = _login(client, "TBCH", "tbch-pass")
     fi_headers = _login(client, "fi", "fi-pass")
     leader_headers = _login(client, "leader", "leader-pass")
@@ -192,17 +233,18 @@ def test_fi_team_draft_is_private_until_submitted(client, admin_headers):
     )
     assert created.status_code == 200, created.text
     record_id = created.json()["id"]
+    assert created.json()["status"] == "Submitted"
 
     admin_list = client.get("/api/v1/fi/sk-ctkt", headers=admin_headers)
     assert admin_list.status_code == 200, admin_list.text
-    assert record_id not in {item["id"] for item in admin_list.json()}
+    assert record_id in {item["id"] for item in admin_list.json()}
     admin_reports = client.get("/api/v1/fi/reports", headers=admin_headers)
     assert admin_reports.status_code == 200, admin_reports.text
-    assert record_id not in {item["id"] for item in admin_reports.json()}
-    assert client.get(f"/api/v1/fi/sk-ctkt/{record_id}", headers=admin_headers).status_code == 403
-    public_draft = client.get("/api/v1/fi/sk-ctkt/public", headers=team_headers)
-    assert public_draft.status_code == 200
-    assert record_id not in {item["id"] for item in public_draft.json()}
+    assert record_id in {item["id"] for item in admin_reports.json()}
+    assert client.get(f"/api/v1/fi/sk-ctkt/{record_id}", headers=admin_headers).status_code == 200
+    public_items = client.get("/api/v1/fi/sk-ctkt/public", headers=team_headers)
+    assert public_items.status_code == 200
+    assert record_id in {item["id"] for item in public_items.json()}
 
     team_list = client.get("/api/v1/fi/sk-ctkt", headers=team_headers)
     assert record_id in {item["id"] for item in team_list.json()}
@@ -263,7 +305,7 @@ def test_fi_reject_requires_note_and_delete_is_admin_only(client, admin_headers)
     assert deleted.json() == {"deleted": True}
 
 
-def test_team_account_can_delete_own_draft_only(client):
+def test_team_account_can_delete_own_newly_submitted_sk(client):
     team_headers = _login(client, "TBCH", "tbch-pass")
     other_team_headers = _login(client, "TBĐL", "tbdl-pass")
     created = client.post(
@@ -272,7 +314,7 @@ def test_team_account_can_delete_own_draft_only(client):
         json={
             "author_name": "Đội TBCH",
             "team": "TBCH",
-            "title": "Có thể xóa bản nháp",
+            "title": "Có thể xóa phiếu mới trình",
             "content_description": "Nội dung",
             "completion_plan": "T6/2026",
         },
@@ -294,17 +336,17 @@ def test_team_account_can_delete_own_draft_only(client):
         json={
             "author_name": "Đội TBCH",
             "team": "TBCH",
-            "title": "Không xóa sau khi gửi",
+            "title": "Vẫn xóa được khi mới trình",
             "content_description": "Nội dung",
             "completion_plan": "T6/2026",
         },
     )
     submitted_id = submitted.json()["id"]
     assert client.post(f"/api/v1/fi/sk-ctkt/{submitted_id}/submit", headers=team_headers, json={}).status_code == 200
-    assert client.delete(f"/api/v1/fi/sk-ctkt/{submitted_id}", headers=team_headers).status_code == 403
+    assert client.delete(f"/api/v1/fi/sk-ctkt/{submitted_id}", headers=team_headers).status_code == 200
 
 
-def test_public_sk_is_internal_and_excludes_drafts(client):
+def test_public_sk_is_internal_and_includes_submitted_records(client):
     team_headers = _login(client, "TCĐK", "tcdk-pass")
     other_team_headers = _login(client, "TBCH", "tbch-pass")
     created = client.post(
@@ -321,7 +363,6 @@ def test_public_sk_is_internal_and_excludes_drafts(client):
     assert created.status_code == 200, created.text
     record_id = created.json()["id"]
     assert client.get("/api/v1/fi/sk-ctkt/public").status_code == 401
-    assert record_id not in {item["id"] for item in client.get("/api/v1/fi/sk-ctkt/public", headers=team_headers).json()}
     assert client.post(f"/api/v1/fi/sk-ctkt/{record_id}/submit", headers=team_headers, json={}).status_code == 200
     assert record_id in {item["id"] for item in client.get("/api/v1/fi/sk-ctkt/public", headers=team_headers).json()}
     cross_team_detail = client.get(f"/api/v1/fi/sk-ctkt/{record_id}", headers=other_team_headers)

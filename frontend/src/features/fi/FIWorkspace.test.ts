@@ -1,19 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { canSelectKhmtMonth, displayTeam, isKhmtConsidered, khmtLabel, visibleActionsForSk } from "./FIWorkspace";
+import { canSelectKhmtMonth, displayTeam, isKhmtConsidered, khmtLabel, recordSubmitterId, visibleActionsForSk } from "./FIWorkspace";
 
 describe("FI action visibility", () => {
-  it("allows a team account to submit its own draft but not another team's draft", () => {
+  it("allows a team account to edit/delete its own draft but not another person's draft", () => {
     const ownDraft = { status: "Draft", author_user_id: "u1" };
     const otherDraft = { status: "Draft", author_user_id: "u2" };
 
-    expect(visibleActionsForSk("Team_Account", "u1", ownDraft)).toEqual(["edit", "submit", "delete"]);
+    expect(visibleActionsForSk("Team_Account", "u1", ownDraft)).toEqual(["edit", "delete"]);
     expect(visibleActionsForSk("Team_Account", "u1", otherDraft)).toEqual([]);
   });
 
-  it("does not let a team account delete after submitting", () => {
+  it("keeps edit/delete for a newly submitted item because there is no separate draft step", () => {
     const ownSubmitted = { status: "Submitted", author_user_id: "u1" };
 
-    expect(visibleActionsForSk("Team_Account", "u1", ownSubmitted)).toEqual(["edit"]);
+    expect(visibleActionsForSk("Team_Account", "u1", ownSubmitted)).toEqual(["edit", "delete"]);
   });
 
   it("does not let another author account edit someone else's submitted SK", () => {
@@ -21,7 +21,21 @@ describe("FI action visibility", () => {
 
     expect(visibleActionsForSk("Staff", "khanhdv1", submitted)).toEqual([]);
     expect(visibleActionsForSk("Team_Account", "TBCH", submitted)).toEqual([]);
-    expect(visibleActionsForSk("Staff", "cunghv", submitted)).toEqual(["edit"]);
+    expect(visibleActionsForSk("Staff", "cunghv", submitted)).toEqual(["edit", "delete"]);
+  });
+
+  it("lets the proxy submitter manage the item without making it their own initiative", () => {
+    const proxySubmitted = {
+      status: "Submitted",
+      author_user_id: "quyenpt",
+      status_history: [
+        { changed_by: "baomt", comments: { submitted_by: "baomt" } },
+      ],
+    };
+
+    expect(recordSubmitterId(proxySubmitted)).toBe("baomt");
+    expect(visibleActionsForSk("Staff", "baomt", proxySubmitted)).toEqual(["edit", "delete"]);
+    expect(visibleActionsForSk("Staff", "quyenpt", proxySubmitted)).toEqual(["edit", "delete"]);
   });
 
   it("shows one review decision action for FI_Coordinator on Submitted items", () => {

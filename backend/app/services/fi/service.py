@@ -17,7 +17,7 @@ from app.services.fi.workflow import FIAction, SKStatus, is_public_status, next_
 from app.services.repositories import audit, make_id, model_to_dict, notify
 
 NON_DRAFT_STATUSES = {status.value for status in SKStatus if status != SKStatus.DRAFT}
-OWNER_DELETABLE_STATUSES = {SKStatus.DRAFT.value}
+OWNER_DELETABLE_STATUSES = {SKStatus.DRAFT.value, SKStatus.SUBMITTED.value, SKStatus.NEED_MORE_INFO.value}
 REVIEWABLE_STATUSES = {
     SKStatus.SUBMITTED.value,
     SKStatus.REVIEWED.value,
@@ -46,6 +46,7 @@ EDITABLE_AFTER_SUBMIT_STATUSES = {
     SKStatus.REJECTED.value,
     SKStatus.DEFERRED.value,
 }
+AUTHOR_CONTENT_EDITABLE_STATUSES = {SKStatus.DRAFT.value, *EDITABLE_AFTER_SUBMIT_STATUSES}
 
 
 def _utc_now() -> datetime:
@@ -100,7 +101,27 @@ def _completed_at_from_payload(
     return existing
 
 
-def create_sk_ctkt(db: Session, payload: dict[str, Any], actor: str) -> SKCTKTModel:
+def submitter_user_id(record: SKCTKTModel) -> str | None:
+    history = record.status_history if isinstance(record.status_history, list) else []
+    if not history:
+        return None
+    first = history[0] if isinstance(history[0], dict) else {}
+    comments = first.get("comments") if isinstance(first.get("comments"), dict) else {}
+    submitted_by = comments.get("submitted_by") or comments.get("created_by")
+    return str(submitted_by or first.get("changed_by") or "") or None
+
+
+def is_author_or_submitter(record: SKCTKTModel, actor: str) -> bool:
+    return record.author_user_id == actor or submitter_user_id(record) == actor
+
+
+def create_sk_ctkt(
+    db: Session,
+    payload: dict[str, Any],
+    actor: str,
+    *,
+    submit_immediately: bool = False,
+) -> SKCTKTModel:
     now = _utc_now()
     team = payload["team"]
     year = _int_or_default(payload.get("year") or payload.get("registration_year"), now.year)
@@ -109,6 +130,7 @@ def create_sk_ctkt(db: Session, payload: dict[str, Any], actor: str) -> SKCTKTMo
         registration_month = now.month
     registration_year = _int_or_default(payload.get("registration_year"), year)
     completed_at = _completed_at_from_payload(payload, fallback=now)
+    initial_status = SKStatus.SUBMITTED if submit_immediately else SKStatus.DRAFT
     record = SKCTKTModel(
         id=make_id("sk"),
         sk_code=generate_sk_code(db, team, registration_year, registration_month),
@@ -118,11 +140,11 @@ def create_sk_ctkt(db: Session, payload: dict[str, Any], actor: str) -> SKCTKTMo
         team=team,
         content_description=payload["content_description"],
         completion_plan=payload["completion_plan"],
-        status=SKStatus.DRAFT.value,
+        status=initial_status.value,
         status_history=[
             {
                 "from_status": None,
-                "to_status": SKStatus.DRAFT.value,
+                "to_status": initial_status.value,
                 "changed_by": actor,
                 "changed_at": now.isoformat(),
                 "reason": "web_registration",
@@ -130,6 +152,7 @@ def create_sk_ctkt(db: Session, payload: dict[str, Any], actor: str) -> SKCTKTMo
                     "registration_month": registration_month,
                     "registration_year": registration_year,
                     "source": "web",
+                    "submitted_by": actor,
                 },
             }
         ],
@@ -139,10 +162,13 @@ def create_sk_ctkt(db: Session, payload: dict[str, Any], actor: str) -> SKCTKTMo
         is_historical_import=False,
         created_at=now,
         updated_at=now,
+        submitted_at=now if submit_immediately else None,
         completed_at=completed_at,
     )
     db.add(record)
     audit(db, actor, "SK_CTKT", record.id, "create", model_to_dict(record))
+    if submit_immediately:
+        _notify_transition(db, record, record.id)
     db.commit()
     db.refresh(record)
     return record
@@ -166,7 +192,7 @@ def can_view_sk(record: SKCTKTModel, principal: dict[str, str]) -> bool:
     if role not in allowed_roles:
         return False
     if record.status == SKStatus.DRAFT.value:
-        return record.author_user_id == user_id
+        return is_author_or_submitter(record, user_id)
     return True
 
 
@@ -189,10 +215,12 @@ def update_sk_ctkt(
     shared_content_edit = bool(requested_fields) and requested_fields <= SHARED_CONTENT_EDIT_FIELDS
     if record.is_historical_import:
         raise PermissionError("FI legacy chỉ dùng để tra cứu lịch sử, không chỉnh sửa nội dung")
-    if record.author_user_id != actor:
-        raise PermissionError("Chỉ tác giả của SK mới được chỉnh sửa")
+    if not is_author_or_submitter(record, actor):
+        raise PermissionError("Chỉ tác giả hoặc người gửi hộ mới được chỉnh sửa")
     if record.status in {SKStatus.CANCELLED.value, SKStatus.COMPLETED.value}:
         raise PermissionError("SK đã hoàn tất hoặc đã hủy, không chỉnh sửa được nội dung")
+    if record.status not in AUTHOR_CONTENT_EDITABLE_STATUSES:
+        raise PermissionError("Trạng thái hiện tại không cho phép chỉnh sửa nội dung")
     if not shared_content_edit:
         raise PermissionError("Tác giả chỉ được cập nhật tiêu đề, nội dung đăng ký và kế hoạch thực hiện")
     before = model_to_dict(record)
@@ -233,11 +261,12 @@ def _notify_content_edit(db: Session, record: SKCTKTModel, actor: str) -> None:
 
 def _validate_actor_for_transition(record: SKCTKTModel, action: str, actor: str, role: str) -> None:
     if action in {FIAction.SUBMIT.value, FIAction.CANCEL.value} and role in AUTHOR_ROLES:
-        if record.author_user_id != actor:
+        if not is_author_or_submitter(record, actor):
             raise PermissionError("Chỉ tài khoản tạo SK mới được thực hiện thao tác này")
         if action == FIAction.SUBMIT.value and record.status not in {
             SKStatus.DRAFT.value,
             SKStatus.NEED_MORE_INFO.value,
+            SKStatus.SUBMITTED.value,
         }:
             raise PermissionError("Chỉ gửi duyệt được SK ở trạng thái Nháp hoặc Cần bổ sung")
         if action == FIAction.CANCEL.value and record.status not in {
@@ -252,9 +281,9 @@ def _validate_actor_for_transition(record: SKCTKTModel, action: str, actor: str,
             )
         # Tránh xung đột lợi ích: Đầu mối FI không được xét duyệt SK do chính mình đăng ký.
         # Admin sẽ là người xét duyệt cho các SK của FI_Coordinator.
-        if record.author_user_id == actor:
+        if record.author_user_id == actor or submitter_user_id(record) == actor:
             raise PermissionError(
-                "Đầu mối FI không được xét duyệt SK do chính mình đăng ký — vui lòng để Admin xét duyệt"
+                "Đầu mối FI không được xét duyệt SK do chính mình đứng tên hoặc gửi hộ — vui lòng để Admin xét duyệt"
             )
 
 
@@ -270,6 +299,9 @@ def transition_sk_ctkt(
     record = db.get(SKCTKTModel, record_id)
     if record is None:
         raise KeyError("SK-CTKT not found")
+    if action == FIAction.SUBMIT.value and record.status == SKStatus.SUBMITTED.value:
+        _validate_actor_for_transition(record, action, actor, role)
+        return record
     if record.is_historical_import:
         if action not in HISTORICAL_REVIEW_ACTIONS or record.status not in REVIEWABLE_STATUSES:
             raise PermissionError("FI legacy chỉ cho đánh giá các mục Chờ xét duyệt, Xem xét sau, Đồng ý hoặc Không đồng ý")
@@ -532,9 +564,9 @@ def delete_sk_ctkt(db: Session, record_id: str, actor: str, role: str) -> None:
         raise KeyError("SK-CTKT not found")
     can_delete = role == Role.ADMIN.value
     if role in AUTHOR_ROLES:
-        can_delete = record.author_user_id == actor and record.status in OWNER_DELETABLE_STATUSES
+        can_delete = is_author_or_submitter(record, actor) and record.status in OWNER_DELETABLE_STATUSES
     if not can_delete:
-        raise PermissionError("Chỉ người tạo được xóa bản nháp; Admin được xóa SK")
+        raise PermissionError("Chỉ tác giả/người gửi hộ được xóa SK mới trình hoặc cần bổ sung; Admin được xóa SK")
     images = list(db.execute(select(SKImageModel).where(SKImageModel.sk_ctkt_id == record_id)).scalars())
     audit(db, actor, "SK_CTKT", record_id, "delete", {"record": model_to_dict(record), "image_count": len(images)})
     for image in images:

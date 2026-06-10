@@ -18,6 +18,7 @@ from app.services.fi.service import (
     AUTHOR_ROLES as FI_AUTHOR_ROLES,
     assign_khmt,
     can_view_sk,
+    clear_khmt,
     count_for_okr,
     create_sk_ctkt,
     delete_sk_ctkt,
@@ -349,6 +350,33 @@ def assign(
                 record_id,
                 payload.month,
                 payload.year,
+                principal["user_id"],
+                principal["role"],
+                principal_team=principal.get("team"),
+            )
+        )
+        cache_delete_prefix("fi:public_sk")
+        cache_delete_prefix("okr:dashboard")
+        return result
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete("/sk-ctkt/{record_id}/assign-khmt")
+def clear_assignment(
+    record_id: str,
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT)),
+    db: Session = Depends(get_db),
+):
+    try:
+        result = model_to_dict(
+            clear_khmt(
+                db,
+                record_id,
                 principal["user_id"],
                 principal["role"],
                 principal_team=principal.get("team"),

@@ -296,6 +296,11 @@ function historyDetail(history: any) {
     const year = structuredComments?.khmt_year;
     return { label: "KHMT", text: month && year ? `Đã xem xét vào KHMT T${month}/${year}` : "Đã xem xét vào KHMT" };
   }
+  if (reason === "khmt_unassignment") {
+    const month = structuredComments?.previous_khmt_month;
+    const year = structuredComments?.previous_khmt_year;
+    return { label: "KHMT", text: month && year ? `Đã bỏ khỏi KHMT T${month}/${year}` : "Đã bỏ khỏi KHMT" };
+  }
   if (comments) {
     return { label: "Nhận xét", text: comments };
   }
@@ -348,6 +353,10 @@ export function canSelectKhmtMonth(role: string, currentUserId: string, item: an
   if (role !== TEAM_ROLE) return false;
   const ownerTeam = currentTeam ?? currentUserId;
   return FI_TEAMS.includes(ownerTeam) && item?.team === ownerTeam;
+}
+
+export function hasKhmtPendingChange(selectedValue: string, currentValue: string) {
+  return selectedValue !== currentValue;
 }
 
 function formatCount(value: number | undefined) {
@@ -1546,15 +1555,23 @@ export function FIWorkspace({
   };
 
   const handleKhmtMonthSelect = async (item: any, value: string) => {
-    const month = Number(value);
-    if (!Number.isFinite(month) || month < 1 || month > 12 || assigningKhmt) return;
+    if (assigningKhmt) return;
     const year = khmtAssignmentYear(item);
+    const isClearingKhmt = value === "";
+    const month = Number(value);
+    if (!isClearingKhmt && (!Number.isFinite(month) || month < 1 || month > 12)) return;
     setAssigningKhmt(true);
     setError("");
     setNotice("");
     try {
-      const updated = await api.assignKhmt(item.id, month, year);
-      setNotice(`Đã ghi nhận ${updated.sk_code || item.title} vào KHMT T${month}/${year}.`);
+      const updated = isClearingKhmt
+        ? await api.clearKhmt(item.id)
+        : await api.assignKhmt(item.id, month, year);
+      setNotice(
+        isClearingKhmt
+          ? `Đã bỏ ${updated.sk_code || item.title} khỏi KHMT.`
+          : `Đã ghi nhận ${updated.sk_code || item.title} vào KHMT T${month}/${year}.`
+      );
       setKhmtTarget(null);
       setPendingKhmtMonths((current) => {
         const next = { ...current };
@@ -1807,12 +1824,12 @@ export function FIWorkspace({
     const year = khmtAssignmentYear(item);
     const currentValue = considered && item.khmt_month ? String(item.khmt_month) : "";
     const selectedValue = pendingKhmtMonths[item.id] ?? currentValue;
-    const hasPendingChange = Boolean(selectedValue) && selectedValue !== currentValue;
+    const hasPendingChange = hasKhmtPendingChange(selectedValue, currentValue);
     return (
       <span className="legacy-khmt-control">
         <select
           aria-label={`Chọn tháng KHMT cho ${item.title}`}
-          className={`legacy-khmt-select ${considered ? "success" : "empty"}`}
+          className={`legacy-khmt-select ${selectedValue ? "success" : "empty"}`}
           disabled={assigningKhmt}
           onChange={(event) => {
             const value = event.target.value;
@@ -1821,7 +1838,7 @@ export function FIWorkspace({
           title={`Chọn tháng KHMT năm ${year}`}
           value={selectedValue}
         >
-          <option value="" disabled>
+          <option value="">
             Chưa vào KHMT
           </option>
           {KHMT_MONTHS.map((month) => (

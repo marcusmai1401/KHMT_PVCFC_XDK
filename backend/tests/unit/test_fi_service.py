@@ -5,6 +5,7 @@ import pytest
 from app.services.fi.service import (
     assign_khmt,
     can_view_sk,
+    clear_khmt,
     count_for_okr,
     create_sk_ctkt,
     fi_dashboard,
@@ -166,6 +167,34 @@ def test_assign_khmt_records_history_note(db_session):
     assert updated.consider_for_khmt is True
     assert updated.status_history[-1]["reason"] == "khmt_assignment"
     assert updated.status_history[-1]["comments"]["khmt_month"] == 5
+
+
+def test_clear_khmt_removes_month_and_okr_count(db_session):
+    record = create_sk_ctkt(
+        db_session,
+        {
+            "author_name": "A",
+            "team": "TBCH",
+            "title": "Title",
+            "content_description": "Content",
+            "completion_plan": "T6/2026",
+            "year": 2026,
+        },
+        "u1",
+    )
+    transition_sk_ctkt(db_session, record.id, "submit", "u1", "Team_Account")
+    transition_sk_ctkt(db_session, record.id, "approve", "fi1", "FI_Coordinator")
+    assign_khmt(db_session, record.id, 5, 2026, "u1", "Team_Account", principal_team="TBCH")
+
+    updated = clear_khmt(db_session, record.id, "u1", "Team_Account", principal_team="TBCH")
+
+    assert updated.consider_for_khmt is False
+    assert updated.is_counted_for_okr is False
+    assert updated.khmt_month is None
+    assert updated.khmt_year is None
+    assert updated.status_history[-1]["reason"] == "khmt_unassignment"
+    assert updated.status_history[-1]["comments"]["previous_khmt_month"] == 5
+    assert count_for_okr(db_session, 5, 2026)["TBCH"] == 0
 
 
 def test_assign_khmt_allows_historical_approved_records(db_session):

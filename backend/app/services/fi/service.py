@@ -384,13 +384,7 @@ def assign_khmt(
         raise ValueError("Tháng KHMT phải nằm trong khoảng 1-12")
     if year < 2020 or year > 2100:
         raise ValueError("Năm KHMT không hợp lệ")
-    if role != Role.TEAM_ACCOUNT.value:
-        raise PermissionError("Chỉ tài khoản đội/tổ được ghi nhận tháng KHMT")
-    team_code = principal_team or actor
-    if record.team != team_code:
-        raise PermissionError("Tài khoản đội/tổ chỉ được ghi nhận KHMT cho đội/tổ của mình")
-    if record.status not in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}:
-        raise ValueError("Only Approved or Completed SK-CTKT can be assigned to KHMT")
+    _ensure_khmt_editable(record, actor, role, principal_team)
     record.khmt_month = month
     record.khmt_year = year
     record.consider_for_khmt = True
@@ -414,6 +408,61 @@ def assign_khmt(
     db.commit()
     db.refresh(record)
     return record
+
+
+def clear_khmt(
+    db: Session,
+    record_id: str,
+    actor: str,
+    role: str = Role.ADMIN.value,
+    principal_team: str | None = None,
+) -> SKCTKTModel:
+    record = db.get(SKCTKTModel, record_id)
+    if record is None:
+        raise KeyError("SK-CTKT not found")
+    _ensure_khmt_editable(record, actor, role, principal_team)
+    previous_month = record.khmt_month
+    previous_year = record.khmt_year
+    record.khmt_month = None
+    record.khmt_year = None
+    record.consider_for_khmt = False
+    record.is_counted_for_okr = False
+    now = _utc_now()
+    history = {
+        "from_status": record.status,
+        "to_status": record.status,
+        "changed_by": actor,
+        "changed_at": now.isoformat(),
+        "reason": "khmt_unassignment",
+        "comments": {
+            "previous_khmt_month": previous_month,
+            "previous_khmt_year": previous_year,
+            "source": "workflow",
+        },
+    }
+    record.status_history = [*record.status_history, history]
+    record.updated_at = now
+    audit(
+        db,
+        actor,
+        "SK_CTKT",
+        record_id,
+        "clear_khmt",
+        {"previous_month": previous_month, "previous_year": previous_year},
+    )
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def _ensure_khmt_editable(record: SKCTKTModel, actor: str, role: str, principal_team: str | None) -> None:
+    if role != Role.TEAM_ACCOUNT.value:
+        raise PermissionError("Chỉ tài khoản đội/tổ được ghi nhận tháng KHMT")
+    team_code = principal_team or actor
+    if record.team != team_code:
+        raise PermissionError("Tài khoản đội/tổ chỉ được ghi nhận KHMT cho đội/tổ của mình")
+    if record.status not in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}:
+        raise ValueError("Only Approved or Completed SK-CTKT can be assigned to KHMT")
 
 
 FI_DASHBOARD_TEAMS = ["TBCH", "TBĐL", "TBHTĐK", "TCĐK"]

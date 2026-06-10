@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { canSelectKhmtMonth, displayTeam, isKhmtConsidered, khmtLabel, recordSubmitterId, visibleActionsForSk } from "./FIWorkspace";
+import {
+  canSelectKhmtMonth,
+  displayTeam,
+  hasKhmtPendingChange,
+  isKhmtConsidered,
+  khmtLabel,
+  recordSubmitterId,
+  visibleActionsForSk,
+} from "./FIWorkspace";
 
 describe("FI action visibility", () => {
   it("allows a team account to edit/delete its own draft but not another person's draft", () => {
@@ -88,6 +96,12 @@ describe("FI action visibility", () => {
     expect(canSelectKhmtMonth("Team_Account", "TBĐL", approved)).toBe(false);
     expect(canSelectKhmtMonth("FI_Coordinator", "fi", approved)).toBe(false);
     expect(canSelectKhmtMonth("Team_Account", "TBCH", { ...approved, status: "Submitted" })).toBe(false);
+  });
+
+  it("treats returning to Chưa vào KHMT as a KHMT change", () => {
+    expect(hasKhmtPendingChange("", "5")).toBe(true);
+    expect(hasKhmtPendingChange("5", "5")).toBe(false);
+    expect(hasKhmtPendingChange("", "")).toBe(false);
   });
 
   it("does not allow FI_Coordinator to delete approved items", () => {

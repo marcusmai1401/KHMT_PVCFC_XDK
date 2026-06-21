@@ -86,7 +86,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     environment:
       name: production
-      url: http://103.200.20.225/
+      url: http://xdk-pvcfc.com/
     steps:
       - name: Checkout
         uses: actions/checkout@v4

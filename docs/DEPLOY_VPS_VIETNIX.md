@@ -3,6 +3,7 @@
 VPS hiện tại:
 
 - IP: `103.200.20.225`
+- Domain: `xdk-pvcfc.com`
 - OS: Ubuntu 22.04 LTS
 - Cấu hình: 2 CPU, 4 GB RAM, 40 GB NVMe
 
@@ -98,10 +99,10 @@ Trong giai đoạn chạy bằng IP, giữ:
 OKR_ALLOWED_ORIGINS=http://103.200.20.225
 ```
 
-Khi có domain, đổi thành:
+Khi dùng domain `xdk-pvcfc.com`, dùng:
 
 ```text
-OKR_ALLOWED_ORIGINS=https://okr.<domain-cong-ty>
+OKR_ALLOWED_ORIGINS=http://xdk-pvcfc.com,https://xdk-pvcfc.com,http://www.xdk-pvcfc.com,https://www.xdk-pvcfc.com,http://103.200.20.225
 ```
 
 ## 7. Chạy hệ thống
@@ -121,7 +122,7 @@ curl http://127.0.0.1/health
 Mở trình duyệt:
 
 ```text
-http://103.200.20.225
+http://xdk-pvcfc.com
 ```
 
 Tài khoản admin ban đầu là giá trị `OKR_BOOTSTRAP_ADMIN_ID` và `OKR_BOOTSTRAP_ADMIN_PASSWORD` trong `.env.production`. Tài khoản này chỉ được seed khi database còn trống.

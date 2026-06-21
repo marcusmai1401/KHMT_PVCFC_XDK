@@ -239,13 +239,19 @@ Khi push hoặc merge vào `main`:
 Production hiện chạy tại:
 
 ```text
-http://103.200.20.225/
+http://xdk-pvcfc.com/
 ```
 
 Health check:
 
 ```text
-http://103.200.20.225/health
+http://xdk-pvcfc.com/health
+```
+
+IP VPS dự phòng khi DNS chưa cập nhật:
+
+```text
+http://103.200.20.225/
 ```
 
 ### Khi nào cần deploy thủ công?

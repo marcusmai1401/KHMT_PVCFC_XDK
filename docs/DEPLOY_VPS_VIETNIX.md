@@ -9,7 +9,8 @@ VPS hiện tại:
 
 Mô hình deploy:
 
-- `frontend`: React/Vite build static, chạy bằng Nginx, public cổng `80`.
+- `caddy`: reverse proxy public cổng `80`/`443`, tự cấp và gia hạn HTTPS.
+- `frontend`: React/Vite build static, chạy bằng Nginx nội bộ trong Docker network.
 - `backend`: FastAPI, chỉ nằm trong Docker network.
 - `postgres`: database production, không mở port ra Internet.
 - `redis`: cache, không mở port ra Internet.
@@ -52,14 +53,9 @@ docker compose version
 ```bash
 ufw allow OpenSSH
 ufw allow 80/tcp
+ufw allow 443/tcp
 ufw enable
 ufw status
-```
-
-Khi có domain và HTTPS thì mở thêm:
-
-```bash
-ufw allow 443/tcp
 ```
 
 ## 5. Lấy source code
@@ -122,7 +118,7 @@ curl http://127.0.0.1/health
 Mở trình duyệt:
 
 ```text
-http://xdk-pvcfc.com
+https://xdk-pvcfc.com
 ```
 
 Tài khoản admin ban đầu là giá trị `OKR_BOOTSTRAP_ADMIN_ID` và `OKR_BOOTSTRAP_ADMIN_PASSWORD` trong `.env.production`. Tài khoản này chỉ được seed khi database còn trống.

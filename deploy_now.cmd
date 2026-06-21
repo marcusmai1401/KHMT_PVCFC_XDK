@@ -17,5 +17,5 @@ if errorlevel 1 (
 )
 python deploy_prod.py %*
 echo.
-echo === Hoan tat. Mo trinh duyet va vao http://xdk-pvcfc.com de kiem tra. ===
+echo === Hoan tat. Mo trinh duyet va vao https://xdk-pvcfc.com de kiem tra. ===
 pause

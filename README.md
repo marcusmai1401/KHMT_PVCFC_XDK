@@ -239,16 +239,16 @@ Khi push hoặc merge vào `main`:
 Production hiện chạy tại:
 
 ```text
-http://xdk-pvcfc.com/
+https://xdk-pvcfc.com/
 ```
 
 Health check:
 
 ```text
-http://xdk-pvcfc.com/health
+https://xdk-pvcfc.com/health
 ```
 
-IP VPS dự phòng khi DNS chưa cập nhật:
+HTTP sẽ được Caddy chuyển hướng sang HTTPS. IP VPS dự phòng khi DNS chưa cập nhật:
 
 ```text
 http://103.200.20.225/

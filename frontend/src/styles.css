@@ -5251,19 +5251,6 @@ th {
   --month-border: #bfdbfe;
   display: grid;
   gap: 10px;
-  padding-left: 12px;
-  position: relative;
-}
-
-.legacy-month-group::before {
-  background: linear-gradient(180deg, var(--month-accent), var(--month-border));
-  border-radius: 999px;
-  bottom: 4px;
-  content: "";
-  left: 0;
-  position: absolute;
-  top: 0;
-  width: 4px;
 }
 
 .legacy-month-group.month-tone-1 { --month-accent: #2563eb; --month-bg: #eff6ff; --month-border: #bfdbfe; }
@@ -5283,7 +5270,6 @@ th {
 .legacy-month-sticky-head {
   background: linear-gradient(90deg, var(--month-bg) 0%, #ffffff 70%);
   border: 1px solid var(--month-border);
-  border-left: 5px solid var(--month-accent);
   border-radius: 10px;
   box-shadow: 0 8px 18px -16px rgba(15, 23, 42, 0.32);
   display: grid;
@@ -5379,35 +5365,43 @@ th {
 .legacy-row-column-label-side span {
   align-items: center;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: 8px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 1px 2px rgba(15, 23, 42, 0.04);
   display: inline-flex;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 800;
-  min-height: 24px;
+  min-height: 32px;
   justify-content: center;
-  letter-spacing: 0;
-  line-height: 1.05;
-  padding: 0 8px;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
+  padding: 0 10px;
   text-align: center;
   white-space: nowrap;
 }
 
+.legacy-row-column-label-side span:empty {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
 .legacy-row-column-label-side .tone-period {
-  background: #eaf3ff;
-  border-color: #bfdbfe;
-  color: #2c398e;
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  border-color: #93c5fd;
+  color: #1d4ed8;
 }
 
 .legacy-row-column-label-side .tone-decision {
-  background: #fff7ed;
-  border-color: #fed7aa;
+  background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+  border-color: #fdba74;
   color: #c2410c;
 }
 
 .legacy-row-column-label-side .tone-khmt {
-  background: #f0fdf4;
-  border-color: #bbf7d0;
-  color: #15803d;
+  background: linear-gradient(180deg, #ecfdf5 0%, #dcfce7 100%);
+  border-color: #86efac;
+  color: #047857;
 }
 
 .legacy-record {

@@ -16,11 +16,29 @@ from app.models.domain import (
     User,
     VHDNExemptionModel,
 )
-from app.schemas.common import HeadcountUpdate, SystemConfigUpdate, TemplateUpdate, UserCreate, UserRoleUpdate
+from app.schemas.common import (
+    HeadcountUpdate,
+    PasswordResetRequest,
+    SystemConfigUpdate,
+    TemplateUpdate,
+    UserCreate,
+    UserRoleUpdate,
+)
 from app.services.cache import cache_delete_prefix, cache_get, cache_set
 from app.services.repositories import audit, make_id, model_to_dict
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+DEFAULT_RESET_PASSWORD = "PVCFC@123"
+
+
+def _validate_password_policy(password: str) -> None:
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Mật khẩu phải có ít nhất 8 ký tự")
+    has_letter = any(ch.isalpha() for ch in password)
+    has_digit = any(ch.isdigit() for ch in password)
+    if not (has_letter and has_digit):
+        raise HTTPException(status_code=400, detail="Mật khẩu cần có cả chữ và số")
 
 
 def _validate_role(value: str) -> str:
@@ -90,6 +108,38 @@ def update_user_role(
     audit(db, principal["user_id"], "Account", user.id, "update_role", {"before": before, "after": model_to_dict(user)})
     db.commit()
     return model_to_dict(user) | {"password_hash": None}
+
+
+@router.post("/users/{user_id}/reset-password")
+def reset_user_password(
+    user_id: str,
+    payload: PasswordResetRequest,
+    principal: dict = Depends(require_role(Role.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """Admin reset mật khẩu cho 1 user.
+
+    Bỏ trống ``new_password`` để dùng mật khẩu mặc định hệ thống. Luôn bật
+    ``must_change_password`` để buộc user đặt mật khẩu mới ở lần đăng nhập kế.
+    Trả về mật khẩu tạm (plaintext) để admin chuyển cho user qua kênh an toàn.
+    """
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài khoản")
+    temp_password = (payload.new_password or "").strip() or DEFAULT_RESET_PASSWORD
+    _validate_password_policy(temp_password)
+    user.password_hash = hash_password(temp_password)
+    user.must_change_password = True
+    audit(
+        db,
+        principal["user_id"],
+        "Account",
+        user.id,
+        "admin_reset_password",
+        {"used_default": temp_password == DEFAULT_RESET_PASSWORD},
+    )
+    db.commit()
+    return model_to_dict(user) | {"password_hash": None, "temporary_password": temp_password}
 
 
 @router.get("/kr-mapping")

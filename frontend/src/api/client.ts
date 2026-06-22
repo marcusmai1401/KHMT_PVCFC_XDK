@@ -122,6 +122,11 @@ export const api = {
   krMapping: () => request<any[]>("/okr/kr-mapping"),
   headcount: () => request<any>("/admin/headcount"),
   adminUsers: () => request<any[]>("/admin/users"),
+  adminResetUserPassword: (userId: string, newPassword?: string | null) =>
+    request<any>(`/admin/users/${encodeURIComponent(userId)}/reset-password`, {
+      method: "POST",
+      body: JSON.stringify({ new_password: newPassword?.trim() ? newPassword.trim() : null }),
+    }),
   auditLog: (filters: QueryParams = {}) => request<any[]>(`/admin/audit-log${toQuery(filters)}`),
   reports: () => request<any[]>("/okr/reports"),
   previewReport: (id: string) => request<any>(`/okr/reports/${id}/preview`),

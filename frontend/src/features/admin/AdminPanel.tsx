@@ -4,16 +4,19 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock3,
+  Copy,
   Database,
   FileText,
   History,
   KeyRound,
   RefreshCw,
+  RotateCcw,
   Search,
   Send,
   ShieldCheck,
   UserRound,
   Users2,
+  X,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { displayTeam, isKhmtConsidered, khmtLabel } from "../fi/FIWorkspace";
@@ -174,6 +177,8 @@ export function AdminPanel() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [accountSearch, setAccountSearch] = useState("");
+  const [resetBusyId, setResetBusyId] = useState<string | null>(null);
+  const [resetResult, setResetResult] = useState<{ userId: string; password: string } | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [okrMonth, setOkrMonth] = useState(today.getMonth() + 1);
   const [okrYear, setOkrYear] = useState(today.getFullYear());
@@ -202,6 +207,27 @@ export function AdminPanel() {
   useEffect(() => {
     reload();
   }, [okrMonth, okrYear]);
+
+  const handleResetPassword = (user: any) => {
+    const label = user.display_name || user.full_name || user.id;
+    const confirmed = window.confirm(
+      `Reset mật khẩu cho "${label}" (${user.id})?\n\n` +
+        "Hệ thống sẽ đặt lại mật khẩu mặc định và buộc người dùng đổi mật khẩu " +
+        "ngay khi đăng nhập lần kế tiếp.",
+    );
+    if (!confirmed) return;
+    setResetBusyId(user.id);
+    setError("");
+    setResetResult(null);
+    api
+      .adminResetUserPassword(user.id)
+      .then((res) => {
+        setResetResult({ userId: user.id, password: res.temporary_password });
+        reload();
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setResetBusyId(null));
+  };
 
   const teams = useMemo(
     () => Array.from(new Set(fiRows.map((row) => row.team).filter(Boolean))).sort((a, b) => displayTeam(a).localeCompare(displayTeam(b), "vi")),
@@ -578,6 +604,38 @@ export function AdminPanel() {
         </div>
       </div>
 
+      {resetResult && (
+        <div className="admin-reset-banner" role="status">
+          <ShieldCheck size={18} />
+          <div className="admin-reset-banner-body">
+            <strong>Đã reset mật khẩu cho “{resetResult.userId}”.</strong>
+            <span>
+              Mật khẩu tạm:{" "}
+              <code className="admin-reset-password">{resetResult.password}</code> — gửi cho người
+              dùng qua kênh an toàn. Họ sẽ bị buộc đổi mật khẩu khi đăng nhập lần kế tiếp.
+            </span>
+          </div>
+          <div className="admin-reset-banner-actions">
+            <button
+              type="button"
+              className="admin-detail-button"
+              onClick={() => navigator.clipboard?.writeText(resetResult.password)}
+            >
+              <Copy size={14} />
+              Sao chép
+            </button>
+            <button
+              type="button"
+              className="admin-reset-banner-close"
+              aria-label="Đóng thông báo"
+              onClick={() => setResetResult(null)}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="admin-fi-controls">
         <label className="admin-search-field admin-account-search">
           <Search size={15} />
@@ -602,6 +660,7 @@ export function AdminPanel() {
               <th>Lần login gần nhất</th>
               <th>Hoạt động gần nhất</th>
               <th>Ngày tạo</th>
+              <th>Thao tác</th>
             </tr>
           </thead>
           <tbody>
@@ -642,11 +701,23 @@ export function AdminPanel() {
                   )}
                 </td>
                 <td>{formatDateTime(user.created_at)}</td>
+                <td>
+                  <button
+                    type="button"
+                    className="admin-detail-button admin-reset-button"
+                    onClick={() => handleResetPassword(user)}
+                    disabled={resetBusyId === user.id}
+                    title="Đặt lại mật khẩu mặc định và buộc đổi khi đăng nhập"
+                  >
+                    <RotateCcw size={14} />
+                    {resetBusyId === user.id ? "Đang reset..." : "Reset mật khẩu"}
+                  </button>
+                </td>
               </tr>
             ))}
             {accountRows.length === 0 && (
               <tr>
-                <td colSpan={9}>Không có tài khoản phù hợp với bộ lọc hiện tại.</td>
+                <td colSpan={10}>Không có tài khoản phù hợp với bộ lọc hiện tại.</td>
               </tr>
             )}
           </tbody>

@@ -85,6 +85,17 @@ class UserRoleUpdate(BaseModel):
     is_active: bool | None = None
 
 
+class PasswordResetRequest(BaseModel):
+    """Admin reset mật khẩu cho 1 user.
+
+    Bỏ trống ``new_password`` để dùng mật khẩu mặc định của hệ thống. Sau khi
+    reset, ``must_change_password`` luôn bật để buộc user đặt mật khẩu mới khi
+    đăng nhập lần kế tiếp.
+    """
+
+    new_password: str | None = Field(default=None, max_length=128)
+
+
 class HeadcountUpdate(BaseModel):
     team: str
     total_headcount: int = Field(ge=0)

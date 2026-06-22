@@ -143,6 +143,13 @@ function clearStoredSessionTokens() {
   window.sessionStorage.removeItem(BROWSER_SESSION_TOKEN_KEY);
 }
 
+function isMobileViewport() {
+  if (typeof window === "undefined") return false;
+  return window.innerWidth <= 900
+    || window.screen.width <= 900
+    || window.matchMedia("(max-width: 900px)").matches;
+}
+
 export function App() {
   const [tab, setTab] = useState<Tab>(() => initialTabFromPath());
   const [role, setRole] = useState("");
@@ -181,6 +188,7 @@ export function App() {
   const [exportingPng, setExportingPng] = useState(false);
   const [workspaceVersion, setWorkspaceVersion] = useState(0);
   const [adminEditMode, setAdminEditMode] = useState(false);
+  const [mobileView, setMobileView] = useState(() => isMobileViewport());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
@@ -451,6 +459,21 @@ export function App() {
   }, [role, adminEditMode]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(max-width: 900px)");
+    const update = () => setMobileView(isMobileViewport());
+    update();
+    media.addEventListener("change", update);
+    window.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("resize", update);
+    return () => {
+      media.removeEventListener("change", update);
+      window.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("resize", update);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!notificationsOpen || typeof window === "undefined") return;
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target;
@@ -679,141 +702,143 @@ export function App() {
   const unreadNotificationCount = notifications.filter((item) => !item.read).length;
 
   return (
-    <main className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""} ${role === "Admin" && adminEditMode ? "edit-mode-on" : "edit-mode-off"}`}>
-      <aside className="sidebar">
-        <div className="sidebar-head">
-          <div className="brand">
-            <img src="/logo.webp" alt="PVCFC Logo" className="brand-logo" />
-            <div>
-              <strong>OKR Automation</strong>
-              <span>Xưởng Điều khiển</span>
+    <main className={`app-shell ${mobileView ? "mobile-view" : ""} ${sidebarCollapsed ? "sidebar-collapsed" : ""} ${role === "Admin" && adminEditMode ? "edit-mode-on" : "edit-mode-off"}`}>
+      {!mobileView && (
+        <aside className="sidebar">
+          <div className="sidebar-head">
+            <div className="brand">
+              <img src="/logo.webp" alt="PVCFC Logo" className="brand-logo" />
+              <div>
+                <strong>OKR Automation</strong>
+                <span>Xưởng Điều khiển</span>
+              </div>
+            </div>
+            <button
+              aria-label={sidebarCollapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
+              className="sidebar-toggle"
+              onClick={() => setSidebarCollapsed((value) => !value)}
+              title={sidebarCollapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
+              type="button"
+            >
+              {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            </button>
+          </div>
+          <div className="field">
+            <span>Tài khoản</span>
+            <strong>{currentDisplayName ?? currentUserId}</strong>
+            <small>
+              {sandbox
+                ? `Kiểm thử · ${displayRole(role)}${currentTeam ? ` · ${displayTeam(currentTeam)}` : ""}`
+                : `${displayRole(role)}${currentTeam ? ` · ${displayTeam(currentTeam)}` : ""}`}
+            </small>
+            <div className="account-actions">
+              {!sandbox && (
+                <button
+                  className="account-action"
+                  onClick={() => setVoluntaryChange(true)}
+                  title="Đổi mật khẩu"
+                  type="button"
+                >
+                  <KeyRound size={14} />
+                  <span>Đổi mật khẩu</span>
+                </button>
+              )}
+              {isAdminProd && (
+                <button
+                  className="account-action"
+                  onClick={enterSandbox}
+                  title="Vào môi trường kiểm thử để giả lập các tài khoản"
+                  type="button"
+                >
+                  <FlaskConical size={14} />
+                  <span>Kiểm thử</span>
+                </button>
+              )}
+              {sandbox && hasRealSession && (
+                <button
+                  className="account-action"
+                  onClick={exitSandbox}
+                  title="Thoát môi trường kiểm thử"
+                  type="button"
+                >
+                  <Undo2 size={14} />
+                  <span>Thoát kiểm thử</span>
+                </button>
+              )}
+              <button
+                className="account-action"
+                onClick={logout}
+                title="Đăng xuất"
+                type="button"
+              >
+                <LogOut size={14} />
+                <span>Đăng xuất</span>
+              </button>
             </div>
           </div>
-          <button
-            aria-label={sidebarCollapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
-            className="sidebar-toggle"
-            onClick={() => setSidebarCollapsed((value) => !value)}
-            title={sidebarCollapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
-            type="button"
-          >
-            {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-          </button>
-        </div>
-        <div className="field">
-          <span>Tài khoản</span>
-          <strong>{currentDisplayName ?? currentUserId}</strong>
-          <small>
-            {sandbox
-              ? `Kiểm thử · ${displayRole(role)}${currentTeam ? ` · ${displayTeam(currentTeam)}` : ""}`
-              : `${displayRole(role)}${currentTeam ? ` · ${displayTeam(currentTeam)}` : ""}`}
-          </small>
-          <div className="account-actions">
-            {!sandbox && (
-              <button
-                className="account-action"
-                onClick={() => setVoluntaryChange(true)}
-                title="Đổi mật khẩu"
-                type="button"
-              >
-                <KeyRound size={14} />
-                <span>Đổi mật khẩu</span>
-              </button>
-            )}
-            {isAdminProd && (
-              <button
-                className="account-action"
-                onClick={enterSandbox}
-                title="Vào môi trường kiểm thử để giả lập các tài khoản"
-                type="button"
-              >
+          {sandbox && (
+            <div className="sidebar-sandbox">
+              <div className="sidebar-sandbox-head">
                 <FlaskConical size={14} />
-                <span>Kiểm thử</span>
-              </button>
-            )}
-            {sandbox && hasRealSession && (
+                <span>Môi trường kiểm thử</span>
+              </div>
+              <label className="sidebar-sandbox-field">
+                <span>Giả lập tài khoản</span>
+                <select
+                  value={currentUserId}
+                  onChange={(event) => switchSandboxRole(event.target.value)}
+                  aria-label="Giả lập tài khoản"
+                >
+                  {groupedIdentities.length === 0 && (
+                    <option value={currentUserId}>{currentDisplayName ?? currentUserId}</option>
+                  )}
+                  {groupedIdentities.map((group) => (
+                    <optgroup key={group.role} label={displayRole(group.role)}>
+                      {group.items.map((identity) => (
+                        <option key={identity.id} value={identity.id}>
+                          {identity.display_name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </label>
               <button
-                className="account-action"
-                onClick={exitSandbox}
-                title="Thoát môi trường kiểm thử"
+                className="sidebar-sandbox-reset"
+                onClick={resetSandbox}
+                disabled={resettingSandbox}
+                title="Reset toàn bộ dữ liệu kiểm thử"
                 type="button"
               >
-                <Undo2 size={14} />
-                <span>Thoát kiểm thử</span>
+                <RotateCcw size={15} />
+                <span>{resettingSandbox ? "Đang reset..." : "Reset dữ liệu kiểm thử"}</span>
+              </button>
+            </div>
+          )}
+          <nav>
+            <button className={tab === "okr" ? "active" : ""} onClick={() => navigateToTab("okr")} title="OKR">
+              <BarChart3 size={18} />
+              <span>OKR</span>
+            </button>
+            {canAccessTab(role, "et") && (
+              <button className={tab === "et" ? "active" : ""} onClick={() => navigateToTab("et")} title="Năng lực ET">
+                <ClipboardCheck size={18} />
+                <span>Năng lực ET</span>
               </button>
             )}
-            <button
-              className="account-action"
-              onClick={logout}
-              title="Đăng xuất"
-              type="button"
-            >
-              <LogOut size={14} />
-              <span>Đăng xuất</span>
+            <button className={tab === "fi" ? "active" : ""} onClick={() => navigateToTab("fi")} title="FI">
+              <Lightbulb size={18} />
+              <span>FI</span>
             </button>
-          </div>
-        </div>
-        {sandbox && (
-          <div className="sidebar-sandbox">
-            <div className="sidebar-sandbox-head">
-              <FlaskConical size={14} />
-              <span>Môi trường kiểm thử</span>
-            </div>
-            <label className="sidebar-sandbox-field">
-              <span>Giả lập tài khoản</span>
-              <select
-                value={currentUserId}
-                onChange={(event) => switchSandboxRole(event.target.value)}
-                aria-label="Giả lập tài khoản"
-              >
-                {groupedIdentities.length === 0 && (
-                  <option value={currentUserId}>{currentDisplayName ?? currentUserId}</option>
-                )}
-                {groupedIdentities.map((group) => (
-                  <optgroup key={group.role} label={displayRole(group.role)}>
-                    {group.items.map((identity) => (
-                      <option key={identity.id} value={identity.id}>
-                        {identity.display_name}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </label>
-            <button
-              className="sidebar-sandbox-reset"
-              onClick={resetSandbox}
-              disabled={resettingSandbox}
-              title="Reset toàn bộ dữ liệu kiểm thử"
-              type="button"
-            >
-              <RotateCcw size={15} />
-              <span>{resettingSandbox ? "Đang reset..." : "Reset dữ liệu kiểm thử"}</span>
-            </button>
-          </div>
-        )}
-        <nav>
-          <button className={tab === "okr" ? "active" : ""} onClick={() => navigateToTab("okr")} title="OKR">
-            <BarChart3 size={18} />
-            <span>OKR</span>
-          </button>
-          {canAccessTab(role, "et") && (
-            <button className={tab === "et" ? "active" : ""} onClick={() => navigateToTab("et")} title="Năng lực ET">
-              <ClipboardCheck size={18} />
-              <span>Năng lực ET</span>
-            </button>
-          )}
-          <button className={tab === "fi" ? "active" : ""} onClick={() => navigateToTab("fi")} title="FI">
-            <Lightbulb size={18} />
-            <span>FI</span>
-          </button>
-          {canAccessTab(role, "admin") && (
-            <button className={tab === "admin" ? "active" : ""} onClick={() => navigateToTab("admin")} title="Quản trị">
-              <History size={18} />
-              <span>Quản trị</span>
-            </button>
-          )}
-        </nav>
-      </aside>
+            {canAccessTab(role, "admin") && (
+              <button className={tab === "admin" ? "active" : ""} onClick={() => navigateToTab("admin")} title="Quản trị">
+                <History size={18} />
+                <span>Quản trị</span>
+              </button>
+            )}
+          </nav>
+        </aside>
+      )}
       <section className={`workspace ${tab === "fi" ? "fi-workspace-shell" : ""}`}>
         <header className="topbar" ref={attachTopbarMeasure}>
           <div className="topbar-heading">

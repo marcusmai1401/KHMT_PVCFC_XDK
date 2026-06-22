@@ -413,12 +413,12 @@ textarea:focus-visible {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 260px minmax(0, 1fr);
   min-height: 100vh;
 }
 
 .app-shell.sidebar-collapsed {
-  grid-template-columns: 76px 1fr;
+  grid-template-columns: 76px minmax(0, 1fr);
 }
 
 .sidebar {
@@ -790,6 +790,7 @@ nav button.active {
 
 .workspace {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto 1fr;
   min-width: 0;
   background-color: var(--bg-main);
@@ -13323,7 +13324,10 @@ pre {
 .app-shell.mobile-view .topbar,
 .app-shell.mobile-view.fi-workspace-shell .topbar {
   align-items: center;
-  gap: 8px;
+  column-gap: 8px;
+  row-gap: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   padding: 9px 12px;
   position: sticky;
   top: 0;
@@ -13331,7 +13335,8 @@ pre {
 }
 
 .app-shell.mobile-view .topbar-heading {
-  flex: 1 1 auto;
+  grid-column: 1;
+  grid-row: 1;
   min-width: 0;
 }
 
@@ -13348,9 +13353,12 @@ pre {
 }
 
 .app-shell.mobile-view .topbar-tools {
-  flex: 0 0 auto;
+  grid-column: 2;
+  grid-row: 1;
+  align-items: center;
+  flex-direction: row;
   gap: 6px;
-  margin-left: auto;
+  justify-self: end;
 }
 
 .app-shell.mobile-view .topbar-tools > svg,
@@ -13399,8 +13407,10 @@ pre {
 }
 
 .app-shell.mobile-view .topbar-tabs {
-  flex: 0 0 100%;
-  order: 3;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
   padding-bottom: 1px;
   scrollbar-width: none;
@@ -13513,7 +13523,92 @@ pre {
 .app-shell.mobile-view .et-notes,
 .app-shell.mobile-view .et-top-lists,
 .app-shell.mobile-view .admin-tabs {
-  grid-template-columns: 1fr !important;
+  /* minmax(0, 1fr) chứ không phải 1fr: 1fr = minmax(auto, 1fr) nên cột vẫn nở
+     theo max-content của nội dung (status card, chart) gây tràn ngang. */
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+/* Lưới thẻ tóm tắt đội/tổ (KPI A1/A2, tổng hợp đội) tự co số cột theo bề ngang
+   thực tế: 1 cột trên điện thoại hẹp (tránh cắt nội dung "TBHTĐK A2:0 A1:0"),
+   2+ cột khi đủ chỗ. Ghi đè rule cố định repeat(2, ...) ở breakpoint ≤700px. */
+.app-shell.mobile-view .kpi-section-grid,
+.app-shell.mobile-view .fi-team-numbers,
+.app-shell.mobile-view .okr-team-summary-list,
+.app-shell.mobile-view .legacy-team-picker {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important;
+}
+
+/* Chi tiết Objective (O1–O6): các lưới con dùng minmax(≥260–320px) sẽ ép cột
+   rộng hơn cả màn hình điện thoại → cắt nội dung. Cho về 1 cột và buộc mọi
+   biểu đồ (SVG/canvas/ảnh) co theo bề ngang thẻ. */
+.app-shell.mobile-view .o1-status-list,
+.app-shell.mobile-view .narrative-list,
+.app-shell.mobile-view .visual-kind-narrative_card .narrative-list,
+.app-shell.mobile-view .conclusion-grid,
+.app-shell.mobile-view .objective-status-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.app-shell.mobile-view .objective-visual,
+.app-shell.mobile-view .o1-status-board,
+.app-shell.mobile-view .o1-status-overview,
+.app-shell.mobile-view .o1-status-card {
+  min-width: 0;
+}
+
+.app-shell.mobile-view .objective-visual svg,
+.app-shell.mobile-view .objective-visual canvas,
+.app-shell.mobile-view .objective-visual img {
+  height: auto;
+  max-width: 100%;
+}
+
+/* Danh sách chi tiết/narrative trong objective: cho phép xuống dòng và không để
+   phần tử con ép rộng (tránh clip vài chục px ở O5/O6). */
+.app-shell.mobile-view .narrative-item,
+.app-shell.mobile-view .narrative-detail,
+.app-shell.mobile-view .narrative-detail > *,
+.app-shell.mobile-view .o6-sports-row,
+.app-shell.mobile-view [class*="-row-head"],
+.app-shell.mobile-view [class*="-row-bar"] {
+  min-width: 0;
+}
+
+.app-shell.mobile-view .narrative-item {
+  flex-wrap: wrap;
+}
+
+.app-shell.mobile-view .narrative-item span,
+.app-shell.mobile-view .narrative-detail li {
+  overflow-wrap: anywhere;
+}
+
+/* Thẻ kết luận (Nhập liệu OKR) và điều khiển biểu mẫu: co theo bề ngang, không
+   để select/textarea/input mặc định vượt khung trên điện thoại. */
+.app-shell.mobile-view .conclusion-card,
+.app-shell.mobile-view .conclusion-card > * {
+  min-width: 0;
+}
+
+.app-shell.mobile-view select,
+.app-shell.mobile-view textarea,
+.app-shell.mobile-view input {
+  max-width: 100%;
+}
+
+.app-shell.mobile-view .conclusion-card > header {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.app-shell.mobile-view .assessment-select {
+  width: 100%;
+}
+
+/* Lưới tổng hợp 8 bậc năng lực (ET · Khung năng lực): minmax(56px) ép tối thiểu
+   448px > màn hình → cắt. Cho co đều theo bề ngang (số liệu nhỏ, vẫn đủ chỗ). */
+.app-shell.mobile-view .framework-total-grid {
+  grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
 }
 
 .app-shell.mobile-view .content-grid {

@@ -5228,6 +5228,29 @@ th {
 .fi-history-stat.tone-completion { border-left-color: #0d9488; }
 .fi-history-stat.tone-completion > strong { color: #0f766e; }
 
+/* Stat cards double as quick filters: clickable buttons with a clear pressed state. */
+.fi-history-stat.is-quickfilter {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  margin: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fi-history-stat.is-quickfilter:focus-visible {
+  outline: 2px solid var(--brand-navy);
+  outline-offset: 2px;
+}
+
+.fi-history-stat.is-active {
+  border-color: var(--brand-navy);
+  border-left-width: 3px;
+  background: #f4f7ff;
+  box-shadow: 0 0 0 2px rgba(44, 57, 142, 0.18), 0 4px 10px -6px rgba(44, 57, 142, 0.5);
+}
+
 .legacy-list {
   display: grid;
   gap: 10px;
@@ -13092,4 +13115,170 @@ pre {
   .okr-accordion-pct {
     display: none;
   }
+}
+
+/* ============================================================
+   Dashboard fidelity (parity with Excel "Dashboard" sheet)
+   Report banner, objective target/result, KR narrative detail,
+   VHDN "Số lần tổ chức" counts, training/competency footnotes,
+   discipline-violation clear state.
+   ============================================================ */
+
+.okr-report-banner {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 16px 24px;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--brand-green-deep) 0%, var(--brand-green) 55%, var(--brand-green-bright) 100%);
+  box-shadow: 0 10px 24px -16px rgba(14, 122, 56, 0.65);
+}
+
+.okr-report-banner h1 {
+  margin: 4px 0;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.okr-report-eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  color: rgba(255, 255, 255, 0.9);
+  text-transform: uppercase;
+}
+
+.okr-report-note {
+  margin: 0;
+  font-size: 12px;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Objective header Mục tiêu / Kết quả line */
+.objective-target-result {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: #475569;
+}
+
+.objective-target-result b {
+  color: var(--brand-green-deep);
+  font-weight: 700;
+}
+
+/* KR narrative card detail (progress notes, per-team statuses) */
+.narrative-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.narrative-statuses {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.narrative-status {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.narrative-status small {
+  font-size: 9px;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.2px;
+}
+
+.narrative-status-pill {
+  min-width: 26px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 3px 5px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.narrative-status-pill.is-good { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+.narrative-status-pill.is-ok { background: var(--brand-green-soft); color: var(--brand-green-deep); border-color: #c7ead7; }
+.narrative-status-pill.is-na { background: #f1f5f9; color: #94a3b8; border-color: #e2e8f0; }
+.narrative-status-pill.is-risk { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+
+.narrative-detail {
+  margin: 2px 0 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 3px;
+  list-style: disc;
+}
+
+.narrative-detail li {
+  font-size: 12px;
+  line-height: 1.45;
+  color: #334155;
+}
+
+.narrative-org-count {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #475569;
+  padding-top: 6px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.narrative-org-count b { color: var(--brand-navy); font-weight: 800; }
+
+/* VHDN "Số lần tổ chức" footer on running/sports cards */
+.o6-org-count {
+  margin: 10px 2px 0;
+  font-size: 12.5px;
+  color: #475569;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.o6-org-count b { color: var(--brand-green-deep); font-weight: 800; }
+
+/* O5 training / competency footnotes */
+.training-payment {
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--brand-navy);
+}
+
+.competency-cbcnv {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #475569;
+}
+
+.competency-cbcnv b { color: var(--brand-green-deep); font-weight: 800; }
+
+/* Discipline violations — clear (no-violation) state */
+.discipline-violations.is-clear {
+  border-color: #bbf7d0;
+  background: var(--brand-green-soft);
+}
+
+.discipline-clear-note {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand-green-deep);
 }

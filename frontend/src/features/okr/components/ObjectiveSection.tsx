@@ -69,6 +69,16 @@ export function ObjectiveSection({
         <div>
           <p className="objective-code">{code}</p>
           <h2>{section.title || ""}</h2>
+          {section.target || section.result ? (
+            <p className="objective-target-result">
+              {section.target ? (
+                <span><b>Mục tiêu:</b> {section.target}</span>
+              ) : null}
+              {section.result ? (
+                <span><b>Kết quả:</b> {section.result}</span>
+              ) : null}
+            </p>
+          ) : null}
         </div>
         <ObjectiveStatusBadge status={status} />
         {code ? (

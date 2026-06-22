@@ -132,6 +132,18 @@ function khmtFilterForItem(item: any): HistoryKhmtFilter {
   return isKhmtConsidered(item) ? "in" : "out";
 }
 
+// Single source of truth for the LĐX decision badge in the history view, so the
+// per-item pill and the filter chip always speak the same language
+// (Đồng ý / Không đồng ý / Xem xét sau / Chưa duyệt) regardless of whether the
+// record came from the live workflow or an Excel import.
+const historyDecisionBadgeMap = Object.fromEntries(
+  historyDecisionFilterOptions.map((option) => [option.value, { label: option.label, tone: option.tone }]),
+) as Record<HistoryDecisionFilter, { label: string; tone: string }>;
+
+function historyDecisionBadge(item: any): { label: string; tone: string } {
+  return historyDecisionBadgeMap[decisionFilterForItem(item)];
+}
+
 function completionFilterForItem(item: any): HistoryCompletionFilter {
   if (item?.status === "Completed") return "done";
   if (item?.completed_at) return "done";
@@ -1423,6 +1435,21 @@ export function FIWorkspace({
     setHistoryCompletion([]);
     setSelectedItem(null);
   };
+
+  // Quick-filter from the summary stat cards: clicking a card applies that single
+  // facet (and toggles off when it is already the only active value).
+  const isOnlyHistoryDecision = (value: HistoryDecisionFilter) =>
+    historyDecisions.length === 1 && historyDecisions[0] === value;
+  const toggleHistoryDecision = (value: HistoryDecisionFilter) =>
+    changeHistoryDecisions(isOnlyHistoryDecision(value) ? [] : [value]);
+  const isOnlyHistoryKhmt = (value: HistoryKhmtFilter) =>
+    historyKhmt.length === 1 && historyKhmt[0] === value;
+  const toggleHistoryKhmt = (value: HistoryKhmtFilter) =>
+    changeHistoryKhmt(isOnlyHistoryKhmt(value) ? [] : [value]);
+  const isOnlyHistoryCompletion = (value: HistoryCompletionFilter) =>
+    historyCompletion.length === 1 && historyCompletion[0] === value;
+  const toggleHistoryCompletion = (value: HistoryCompletionFilter) =>
+    changeHistoryCompletion(isOnlyHistoryCompletion(value) ? [] : [value]);
 
   const openHistoryItem = (item: any) => {
     if (selectedItem?.id === item.id) {
@@ -3140,39 +3167,81 @@ export function FIWorkspace({
             const notCompleted = historyTeamSummary.not_completed ?? 0;
             const totalForRate = historyTeamSummary.total ?? 0;
             return (
-              <div className="fi-history-summary" aria-label="Tóm tắt theo đội/tổ">
-                <div className="fi-history-stat tone-total">
+              <div className="fi-history-summary" role="group" aria-label="Tóm tắt — nhấn để lọc nhanh">
+                <button
+                  type="button"
+                  className={`fi-history-stat tone-total is-quickfilter ${historyActiveFilterCount === 0 ? "is-active" : ""}`}
+                  onClick={resetHistoryFilters}
+                  aria-pressed={historyActiveFilterCount === 0}
+                  title="Hiển thị tất cả SK-CTKT"
+                >
                   <span>Tổng SK</span>
                   <strong>{formatCount(totalForRate)}</strong>
                   <small>{formatCount(historyTeamSummary.current ?? 0)} hiện hành · {formatCount(historyTeamSummary.historical ?? 0)} lịch sử</small>
-                </div>
-                <div className="fi-history-stat tone-success">
-                  <span>Đã xét đạt</span>
+                </button>
+                <button
+                  type="button"
+                  className={`fi-history-stat tone-success is-quickfilter ${isOnlyHistoryDecision("approved") ? "is-active" : ""}`}
+                  onClick={() => toggleHistoryDecision("approved")}
+                  aria-pressed={isOnlyHistoryDecision("approved")}
+                  title="Lọc các SK đã xét đồng ý"
+                >
+                  <span>Đã xét đồng ý</span>
                   <strong>{formatCount(passed)}</strong>
                   <small>{percent(passed, totalForRate)}%</small>
-                </div>
-                <div className="fi-history-stat tone-danger">
-                  <span>Không đạt</span>
+                </button>
+                <button
+                  type="button"
+                  className={`fi-history-stat tone-danger is-quickfilter ${isOnlyHistoryDecision("rejected") ? "is-active" : ""}`}
+                  onClick={() => toggleHistoryDecision("rejected")}
+                  aria-pressed={isOnlyHistoryDecision("rejected")}
+                  title="Lọc các SK đã xét không đồng ý"
+                >
+                  <span>Đã xét không đồng ý</span>
                   <strong>{formatCount(failed)}</strong>
-                </div>
-                <div className="fi-history-stat tone-warning">
+                </button>
+                <button
+                  type="button"
+                  className={`fi-history-stat tone-warning is-quickfilter ${isOnlyHistoryDecision("deferred") ? "is-active" : ""}`}
+                  onClick={() => toggleHistoryDecision("deferred")}
+                  aria-pressed={isOnlyHistoryDecision("deferred")}
+                  title="Lọc các SK xem xét sau"
+                >
                   <span>Xem xét sau</span>
                   <strong>{formatCount(historyTeamSummary.deferred ?? 0)}</strong>
-                </div>
-                <div className="fi-history-stat tone-neutral">
+                </button>
+                <button
+                  type="button"
+                  className={`fi-history-stat tone-neutral is-quickfilter ${isOnlyHistoryDecision("pending") ? "is-active" : ""}`}
+                  onClick={() => toggleHistoryDecision("pending")}
+                  aria-pressed={isOnlyHistoryDecision("pending")}
+                  title="Lọc các SK chưa duyệt"
+                >
                   <span>Chưa duyệt</span>
                   <strong>{formatCount(historyTeamSummary.pending ?? 0)}</strong>
-                </div>
-                <div className="fi-history-stat tone-info">
+                </button>
+                <button
+                  type="button"
+                  className={`fi-history-stat tone-info is-quickfilter ${isOnlyHistoryKhmt("in") ? "is-active" : ""}`}
+                  onClick={() => toggleHistoryKhmt("in")}
+                  aria-pressed={isOnlyHistoryKhmt("in")}
+                  title="Lọc các SK đã vào KHMT"
+                >
                   <span>Đã vào KHMT</span>
                   <strong>{formatCount(historyTeamSummary.khmt_considered ?? 0)}</strong>
                   <small>{formatCount(missing)} chưa vào</small>
-                </div>
-                <div className="fi-history-stat tone-completion">
+                </button>
+                <button
+                  type="button"
+                  className={`fi-history-stat tone-completion is-quickfilter ${isOnlyHistoryCompletion("done") ? "is-active" : ""}`}
+                  onClick={() => toggleHistoryCompletion("done")}
+                  aria-pressed={isOnlyHistoryCompletion("done")}
+                  title="Lọc các SK đã hoàn thành"
+                >
                   <span>Hoàn thành</span>
                   <strong>{formatCount(completed)}</strong>
                   <small>/ {formatCount(notCompleted)} chưa xong</small>
-                </div>
+                </button>
               </div>
             );
           })()}
@@ -3221,7 +3290,10 @@ export function FIWorkspace({
                     </button>
                     <div className="legacy-row-side">
                       <span className="legacy-period-pill">{registrationMonthLabel(item)}</span>
-                      <span className={`legacy-status-pill ${statusTone(item.status)}`}>{displayHistoryStatus(item)}</span>
+                      {(() => {
+                        const badge = historyDecisionBadge(item);
+                        return <span className={`legacy-status-pill ${badge.tone}`}>{badge.label}</span>;
+                      })()}
                       {renderKhmtControl(item)}
                       <div className="legacy-row-controls">
                         {actions.includes("edit") && (

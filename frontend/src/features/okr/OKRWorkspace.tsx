@@ -241,8 +241,16 @@ export function OKRWorkspace({ role, editMode = true }: { role: string; editMode
       .finally(() => setResetting(false));
   };
 
+  const reportMonth = String(dashboardPeriod?.month ?? period.month).padStart(2, "0");
+  const reportYear = dashboardPeriod?.year ?? period.year;
+
   return (
     <div className="content-grid" ref={dashboardExportRef}>
+      <header className="okr-report-banner">
+        <p className="okr-report-eyebrow">CHUNG MỘT NIỀM TIN - VƯƠN MÌNH PHÁT TRIỂN</p>
+        <h1>BÁO CÁO KẾ HOẠCH MỤC TIÊU XƯỞNG ĐIỀU KHIỂN THÁNG {reportMonth} VÀ LŨY KẾ NĂM {reportYear}</h1>
+        <p className="okr-report-note">(Dữ liệu được cập nhật vào ngày 25 hàng tháng)</p>
+      </header>
       <section className="panel wide okr-matrix-panel">
         <div className="panel-header">
           <div>
@@ -289,7 +297,7 @@ export function OKRWorkspace({ role, editMode = true }: { role: string; editMode
               savingLeaderKpi={savingLeaderKpi}
               teams={dashboard?.teams ?? []}
             />
-            <DisciplineViolations items={disciplineViolations} />
+            <DisciplineViolations items={disciplineViolations} periodLabel={periodLabel} />
           </>
         )}
       </section>
@@ -853,17 +861,22 @@ function violationDescription(team: DashboardTeamRow) {
   return `${team.team_name || team.team} vi phạm quy định của Nhà máy/Công ty`;
 }
 
-function DisciplineViolations({ items }: { items: Array<{ team: string; description: string }> }) {
-  if (!items.length) return null;
-
+function DisciplineViolations({ items, periodLabel }: { items: Array<{ team: string; description: string }>; periodLabel?: string }) {
+  const hasViolations = items.length > 0;
   return (
-    <div className="discipline-violations" aria-label="Vi phạm quy định của Nhà máy/Công ty">
+    <div className={`discipline-violations ${hasViolations ? "" : "is-clear"}`} aria-label="Vi phạm quy định của Nhà máy/Công ty">
       <h3>VI PHẠM QUY ĐỊNH CỦA NHÀ MÁY/ CÔNG TY</h3>
-      <ul>
-        {items.map((item) => (
-          <li key={item.team}>{item.description}</li>
-        ))}
-      </ul>
+      {hasViolations ? (
+        <ul>
+          {items.map((item) => (
+            <li key={item.team}>{item.description}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="discipline-clear-note">
+          Không ghi nhận vi phạm quy định của Nhà máy/Công ty{periodLabel ? ` trong kỳ ${periodLabel}` : " trong kỳ"}.
+        </p>
+      )}
     </div>
   );
 }

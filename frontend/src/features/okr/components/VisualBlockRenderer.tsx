@@ -280,6 +280,7 @@ function TrainingChartInline({ title, payload, visualId, kind }: { title: string
               <span style={{ width: `${Math.min(100, completionRate)}%` }} />
             </div>
             <small>{completionRate}% hoàn thành kế hoạch năm</small>
+            {payload?.training_payment ? <p className="training-payment">{payload.training_payment}</p> : null}
           </div>
           <div className="training-summary-stats">
             <span><strong>{completedMonths}</strong> tháng đạt KH</span>
@@ -1045,6 +1046,25 @@ function O1StatusBoard({ title, items, visualId, kind }: { title: string; items:
   );
 }
 
+const NARRATIVE_TEAM_ORDER = ["TBHTĐK", "TBCH", "TBĐL", "TCĐK"];
+
+function narrativeDetailLines(item: any): string[] {
+  if (Array.isArray(item?.detail_lines) && item.detail_lines.length) {
+    return item.detail_lines.map((line: any) => String(line).trim()).filter(Boolean);
+  }
+  // Fallback: progress text captured from team reports.
+  const teams = item?.numeric_metric?.teams;
+  if (teams && typeof teams === "object") {
+    const lines: string[] = [];
+    for (const [team, value] of Object.entries<any>(teams)) {
+      const text = String(value?.source_text || "").trim();
+      if (text) lines.push(`${team}: ${text.replace(/\s*\n\s*/g, " ")}`);
+    }
+    return lines;
+  }
+  return [];
+}
+
 function NarrativeCard({ title, payload, visualId, kind }: { title: string; payload?: Record<string, any>; visualId?: string; kind?: string }) {
   const items = Array.isArray(payload?.items) ? payload.items : [];
   const snapshotRows = Array.isArray(payload?.snapshot_rows) ? payload.snapshot_rows : [];
@@ -1052,12 +1072,42 @@ function NarrativeCard({ title, payload, visualId, kind }: { title: string; payl
   return (
     <ChartShell title={title} icon={<Activity size={17} />} kind={kind} visualId={visualId}>
       <div className="narrative-list">
-        {sourceItems.length ? sourceItems.map((item: any, index: number) => (
-          <div className="narrative-item" key={`${item.workshop_kr_code || item.label || index}`}>
-            <strong>{item.workshop_kr_code || item.label || `Mục ${index + 1}`}</strong>
-            <span>{item.kr_name || formatValue(item.value) || formatValue(item.values?.[1])}</span>
-          </div>
-        )) : (
+        {sourceItems.length ? sourceItems.map((item: any, index: number) => {
+          const detail = narrativeDetailLines(item);
+          const statuses = item.team_statuses && typeof item.team_statuses === "object" ? item.team_statuses : null;
+          const orderedTeams = statuses
+            ? [...NARRATIVE_TEAM_ORDER.filter((t) => t in statuses), ...Object.keys(statuses).filter((t) => !NARRATIVE_TEAM_ORDER.includes(t))]
+            : [];
+          const orgCount = item.org_count;
+          return (
+            <div className="narrative-item" key={`${item.workshop_kr_code || item.label || index}`}>
+              <div className="narrative-item-head">
+                <strong>{item.workshop_kr_code || item.label || `Mục ${index + 1}`}</strong>
+                {statuses ? (
+                  <span className="narrative-statuses">
+                    {orderedTeams.map((team) => (
+                      <span className="narrative-status" key={team} title={`${team}: ${displayNarrativeStatus(statuses[team])}`}>
+                        <small>{team}</small>
+                        <CompactNarrativeStatus value={statuses[team]} />
+                      </span>
+                    ))}
+                  </span>
+                ) : null}
+              </div>
+              <span className="narrative-name">{item.kr_name || formatValue(item.value) || formatValue(item.values?.[1])}</span>
+              {detail.length ? (
+                <ul className="narrative-detail">
+                  {detail.map((line, lineIndex) => <li key={lineIndex}>{line}</li>)}
+                </ul>
+              ) : null}
+              {orgCount ? (
+                <p className="narrative-org-count">
+                  Số lần tổ chức: <b>{formatValue(orgCount.actual)}</b> / Mục tiêu {formatValue(orgCount.target)}
+                </p>
+              ) : null}
+            </div>
+          );
+        }) : (
           <div className="narrative-item">
             <strong>Kết quả</strong>
             <span>{formatValue(payload?.total ?? payload?.current_result)}</span>
@@ -1066,6 +1116,21 @@ function NarrativeCard({ title, payload, visualId, kind }: { title: string; payl
       </div>
     </ChartShell>
   );
+}
+
+function displayNarrativeStatus(value: string | undefined) {
+  const text = String(value || "").trim().toUpperCase();
+  if (!text || text === "#N/A" || text === "N/A") return "N/A";
+  if (text === "GOOD" || text === "G") return "GOOD";
+  if (text === "OK") return "OK";
+  return text;
+}
+
+function CompactNarrativeStatus({ value }: { value: string | undefined }) {
+  const text = String(value || "").trim().toUpperCase();
+  const tone = !text || text === "#N/A" || text === "N/A" ? "na" : text === "GOOD" || text === "G" ? "good" : text === "OK" ? "ok" : "risk";
+  const label = tone === "good" ? "G" : tone === "na" ? "NA" : tone === "ok" ? "OK" : text;
+  return <span className={`narrative-status-pill is-${tone}`}>{label}</span>;
 }
 
 function ProgressCard({ title, payload, visualId, kind }: { title: string; payload?: Record<string, any>; visualId?: string; kind?: string }) {
@@ -1118,7 +1183,17 @@ function ProgressCard({ title, payload, visualId, kind }: { title: string; paylo
           );
         })}
       </div>
+      <OrgCountNote orgCount={payload?.org_count} />
     </ChartShell>
+  );
+}
+
+function OrgCountNote({ orgCount }: { orgCount?: { actual?: unknown; target?: unknown } | null }) {
+  if (!orgCount || (orgCount.actual == null && orgCount.target == null)) return null;
+  return (
+    <p className="o6-org-count">
+      Số lần tổ chức (lũy kế): <b>{formatValue(orgCount.actual)}</b> / Mục tiêu năm <b>{formatValue(orgCount.target)}</b>
+    </p>
   );
 }
 
@@ -1172,6 +1247,7 @@ function SportsParticipationInline({ title, payload, visualId, kind }: { title: 
           )}
         </div>
       </div>
+      <OrgCountNote orgCount={payload?.org_count} />
     </ChartShell>
   );
 }
@@ -1262,6 +1338,7 @@ function CompetencyRadarInline({ title, payload, visualId, kind }: { title: stri
             <span><strong>{inProgress}</strong> đang làm</span>
             <span><strong>{average}%</strong> trung bình</span>
           </div>
+          {payload?.cbcnv_note ? <p className="competency-cbcnv">KR2 · Đánh giá năng lực: <b>{payload.cbcnv_note}</b></p> : null}
           <dl className="competency-milestones">
             {competencyMilestones.map((item) => (
               <div key={item.value}>

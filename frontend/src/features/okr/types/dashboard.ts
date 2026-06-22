@@ -77,6 +77,9 @@ export interface ObjectiveSectionPayload {
   title?: string;
   status?: ObjectiveStatus;
   conclusion?: string | null;
+  target?: string | null;
+  result?: string | null;
+  headline?: string | null;
   visuals?: VisualBlock[];
   notes?: string[];
   source_references?: string[];

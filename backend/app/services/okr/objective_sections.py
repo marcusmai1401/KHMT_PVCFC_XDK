@@ -816,6 +816,56 @@ def _section(
     }
 
 
+def _apply_dashboard_narratives(sections: list[ObjectiveSection], narratives: dict[str, Any]) -> None:
+    """Enrich built sections with the free-text content extracted from the Dashboard sheet.
+
+    Mirrors exactly what the Excel sheet shows: each objective's Mục tiêu/Kết quả line,
+    the per-KR progress notes inside O4/O5 narrative cards, the O6 "Số lần tổ chức" counts
+    and the O5 training/competency footnotes. Degrades silently when no narratives were
+    imported (older snapshots) so the dashboard keeps rendering as before.
+    """
+    if not narratives:
+        return
+    objectives = narratives.get("objectives") or {}
+    kr_details = narratives.get("kr_details") or {}
+    o6_counts = narratives.get("o6_counts") or {}
+    extras = narratives.get("extras") or {}
+
+    for section in sections:
+        code = section.get("objective_code")
+        obj = objectives.get(str(code)) or {}
+        if obj.get("target") is not None:
+            section["target"] = obj.get("target")
+        if obj.get("result") is not None:
+            section["result"] = obj.get("result")
+        if obj.get("full"):
+            section["headline"] = obj["full"]
+
+        for visual in section.get("visuals") or []:
+            payload = visual.get("payload") or {}
+            for item in payload.get("items") or []:
+                detail = kr_details.get(str(item.get("workshop_kr_code")))
+                if detail:
+                    item["detail_lines"] = detail
+            visual_id = visual.get("id")
+            if visual_id == "o6_running" and o6_counts.get("running"):
+                payload["org_count"] = o6_counts["running"]
+            elif visual_id == "o6_sports" and o6_counts.get("sports"):
+                payload["org_count"] = o6_counts["sports"]
+            elif visual_id == "o5_training" and extras.get("training_payment"):
+                payload["training_payment"] = extras["training_payment"]
+            elif visual_id == "o5_competency":
+                if extras.get("competency_positions"):
+                    payload["positions_note"] = extras["competency_positions"]
+                if extras.get("cbcnv"):
+                    payload["cbcnv_note"] = extras["cbcnv"]
+            if visual_id == "o6_culture" and o6_counts.get("culture"):
+                for item in payload.get("items") or []:
+                    if str(item.get("workshop_kr_code")) == "O6.KR3":
+                        item["org_count"] = o6_counts["culture"]
+            visual["payload"] = payload
+
+
 def build_objective_sections(
     *,
     month: int,
@@ -833,6 +883,8 @@ def build_objective_sections(
 ) -> list[ObjectiveSection]:
     period_snapshots = _snapshots_for_year(year, historical_snapshots)
     snapshot_blocks = _snapshot_blocks(chart_snapshots or period_snapshots)
+    narrative_blocks = snapshot_blocks.get("dashboard_narratives") or []
+    dashboard_narratives = narrative_blocks[0] if narrative_blocks else {}
     has_locked_data = bool(team_reports)
     has_period_data = has_locked_data or _period_has_snapshot(month, year, period_snapshots)
 
@@ -1004,4 +1056,5 @@ def build_objective_sections(
             conclusion="Theo dõi mức độ tham gia hoạt động VHDN, chạy bộ và hội thao trong kỳ.",
         )
     )
+    _apply_dashboard_narratives(sections, dashboard_narratives)
     return sections

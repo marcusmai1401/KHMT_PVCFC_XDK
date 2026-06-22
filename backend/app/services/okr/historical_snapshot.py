@@ -53,6 +53,18 @@ UNCONFIRMED_WARNING_BLOCKS = [
 
 DRAWING_NAMESPACES = {
     "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+    "xdr": "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing",
+}
+
+# Heading of a KR narrative text box, e.g. "KR 04 Mở rộng..." or "KR 7. Thiết kế...".
+_KR_HEAD = re.compile(r"^KR\s*0*(\d{1,2})\b", re.IGNORECASE)
+# Objective header text box, e.g. "O1: ... - Mục tiêu: 0 vụ - Kết quả: 0 vụ".
+_OBJ_HEAD = re.compile(r"^(O[1-6])\s*[:.]")
+_OBJ_TARGET = re.compile(r"Mục tiêu\s*:?\s*(.+?)\s*[-–]\s*Kết quả\s*:?\s*(.+)$")
+# Short chart labels / pillar tags that must not be mistaken for narrative prose.
+_NARRATIVE_SKIP = {
+    "am", "pm", "et", "fi", "oi", "she", "muc tieu", "ket qua", "thuc hien",
+    "ke", "hoach", "ke hoach", "luy ke", "so lan to chuc", "tcdk", "tbch", "tbdl", "tbhtdk",
 }
 
 
@@ -297,6 +309,145 @@ def _extract_dashboard_note_blocks(workbook_bytes: bytes) -> dict[str, list[str]
     return notes
 
 
+def _narrative_boxes(workbook_bytes: bytes) -> list[dict[str, Any]]:
+    """Read every Dashboard drawing text box as {col, row, lines}."""
+    boxes: list[dict[str, Any]] = []
+    with ZipFile(BytesIO(workbook_bytes)) as archive:
+        drawing_names = [
+            name
+            for name in archive.namelist()
+            if name.startswith("xl/drawings/") and name.endswith(".xml")
+        ]
+        for drawing_name in drawing_names:
+            root = ET.fromstring(archive.read(drawing_name))
+            for anchor in root:
+                col = anchor.find(".//xdr:from/xdr:col", DRAWING_NAMESPACES)
+                row = anchor.find(".//xdr:from/xdr:row", DRAWING_NAMESPACES)
+                if col is None or row is None:
+                    continue
+                lines: list[str] = []
+                for paragraph in anchor.findall(".//a:p", DRAWING_NAMESPACES):
+                    text = "".join(node.text or "" for node in paragraph.findall(".//a:t", DRAWING_NAMESPACES)).strip()
+                    if text:
+                        lines.append(text)
+                if lines:
+                    boxes.append({"col": int(col.text), "row": int(row.text), "lines": lines})
+    return boxes
+
+
+def _narrative_band(box: dict[str, Any]) -> str | None:
+    """Map a text box position to the objective whose column/row band it sits in."""
+    col, row = box["col"], box["row"]
+    if col <= 13:
+        if row < 60:
+            return "O1"
+        if row < 143:
+            return "O2"
+        if row < 167:
+            return "O3"
+        return "O4"
+    if row < 146:
+        return "O5"
+    return "O6"
+
+
+def _is_narrative_line(line: str) -> bool:
+    """True when a paragraph reads like report prose rather than a chart label."""
+    text = line.strip()
+    if not text or _plain_text(text) in _NARRATIVE_SKIP:
+        return False
+    if re.match(r"^[\d.,]+%?$", text):  # pure number / percent (chart data label)
+        return False
+    if re.match(r"^\d+%\s*:", text):  # radar legend "25%: ..."
+        return False
+    if text.startswith(("-", "+", "•", "*")):
+        return True
+    if re.match(r"^(TB|TC|Đội|Tổ|FS|ĐH|KH|Không|Trong|Hoàn|Đang|Front|Xây)", text):
+        return True
+    return len(text) >= 18 and " " in text
+
+
+def extract_dashboard_narratives(workbook_bytes: bytes) -> dict[str, Any]:
+    """Extract the free-text narrative content of the Dashboard sheet (drawing text boxes).
+
+    These paragraphs are not stored in cells, so they are invisible to the cell/data
+    parsers. We recover them here so the web dashboard can reproduce the objective
+    target/result lines, the per-KR progress notes (O4/O5), the "Số lần tổ chức" counts
+    (O6) and the discipline-violation note exactly as they appear in Excel.
+    """
+    result: dict[str, Any] = {
+        "objectives": {},
+        "kr_details": {},
+        "violations": [],
+        "o6_counts": {},
+        "extras": {},
+    }
+    try:
+        boxes = _narrative_boxes(workbook_bytes)
+    except Exception:
+        return result
+
+    for box in boxes:
+        first = box["lines"][0]
+        obj_match = _OBJ_HEAD.match(first)
+        if obj_match:
+            head = " ".join(box["lines"])
+            entry: dict[str, Any] = {"full": head}
+            target = _OBJ_TARGET.search(head)
+            if target:
+                entry["target"] = target.group(1).strip()
+                entry["result"] = target.group(2).strip()
+            result["objectives"][obj_match.group(1)] = entry
+        if "ghi nhan vi pham" in _plain_text(first):
+            result["violations"] = box["lines"]
+
+    for band in ("O4", "O5"):
+        band_boxes = sorted(
+            (b for b in boxes if _narrative_band(b) == band),
+            key=lambda b: (b["col"], b["row"]),
+        )
+        titles = [
+            {**b, "kr": int(_KR_HEAD.match(b["lines"][0]).group(1))}
+            for b in band_boxes
+            if _KR_HEAD.match(b["lines"][0])
+        ]
+
+        def _add(code: str, lines: list[str]) -> None:
+            kept = [ln for ln in lines if _is_narrative_line(ln)]
+            if kept:
+                result["kr_details"].setdefault(code, []).extend(kept)
+
+        for box in band_boxes:
+            head = _KR_HEAD.match(box["lines"][0])
+            if head:
+                _add(f"{band}.KR{int(head.group(1))}", box["lines"][1:])
+                continue
+            candidates = [t for t in titles if t["row"] <= box["row"]]
+            if not candidates:
+                continue
+            owner = max(candidates, key=lambda t: t["row"])
+            _add(f"{band}.KR{owner['kr']}", box["lines"])
+
+    for box in boxes:
+        lines = box["lines"]
+        if _narrative_band(box) == "O6" and len(lines) == 4 and lines[1] == "Lũy kế" and lines[2] == "Mục tiêu":
+            if box["row"] < 210:
+                key = "running" if box["col"] < 35 else "sports"
+            else:
+                key = "culture"
+            result["o6_counts"][key] = {"actual": lines[0], "target": lines[3]}
+
+    for box in boxes:
+        first = box["lines"][0]
+        if "vị trí chức danh" in first:
+            result["extras"].setdefault("competency_positions", first)
+        if re.match(r"^\s*\d+\s*CBCNV", first):  # e.g. "33 CBCNV (KTV)", not the KR2 title
+            result["extras"].setdefault("cbcnv", first)
+        if "Thanh toán lần" in first or "Thành tích lần" in first:
+            result["extras"].setdefault("training_payment", first)
+    return result
+
+
 def _parse_data_blocks(
     db: Session,
     workbook: Any,
@@ -395,6 +546,24 @@ def import_historical_snapshot(
         imported_by=imported_by,
         note_blocks=_extract_dashboard_note_blocks(workbook_bytes),
     )
+    try:
+        narratives = extract_dashboard_narratives(workbook_bytes)
+        _upsert_snapshot(
+            db,
+            result,
+            source_file_name=source_file_name,
+            source_sheet="Dashboard",
+            source_range="Dashboard!narratives",
+            source_label="dashboard_narratives",
+            team="__CHARTS__",
+            month=0,
+            year=_source_year(workbook),
+            chart_payload={"block_type": "dashboard_narratives", **narratives},
+            warnings=[],
+            imported_by=imported_by,
+        )
+    except Exception as exc:  # pragma: no cover - narrative extraction must never break import
+        result.warnings.append(_warning(f"Cannot parse Dashboard narratives: {exc}", "Dashboard!narratives", "LOW"))
     db.flush()
     return result.to_dict()
 

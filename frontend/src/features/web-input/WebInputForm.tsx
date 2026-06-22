@@ -269,9 +269,9 @@ export function WebInputForm({
   const [hasSavedDraft, setHasSavedDraft] = useState(false);
   const autosaveTimer = useRef<number | null>(null);
 
-  const canWrite = (role === "Admin" && editMode) || (role === "Team_Account" && teamFromAccount === team);
+  const canWrite = role === "Admin" && editMode;
   const readOnly = !canWrite || locked;
-  const showAdminEditCommands = role !== "Admin" || editMode;
+  const showAdminEditCommands = canWrite;
   const emailText = useMemo(() => buildEmailText(team, month, data), [team, month, data]);
 
   const mappingByCode = useMemo(() => new Map(mapping.map((item) => [item.workshop_kr_code, item])), [mapping]);

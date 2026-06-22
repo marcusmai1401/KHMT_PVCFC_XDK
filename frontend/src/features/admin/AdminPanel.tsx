@@ -1,7 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import {
-  BarChart3,
-  CalendarDays,
   CheckCircle2,
   Clock3,
   Copy,
@@ -12,7 +10,6 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
-  Send,
   ShieldCheck,
   UserRound,
   Users2,
@@ -21,13 +18,12 @@ import {
 import { api } from "../../api/client";
 import { displayTeam, isKhmtConsidered, khmtLabel } from "../fi/FIWorkspace";
 
-type AdminTab = "fi" | "accounts" | "okr";
+type AdminTab = "fi" | "accounts";
 type FiScope = "current" | "all" | "historical";
 
 const adminTabs: Array<{ value: AdminTab; label: string; icon: typeof FileText; helper: string }> = [
   { value: "fi", label: "FI", icon: FileText, helper: "SK-CTKT" },
   { value: "accounts", label: "Tài khoản", icon: Users2, helper: "Login & pass" },
-  { value: "okr", label: "OKR", icon: BarChart3, helper: "Tiến độ tháng" },
 ];
 
 const fiScopes: Array<{ value: FiScope; label: string }> = [
@@ -35,8 +31,6 @@ const fiScopes: Array<{ value: FiScope; label: string }> = [
   { value: "all", label: "Tất cả" },
   { value: "historical", label: "Lịch sử" },
 ];
-
-const okrTeams = ["TBCH", "TBĐL", "TBHTĐK", "TCĐK"];
 
 const roleLabels: Record<string, string> = {
   Admin: "Quản trị",
@@ -75,13 +69,6 @@ function statusTone(value: string | null | undefined) {
   if (value === "Rejected" || value === "Cancelled") return "danger";
   if (value === "Deferred" || value === "NeedMoreInfo") return "warning";
   if (value === "Submitted" || value === "Reviewed") return "info";
-  return "neutral";
-}
-
-function okrStatusTone(value: string | null | undefined) {
-  if (value === "Đã gửi" || value === "Đã chốt") return "success";
-  if (value === "Đang nhập") return "warning";
-  if (value === "Chưa nhập") return "danger";
   return "neutral";
 }
 
@@ -154,22 +141,12 @@ function latestByTime(rows: any[]) {
   })[0];
 }
 
-function okrActionHint(status: string | null | undefined) {
-  if (status === "Chưa nhập") return "Chưa có bản lưu, cần đội/tổ nhập OKR";
-  if (status === "Đang nhập") return "Đang có nháp, cần gửi chính thức";
-  if (status === "Đã gửi") return "Đã gửi, sẵn sàng kiểm tra/chốt";
-  if (status === "Đã chốt") return "Đã khóa dữ liệu kỳ này";
-  return "Cần kiểm tra lại trạng thái";
-}
-
 export function AdminPanel() {
-  const today = new Date();
   const [activeTab, setActiveTab] = useState<AdminTab>("fi");
   const [fiRows, setFiRows] = useState<any[]>([]);
   const [dashboard, setDashboard] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [auditRows, setAuditRows] = useState<any[]>([]);
-  const [okrRows, setOkrRows] = useState<any[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [scope, setScope] = useState<FiScope>("current");
@@ -177,11 +154,15 @@ export function AdminPanel() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [accountSearch, setAccountSearch] = useState("");
+  const [accountRoleFilter, setAccountRoleFilter] = useState("all");
+  const [accountTeamFilter, setAccountTeamFilter] = useState("all");
+  const [accountStatusFilter, setAccountStatusFilter] = useState("all");
+  const [accountPasswordFilter, setAccountPasswordFilter] = useState("all");
+  const [accountLoginFilter, setAccountLoginFilter] = useState("all");
+  const [accountActivityFilter, setAccountActivityFilter] = useState("all");
   const [resetBusyId, setResetBusyId] = useState<string | null>(null);
   const [resetResult, setResetResult] = useState<{ userId: string; password: string } | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [okrMonth, setOkrMonth] = useState(today.getMonth() + 1);
-  const [okrYear, setOkrYear] = useState(today.getFullYear());
 
   const reload = () => {
     setLoading(true);
@@ -190,14 +171,12 @@ export function AdminPanel() {
       api.fiDashboard(),
       api.adminUsers(),
       api.auditLog({ entity_type: "Account" }),
-      api.getWebInputStatus(okrMonth, okrYear),
     ])
-      .then(([rows, dashboardData, userRows, logs, statusRows]) => {
+      .then(([rows, dashboardData, userRows, logs]) => {
         setFiRows([...rows].sort(compareFiRows));
         setDashboard(dashboardData);
         setUsers([...userRows].sort((a, b) => String(a.id).localeCompare(String(b.id), "vi")));
         setAuditRows(logs);
-        setOkrRows(statusRows);
         setError("");
       })
       .catch((err) => setError(err.message))
@@ -206,7 +185,7 @@ export function AdminPanel() {
 
   useEffect(() => {
     reload();
-  }, [okrMonth, okrYear]);
+  }, []);
 
   const handleResetPassword = (user: any) => {
     const label = user.display_name || user.full_name || user.id;
@@ -278,20 +257,59 @@ export function AdminPanel() {
       });
   }, [users, auditRows]);
 
+  const accountRoleOptions = useMemo(() => {
+    return Array.from(new Set(users.map((user) => user.role).filter(Boolean)))
+      .sort((a, b) => displayRole(a).localeCompare(displayRole(b), "vi"));
+  }, [users]);
+
+  const accountTeamOptions = useMemo(() => {
+    return Array.from(new Set(users.map((user) => user.team || "__none")))
+      .sort((a, b) => displayTeam(a === "__none" ? null : a).localeCompare(displayTeam(b === "__none" ? null : b), "vi"));
+  }, [users]);
+
+  const accountActivityOptions = useMemo(() => {
+    return Array.from(new Set(accountActivityRows.map((row) => row.latestLog?.action).filter(Boolean)))
+      .sort((a, b) => actionLabel(a).localeCompare(actionLabel(b), "vi"));
+  }, [accountActivityRows]);
+
   const accountRows = useMemo(() => {
     const keyword = accountSearch.trim().toLowerCase();
-    if (!keyword) return accountActivityRows;
-    return accountActivityRows.filter(({ user }) => {
+    return accountActivityRows.filter(({ user, loginLog, latestLog }) => {
+      const userTeam = user.team || "__none";
+      if (accountRoleFilter !== "all" && user.role !== accountRoleFilter) return false;
+      if (accountTeamFilter !== "all" && userTeam !== accountTeamFilter) return false;
+      if (accountStatusFilter === "active" && !user.is_active) return false;
+      if (accountStatusFilter === "locked" && user.is_active) return false;
+      if (accountPasswordFilter === "changed" && user.must_change_password) return false;
+      if (accountPasswordFilter === "pending" && !user.must_change_password) return false;
+      if (accountLoginFilter === "has_login" && !loginLog) return false;
+      if (accountLoginFilter === "no_login" && loginLog) return false;
+      if (accountActivityFilter === "no_activity" && latestLog) return false;
+      if (accountActivityFilter !== "all" && accountActivityFilter !== "no_activity" && latestLog?.action !== accountActivityFilter) return false;
+      if (!keyword) return true;
       const haystack = [
         user.id,
         user.display_name,
         user.full_name,
         user.role,
         user.team,
+        loginLog?.created_at,
+        latestLog?.action,
+        actionLabel(latestLog?.action),
+        latestLog?.created_at,
       ].join(" ").toLowerCase();
       return haystack.includes(keyword);
     });
-  }, [accountActivityRows, accountSearch]);
+  }, [
+    accountActivityRows,
+    accountActivityFilter,
+    accountLoginFilter,
+    accountPasswordFilter,
+    accountRoleFilter,
+    accountSearch,
+    accountStatusFilter,
+    accountTeamFilter,
+  ]);
 
   const totals = dashboard?.totals ?? {};
   const pendingCount = Number(totals.pending ?? fiRows.filter((row) => ["Submitted", "NeedMoreInfo", "Reviewed"].includes(row.status)).length);
@@ -300,9 +318,6 @@ export function AdminPanel() {
   const changedPasswordCount = users.filter((user) => !user.must_change_password).length;
   const loggedInCount = accountActivityRows.filter((row) => Boolean(row.loginLog)).length;
   const readyAccountCount = accountActivityRows.filter((row) => Boolean(row.loginLog) && !row.user.must_change_password).length;
-  const submittedOkrCount = okrRows.filter((row) => ["Đã gửi", "Đã chốt"].includes(row.status)).length;
-  const draftOkrCount = okrRows.filter((row) => row.status === "Đang nhập").length;
-  const missingOkrCount = okrRows.filter((row) => row.status === "Chưa nhập").length;
 
   const renderFiTab = () => (
     <>
@@ -645,6 +660,58 @@ export function AdminPanel() {
             onChange={(event) => setAccountSearch(event.target.value)}
           />
         </label>
+        <label className="admin-filter-field">
+          Vai trò
+          <select value={accountRoleFilter} onChange={(event) => setAccountRoleFilter(event.target.value)}>
+            <option value="all">Tất cả</option>
+            {accountRoleOptions.map((role) => (
+              <option key={role} value={role}>{displayRole(role)}</option>
+            ))}
+          </select>
+        </label>
+        <label className="admin-filter-field">
+          Đội/tổ
+          <select value={accountTeamFilter} onChange={(event) => setAccountTeamFilter(event.target.value)}>
+            <option value="all">Tất cả</option>
+            {accountTeamOptions.map((team) => (
+              <option key={team} value={team}>{team === "__none" ? "Không gán" : displayTeam(team)}</option>
+            ))}
+          </select>
+        </label>
+        <label className="admin-filter-field">
+          Trạng thái
+          <select value={accountStatusFilter} onChange={(event) => setAccountStatusFilter(event.target.value)}>
+            <option value="all">Tất cả</option>
+            <option value="active">Đang hoạt động</option>
+            <option value="locked">Đã khóa</option>
+          </select>
+        </label>
+        <label className="admin-filter-field">
+          Đổi pass
+          <select value={accountPasswordFilter} onChange={(event) => setAccountPasswordFilter(event.target.value)}>
+            <option value="all">Tất cả</option>
+            <option value="changed">Đã đổi/không bắt buộc</option>
+            <option value="pending">Chưa đổi</option>
+          </select>
+        </label>
+        <label className="admin-filter-field">
+          Login
+          <select value={accountLoginFilter} onChange={(event) => setAccountLoginFilter(event.target.value)}>
+            <option value="all">Tất cả</option>
+            <option value="has_login">Đã có log</option>
+            <option value="no_login">Chưa có log</option>
+          </select>
+        </label>
+        <label className="admin-filter-field">
+          Hoạt động
+          <select value={accountActivityFilter} onChange={(event) => setAccountActivityFilter(event.target.value)}>
+            <option value="all">Tất cả</option>
+            <option value="no_activity">Chưa có hoạt động</option>
+            {accountActivityOptions.map((action) => (
+              <option key={action} value={action}>{actionLabel(action)}</option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <div className="admin-fi-table-wrap">
@@ -726,119 +793,6 @@ export function AdminPanel() {
     </>
   );
 
-  const renderOkrTab = () => (
-    <>
-      <div className="admin-okr-toolbar">
-        <div className="admin-okr-period">
-          <CalendarDays size={17} />
-          <label>
-            Tháng
-            <select value={okrMonth} onChange={(event) => setOkrMonth(Number(event.target.value))}>
-              {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
-                <option key={month} value={month}>T{month}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Năm
-            <input
-              min={2020}
-              max={2100}
-              type="number"
-              value={okrYear}
-              onChange={(event) => setOkrYear(Number(event.target.value) || today.getFullYear())}
-            />
-          </label>
-        </div>
-      </div>
-
-      <div className="admin-fi-kpis admin-okr-kpis">
-        <div className="admin-fi-kpi">
-          <Database size={18} />
-          <span>Đội/tổ</span>
-          <strong>{okrRows.length || okrTeams.length}</strong>
-          <small>Kỳ T{okrMonth}/{okrYear}</small>
-        </div>
-        <div className="admin-fi-kpi current">
-          <Send size={18} />
-          <span>Đã gửi/chốt</span>
-          <strong>{submittedOkrCount}</strong>
-          <small>{Math.round((submittedOkrCount / Math.max(1, okrRows.length || okrTeams.length)) * 100)}% hoàn tất gửi</small>
-        </div>
-        <div className="admin-fi-kpi">
-          <Clock3 size={18} />
-          <span>Đang nhập</span>
-          <strong>{draftOkrCount}</strong>
-          <small>Có nháp nhưng chưa gửi</small>
-        </div>
-        <div className="admin-fi-kpi">
-          <History size={18} />
-          <span>Chưa nhập</span>
-          <strong>{missingOkrCount}</strong>
-          <small>Cần nhắc đội/tổ phụ trách</small>
-        </div>
-      </div>
-
-      <div className="admin-okr-grid">
-        {okrRows.map((row) => (
-          <div className="admin-okr-card" key={row.team}>
-            <div className="admin-okr-card-head">
-              <strong>{displayTeam(row.team)}</strong>
-              <span className={`admin-status-pill ${okrStatusTone(row.status)}`}>{row.status}</span>
-            </div>
-            <dl>
-              <div>
-                <dt>Lưu gần nhất</dt>
-                <dd>{formatDateTime(row.last_saved_at)}</dd>
-              </div>
-              <div>
-                <dt>Gửi chính thức</dt>
-                <dd>{formatDateTime(row.submitted_at)}</dd>
-              </div>
-              <div>
-                <dt>Phiên bản</dt>
-                <dd>{row.version ?? "Chưa có"}</dd>
-              </div>
-            </dl>
-            <small>{okrActionHint(row.status)}</small>
-          </div>
-        ))}
-      </div>
-
-      <div className="admin-fi-table-wrap">
-        <table className="admin-fi-table admin-okr-table">
-          <thead>
-            <tr>
-              <th>Đội/tổ</th>
-              <th>Trạng thái</th>
-              <th>Phiên bản</th>
-              <th>Lưu gần nhất</th>
-              <th>Gửi chính thức</th>
-              <th>Gợi ý hành động</th>
-            </tr>
-          </thead>
-          <tbody>
-            {okrRows.map((row) => (
-              <tr key={`${row.team}-${okrMonth}-${okrYear}`}>
-                <td><strong>{displayTeam(row.team)}</strong></td>
-                <td><span className={`admin-status-pill ${okrStatusTone(row.status)}`}>{row.status}</span></td>
-                <td>{row.version ?? "Chưa có"}</td>
-                <td>{formatDateTime(row.last_saved_at)}</td>
-                <td>{formatDateTime(row.submitted_at)}</td>
-                <td>{okrActionHint(row.status)}</td>
-              </tr>
-            ))}
-            {okrRows.length === 0 && (
-              <tr>
-                <td colSpan={6}>Chưa tải được trạng thái OKR kỳ này.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </>
-  );
-
   return (
     <div
       className="content-grid admin-fi-shell"
@@ -851,7 +805,7 @@ export function AdminPanel() {
           <div>
             <h2>Quản trị hệ thống</h2>
             <p className="muted">
-              Theo dõi dữ liệu vận hành: SK-CTKT, tài khoản đã sử dụng và tiến độ OKR theo tháng.
+              Theo dõi dữ liệu vận hành: SK-CTKT và tài khoản đã sử dụng.
             </p>
           </div>
           <button onClick={reload} disabled={loading} type="button">
@@ -882,7 +836,6 @@ export function AdminPanel() {
 
         {activeTab === "fi" && renderFiTab()}
         {activeTab === "accounts" && renderAccountsTab()}
-        {activeTab === "okr" && renderOkrTab()}
       </section>
     </div>
   );

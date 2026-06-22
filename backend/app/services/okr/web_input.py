@@ -45,6 +45,8 @@ def assert_team_access(principal: dict[str, str], team: str, *, write: bool) -> 
     if role == Role.ADMIN.value:
         return
     if role == Role.TEAM_ACCOUNT.value:
+        if write:
+            raise _error(403, "FORBIDDEN", "Chỉ Admin được nhập/sửa OKR")
         principal_team = principal.get("team") or principal["user_id"]
         if principal_team != team:
             raise _error(403, "TEAM_MISMATCH", "Tài khoản đội/tổ chỉ được thao tác dữ liệu của đội mình")

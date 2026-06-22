@@ -28,7 +28,7 @@ from app.services.repositories import audit, notify
 router = APIRouter(prefix="/okr/web-input", tags=["okr-web-input"])
 
 READ_ROLES = (Role.ADMIN, Role.WORKSHOP_LEADER, Role.FI_COORDINATOR, Role.TEAM_ACCOUNT, Role.STAFF)
-WRITE_ROLES = (Role.ADMIN, Role.TEAM_ACCOUNT)
+WRITE_ROLES = (Role.ADMIN,)
 
 
 @router.get("/status")

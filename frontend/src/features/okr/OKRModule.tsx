@@ -37,8 +37,8 @@ export function OKRModule({
   tabsHost?: HTMLElement | null;
 }) {
   const [activeTab, setActiveTab] = useState<OKRTab>("dashboard");
-  // Staff chỉ được xem dashboard + reference; ẩn tab nhập liệu OKR.
-  const visibleTabs = okrTabs.filter((tab) => !(role === "Staff" && tab.id === "web-input"));
+  const canUseOkrWebInput = role === "Admin";
+  const visibleTabs = okrTabs.filter((tab) => canUseOkrWebInput || tab.id !== "web-input");
 
   const tabsControl = (
     <div className="segmented-control okr-topbar-tabs" role="tablist" aria-label="OKR">
@@ -73,7 +73,7 @@ export function OKRModule({
         ? createPortal(tabsControl, tabsHost)
         : <div className="okr-module-tabs">{tabsControl}</div>}
       {activeTab === "dashboard" && <OKRWorkspace role={role} editMode={editMode} />}
-      {activeTab === "web-input" && role !== "Staff" && (
+      {canUseOkrWebInput && activeTab === "web-input" && (
         <WebInputForm role={role} currentUserId={currentUserId} currentTeam={currentTeam} editMode={editMode} />
       )}
       {activeTab === "criteria" && <EvaluationReference kind="criteria" />}

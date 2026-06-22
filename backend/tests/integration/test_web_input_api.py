@@ -34,7 +34,7 @@ def _valid_payload(client, headers):
 
 
 def test_web_input_draft_submit_lock_export_flow(client):
-    headers = _login(client, "TBCH", "tbch-pass")
+    headers = _login(client, "admin", "admin-pass")
     payload = _valid_payload(client, headers)
 
     draft = client.put(
@@ -47,7 +47,7 @@ def test_web_input_draft_submit_lock_export_flow(client):
     assert draft.json()["version"] == 1
     draft_report_id = draft.json()["report"]["id"]
 
-    admin_headers = _login(client, "admin", "admin-pass")
+    admin_headers = headers
     manager_reports = client.get("/api/v1/okr/reports", headers=admin_headers)
     assert manager_reports.status_code == 200, manager_reports.text
     assert manager_reports.json() == []
@@ -130,8 +130,27 @@ def test_team_account_cannot_access_other_team_web_input(client):
     assert response.status_code == 403
 
 
-def test_web_input_submit_returns_validation_errors(client):
+def test_team_account_cannot_write_web_input(client):
     headers = _login(client, "TBCH", "tbch-pass")
+    payload = _valid_payload(client, headers)
+
+    draft = client.put(
+        "/api/v1/okr/web-input/TBCH/4/2026/draft",
+        headers=headers,
+        json={"data": payload, "expected_version": None},
+    )
+    assert draft.status_code == 403
+
+    submitted = client.post(
+        "/api/v1/okr/web-input/TBCH/4/2026/submit",
+        headers=headers,
+        json={"data": payload},
+    )
+    assert submitted.status_code == 403
+
+
+def test_web_input_submit_returns_validation_errors(client):
+    headers = _login(client, "admin", "admin-pass")
     response = client.post(
         "/api/v1/okr/web-input/TBCH/4/2026/submit",
         headers=headers,

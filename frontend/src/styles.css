@@ -541,6 +541,14 @@ textarea:focus-visible {
   resize: vertical;
 }
 
+.form-stack .fi-title-input {
+  min-height: 44px;
+}
+
+.form-stack .fi-content-input {
+  min-height: 210px;
+}
+
 .fi-account-source {
   background: #f8fafc;
   border: 1px solid #dbe4ee;
@@ -3869,6 +3877,24 @@ th {
   min-width: 0;
 }
 
+.fi-dashboard-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.fi-dashboard-toolbar h2 {
+  color: #0f172a;
+  font-size: 20px;
+  margin: 0;
+}
+
+.fi-dashboard-toolbar p {
+  margin: 2px 0 0;
+}
+
 .fi-dashboard-header {
   align-items: center;
   background: #ffffff;
@@ -4296,64 +4322,29 @@ th {
   border-bottom: 0;
 }
 
-/* === FI Dashboard Hero === */
-.fi-dashboard-hero {
-  align-items: center;
-  background: linear-gradient(135deg, #1e3a8a 0%, #2c398e 50%, #0ea5e9 100%);
-  border: 1px solid #1f2a6e;
-  border-radius: 14px;
-  box-shadow: 0 8px 22px -10px rgba(44, 57, 142, 0.45);
-  color: #ffffff;
-  display: flex;
-  gap: 18px;
-  justify-content: space-between;
-  padding: 20px 24px;
-  position: relative;
-  overflow: hidden;
-}
-.fi-dashboard-hero::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 85% -20%, rgba(255,255,255,0.18), transparent 55%);
-  pointer-events: none;
-}
-.fi-dashboard-hero-text { display: grid; gap: 6px; max-width: 720px; z-index: 1; }
-.fi-dashboard-hero-title { align-items: center; display: flex; gap: 10px; }
-.fi-dashboard-hero-title h2 { margin: 0; font-size: 22px; color: #ffffff; letter-spacing: 0.2px; }
-.fi-dashboard-hero-text p { margin: 0; color: rgba(255,255,255,0.86); font-size: 13px; line-height: 1.55; }
-.fi-dashboard-hero-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 6px;
-}
-.fi-dashboard-hero-stats span {
-  align-items: center;
-  background: rgba(255,255,255,0.16);
-  border-radius: 999px;
-  color: #ffffff;
-  display: inline-flex;
-  font-size: 12px;
-  font-weight: 600;
-  gap: 6px;
-  padding: 4px 10px;
-}
 .fi-dashboard-refresh {
   align-items: center;
-  background: rgba(255,255,255,0.16);
-  border: 1px solid rgba(255,255,255,0.4);
-  border-radius: 999px;
-  color: #ffffff;
+  background: #ffffff;
+  border: 1px solid #c9d2dc;
+  border-radius: 8px;
+  color: #16234d;
   cursor: pointer;
   display: inline-flex;
+  flex: 0 0 auto;
   font-weight: 600;
   gap: 8px;
-  padding: 8px 14px;
-  transition: background 0.2s;
-  z-index: 1;
+  justify-content: center;
+  min-height: 36px;
+  min-width: 42px;
+  padding: 8px 12px;
+  transition: var(--transition);
 }
-.fi-dashboard-refresh:hover { background: rgba(255,255,255,0.28); }
+
+.fi-dashboard-refresh:hover {
+  background: #f4f6fb;
+  border-color: #2c398e;
+  color: #2c398e;
+}
 
 /* === KPI cards (enhanced) === */
 .fi-dashboard-kpi { position: relative; padding-top: 18px; padding-bottom: 16px; }
@@ -4631,10 +4622,6 @@ th {
 }
 
 @media (max-width: 700px) {
-  .fi-dashboard-hero {
-    align-items: stretch;
-    flex-direction: column;
-  }
   .fi-dashboard-kpis {
     grid-template-columns: 1fr;
   }
@@ -14081,7 +14068,6 @@ pre {
     width: 100%;
   }
 
-  .fi-dashboard-hero,
   .fi-detail-header,
   .okr-matrix-summary-heading,
   .okr-objective-card-header,
@@ -14093,16 +14079,6 @@ pre {
     flex-direction: column;
   }
 
-  .fi-dashboard-hero {
-    border-radius: 12px;
-    padding: 16px;
-  }
-
-  .fi-dashboard-hero-title h2 {
-    font-size: 18px;
-  }
-
-  .fi-dashboard-hero-stats,
   .fi-team-numbers,
   .okr-exec-summary-section,
   .kpi-section-grid,

@@ -24,7 +24,6 @@ import {
   Save,
   Send,
   SlidersHorizontal,
-  Sparkles,
   Trash2,
   TrendingUp,
   Users2,
@@ -2409,6 +2408,7 @@ export function FIWorkspace({
             <label htmlFor="fi-title">Tên SK-CTKT <span style={{ color: "#dc2626" }}>*</span></label>
             <input
               id="fi-title"
+              className="fi-title-input"
               placeholder="Vd: Cải tiến quy trình kiểm tra thiết bị"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
@@ -2416,8 +2416,9 @@ export function FIWorkspace({
             <label htmlFor="fi-content">Nội dung đăng ký <span style={{ color: "#dc2626" }}>*</span></label>
             <textarea
               id="fi-content"
+              className="fi-content-input"
               placeholder="Mô tả hiện trạng, giải pháp và hiệu quả dự kiến..."
-              rows={4}
+              rows={9}
               value={form.content_description}
               onChange={(e) => setForm({ ...form, content_description: e.target.value })}
             />
@@ -2819,28 +2820,13 @@ export function FIWorkspace({
 
       {activeTab === "dashboard" && (
         <section className="wide fi-dashboard-shell">
-          <div className="fi-dashboard-hero">
-            <div className="fi-dashboard-hero-text">
-              <div className="fi-dashboard-hero-title">
-                <Sparkles size={20} />
-                <h2>FI Dashboard</h2>
-              </div>
-              <p>Bức tranh toàn cảnh về SK-CTKT của 4 đội/tổ — trạng thái xử lý, KHMT đã ghi nhận và xu hướng theo tháng.</p>
-              <div className="fi-dashboard-hero-stats">
-                <span>
-                  <CheckCircle2 size={14} /> {approvalRate}% đã xét đạt
-                </span>
-                <span>
-                  <CalendarDays size={14} /> {khmtRate}% SK đạt đã vào KHMT
-                </span>
-                <span>
-                  <Clock3 size={14} /> Cập nhật {dashboard?.generated_at ? formatHistoryTime(dashboard.generated_at) : "—"}
-                </span>
-              </div>
+          <div className="fi-dashboard-toolbar">
+            <div>
+              <h2>FI Dashboard</h2>
+              <p className="muted">Cập nhật {dashboard?.generated_at ? formatHistoryTime(dashboard.generated_at) : "—"}</p>
             </div>
             <button className="fi-dashboard-refresh" onClick={reload} title="Tải lại FI Dashboard" type="button">
               <RefreshCw size={17} />
-              Tải lại
             </button>
           </div>
 

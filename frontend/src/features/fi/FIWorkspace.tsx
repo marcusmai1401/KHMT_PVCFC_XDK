@@ -3234,18 +3234,29 @@ export function FIWorkspace({
         </div>
         <div className="legacy-list">
           {groupedHistoryItems.map((group) => (
-            <div className="legacy-month-group" key={group.key}>
-              <div className="legacy-month-heading">
-                <h3>{group.month ? `T${group.month}/${group.year}` : "Chưa rõ tháng"}</h3>
-                <span>{group.items.length} SK-CTKT</span>
-              </div>
-              <div className="legacy-row-column-labels" aria-hidden="true">
-                <span />
-                <div className="legacy-row-column-label-side">
-                  <span className="tone-period">Thời gian ĐK</span>
-                  <span className="tone-decision">Kết luận LĐX</span>
-                  <span className="tone-khmt">KHMT</span>
+            <div
+              className={`legacy-month-group ${group.month ? `month-tone-${group.month}` : "month-tone-unknown"}`}
+              key={group.key}
+            >
+              <div className="legacy-month-sticky-head">
+                <div className="legacy-month-heading">
+                  <div className="legacy-month-title">
+                    <span className="legacy-month-badge">{group.month ? `T${group.month}` : "?"}</span>
+                    <div>
+                      <h3>{group.month ? `T${group.month}/${group.year}` : "Chưa rõ tháng"}</h3>
+                      <small>Tháng đăng ký</small>
+                    </div>
+                  </div>
+                  <span className="legacy-month-count">{group.items.length} SK-CTKT</span>
+                </div>
+                <div className="legacy-row-column-labels" aria-hidden="true">
                   <span />
+                  <div className="legacy-row-column-label-side">
+                    <span className="tone-period">Thời gian ĐK</span>
+                    <span className="tone-decision">Kết luận LĐX</span>
+                    <span className="tone-khmt">KHMT</span>
+                    <span />
+                  </div>
                 </div>
               </div>
               {group.items.map((item) => {

@@ -73,6 +73,14 @@ const REAL_TOKEN_KEY = "okr.real.token";
 const REMEMBER_FLAG_KEY = "okr.remember.enabled";
 const REMEMBERED_USER_KEY = "okr.remember.user";
 const PERSISTED_TOKEN_KEY = "okr.session.token";
+const BROWSER_SESSION_TOKEN_KEY = "okr.browser-session.token";
+
+const tabPaths: Record<Tab, string> = {
+  okr: "/OKR",
+  et: "/ET",
+  fi: "/FI",
+  admin: "/Admin",
+};
 
 type SandboxIdentity = {
   id: string;
@@ -102,8 +110,41 @@ function canAccessTab(role: string, candidate: Tab) {
   return true;
 }
 
+function tabFromPath(pathname: string): Tab {
+  const normalized = pathname.replace(/\/+$/, "").toLowerCase();
+  if (normalized === "/fi") return "fi";
+  if (normalized === "/et") return "et";
+  if (normalized === "/admin") return "admin";
+  return "okr";
+}
+
+function initialTabFromPath() {
+  if (typeof window === "undefined") return "okr";
+  return tabFromPath(window.location.pathname);
+}
+
+function updateBrowserPath(nextTab: Tab, replace = false) {
+  if (typeof window === "undefined") return;
+  const nextPath = tabPaths[nextTab];
+  if (window.location.pathname === nextPath) return;
+  const method = replace ? "replaceState" : "pushState";
+  window.history[method](null, "", nextPath);
+}
+
+function getStoredSessionToken() {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(PERSISTED_TOKEN_KEY)
+    ?? window.sessionStorage.getItem(BROWSER_SESSION_TOKEN_KEY);
+}
+
+function clearStoredSessionTokens() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(PERSISTED_TOKEN_KEY);
+  window.sessionStorage.removeItem(BROWSER_SESSION_TOKEN_KEY);
+}
+
 export function App() {
-  const [tab, setTab] = useState<Tab>("okr");
+  const [tab, setTab] = useState<Tab>(() => initialTabFromPath());
   const [role, setRole] = useState("");
   const [userId, setUserId] = useState(() => {
     if (typeof window !== "undefined") {
@@ -119,7 +160,7 @@ export function App() {
   });
   const [restoringSession, setRestoringSession] = useState(() => {
     if (typeof window === "undefined") return false;
-    return Boolean(window.localStorage.getItem(PERSISTED_TOKEN_KEY));
+    return Boolean(getStoredSessionToken());
   });
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -133,6 +174,7 @@ export function App() {
   const [hasRealSession, setHasRealSession] = useState(false);
   const [sandboxIdentities, setSandboxIdentities] = useState<SandboxIdentity[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [resettingSandbox, setResettingSandbox] = useState(false);
@@ -152,6 +194,7 @@ export function App() {
   // biến CSS --app-topbar-h, để vùng bộ lọc sticky của Lịch sử FI luôn ghim đúng
   // ngay dưới topbar dù topbar 1 hay 2 hàng.
   const topbarObserverRef = useRef<ResizeObserver | null>(null);
+  const notificationsRef = useRef<HTMLDivElement | null>(null);
   const attachTopbarMeasure = useCallback((el: HTMLElement | null) => {
     topbarObserverRef.current?.disconnect();
     topbarObserverRef.current = null;
@@ -182,9 +225,18 @@ export function App() {
       const shouldPersist = window.localStorage.getItem(REMEMBER_FLAG_KEY) === "true";
       if (shouldPersist) {
         window.localStorage.setItem(PERSISTED_TOKEN_KEY, response.access_token);
+        window.sessionStorage.removeItem(BROWSER_SESSION_TOKEN_KEY);
+      } else {
+        window.sessionStorage.setItem(BROWSER_SESSION_TOKEN_KEY, response.access_token);
+        window.localStorage.removeItem(PERSISTED_TOKEN_KEY);
       }
     }
   };
+
+  const navigateToTab = useCallback((nextTab: Tab, replace = false) => {
+    setTab(nextTab);
+    updateBrowserPath(nextTab, replace);
+  }, []);
 
   const logout = () => {
     setToken("");
@@ -201,7 +253,7 @@ export function App() {
     if (typeof window !== "undefined") {
       const stillRemember = window.localStorage.getItem(REMEMBER_FLAG_KEY) === "true";
       setUserId(stillRemember ? (window.localStorage.getItem(REMEMBERED_USER_KEY) ?? "") : "");
-      window.localStorage.removeItem(PERSISTED_TOKEN_KEY);
+      clearStoredSessionTokens();
       window.sessionStorage.removeItem(REAL_TOKEN_KEY);
     } else {
       setUserId("");
@@ -224,7 +276,7 @@ export function App() {
       } else {
         window.localStorage.removeItem(REMEMBERED_USER_KEY);
         window.localStorage.removeItem(REMEMBER_FLAG_KEY);
-        window.localStorage.removeItem(PERSISTED_TOKEN_KEY);
+        clearStoredSessionTokens();
       }
     }
 
@@ -304,7 +356,17 @@ export function App() {
   };
 
   const markRead = (id: string) => {
-    api.markNotificationRead(id).then(loadNotifications).catch((err) => setError(friendlyError(err.message)));
+    api.markNotificationRead(id)
+      .then(() => {
+        setNotificationsOpen(false);
+        loadNotifications();
+      })
+      .catch((err) => setError(friendlyError(err.message)));
+  };
+
+  const toggleNotifications = () => {
+    setNotificationsOpen((current) => !current);
+    loadNotifications();
   };
 
   const handleSnapshot = () => {
@@ -323,7 +385,7 @@ export function App() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const savedToken = window.localStorage.getItem(PERSISTED_TOKEN_KEY);
+    const savedToken = getStoredSessionToken();
     if (!savedToken) {
       setRestoringSession(false);
       return;
@@ -345,10 +407,17 @@ export function App() {
       })
       .catch(() => {
         setToken("");
-        window.localStorage.removeItem(PERSISTED_TOKEN_KEY);
+        clearStoredSessionTokens();
       })
       .finally(() => setRestoringSession(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onPopState = () => setTab(tabFromPath(window.location.pathname));
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
   useEffect(() => {
@@ -361,8 +430,13 @@ export function App() {
   }, [sandbox]);
 
   useEffect(() => {
-    if (role && !canAccessTab(role, tab)) setTab("okr");
-  }, [role, tab]);
+    if (!role) return;
+    if (!canAccessTab(role, tab)) {
+      navigateToTab("okr", true);
+      return;
+    }
+    updateBrowserPath(tab, true);
+  }, [navigateToTab, role, tab]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -375,6 +449,17 @@ export function App() {
       setAdminEditMode(false);
     }
   }, [role, adminEditMode]);
+
+  useEffect(() => {
+    if (!notificationsOpen || typeof window === "undefined") return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && notificationsRef.current?.contains(target)) return;
+      setNotificationsOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [notificationsOpen]);
 
   const groupedIdentities = useMemo(() => {
     const groups: Record<string, SandboxIdentity[]> = {};
@@ -591,6 +676,7 @@ export function App() {
   const isAdminProd = role === "Admin" && !sandbox;
 
   const effectiveEditMode = role === "Admin" ? adminEditMode : true;
+  const unreadNotificationCount = notifications.filter((item) => !item.read).length;
 
   return (
     <main className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""} ${role === "Admin" && adminEditMode ? "edit-mode-on" : "edit-mode-off"}`}>
@@ -706,22 +792,22 @@ export function App() {
           </div>
         )}
         <nav>
-          <button className={tab === "okr" ? "active" : ""} onClick={() => setTab("okr")} title="OKR">
+          <button className={tab === "okr" ? "active" : ""} onClick={() => navigateToTab("okr")} title="OKR">
             <BarChart3 size={18} />
             <span>OKR</span>
           </button>
           {canAccessTab(role, "et") && (
-            <button className={tab === "et" ? "active" : ""} onClick={() => setTab("et")} title="Năng lực ET">
+            <button className={tab === "et" ? "active" : ""} onClick={() => navigateToTab("et")} title="Năng lực ET">
               <ClipboardCheck size={18} />
               <span>Năng lực ET</span>
             </button>
           )}
-          <button className={tab === "fi" ? "active" : ""} onClick={() => setTab("fi")} title="FI">
+          <button className={tab === "fi" ? "active" : ""} onClick={() => navigateToTab("fi")} title="FI">
             <Lightbulb size={18} />
             <span>FI</span>
           </button>
           {canAccessTab(role, "admin") && (
-            <button className={tab === "admin" ? "active" : ""} onClick={() => setTab("admin")} title="Quản trị">
+            <button className={tab === "admin" ? "active" : ""} onClick={() => navigateToTab("admin")} title="Quản trị">
               <History size={18} />
               <span>Quản trị</span>
             </button>
@@ -741,6 +827,50 @@ export function App() {
             <div className="topbar-tabs" ref={setTopbarTabsHost} />
           )}
           <div className="topbar-tools">
+            <div className="mobile-account-actions" aria-label="Thao tác tài khoản trên mobile">
+              {!sandbox && (
+                <button
+                  aria-label="Đổi mật khẩu"
+                  className="mobile-account-button"
+                  onClick={() => setVoluntaryChange(true)}
+                  title="Đổi mật khẩu"
+                  type="button"
+                >
+                  <KeyRound size={16} />
+                </button>
+              )}
+              {isAdminProd && (
+                <button
+                  aria-label="Vào môi trường kiểm thử"
+                  className="mobile-account-button"
+                  onClick={enterSandbox}
+                  title="Vào môi trường kiểm thử"
+                  type="button"
+                >
+                  <FlaskConical size={16} />
+                </button>
+              )}
+              {sandbox && hasRealSession && (
+                <button
+                  aria-label="Thoát kiểm thử"
+                  className="mobile-account-button"
+                  onClick={exitSandbox}
+                  title="Thoát kiểm thử"
+                  type="button"
+                >
+                  <Undo2 size={16} />
+                </button>
+              )}
+              <button
+                aria-label="Đăng xuất"
+                className="mobile-account-button"
+                onClick={logout}
+                title="Đăng xuất"
+                type="button"
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
             {role === "Admin" && (
               <button
                 aria-pressed={adminEditMode}
@@ -768,19 +898,29 @@ export function App() {
                 <span>{exportingPng ? "Đang xuất..." : "Tải PNG"}</span>
               </button>
             )}
-            <div className="notifications">
-              <button title="Tải lại thông báo" onClick={loadNotifications}>
+            <div className={`notifications ${notificationsOpen ? "is-open" : ""}`} ref={notificationsRef}>
+              <button
+                aria-expanded={notificationsOpen}
+                aria-haspopup="true"
+                title="Thông báo"
+                onClick={toggleNotifications}
+                type="button"
+              >
                 <Bell size={17} />
-                {notifications.filter((item) => !item.read).length}
+                {unreadNotificationCount}
               </button>
-              {notifications.length > 0 && (
+              {(notificationsOpen || notifications.length > 0) && (
                 <div className="notification-list">
-                  {notifications.slice(0, 4).map((item) => (
-                    <button key={item.id} className={item.read ? "read" : ""} onClick={() => markRead(item.id)}>
-                      <strong>{displayNotification(item.event)}</strong>
-                      <span>{item.payload?.sk_code ?? item.payload?.id ?? displayTeam(item.payload?.team)}</span>
-                    </button>
-                  ))}
+                  {notifications.length === 0 ? (
+                    <div className="notification-empty">Không có thông báo mới.</div>
+                  ) : (
+                    notifications.slice(0, 4).map((item) => (
+                      <button key={item.id} className={item.read ? "read" : ""} onClick={() => markRead(item.id)}>
+                        <strong>{displayNotification(item.event)}</strong>
+                        <span>{item.payload?.sk_code ?? item.payload?.id ?? displayTeam(item.payload?.team)}</span>
+                      </button>
+                    ))
+                  )}
                 </div>
               )}
             </div>
@@ -798,6 +938,52 @@ export function App() {
           {tab === "admin" && <AdminPanel />}
         </div>
       </section>
+      <nav className="mobile-bottom-nav" aria-label="Điều hướng chính">
+        <button
+          aria-current={tab === "okr" ? "page" : undefined}
+          className={tab === "okr" ? "active" : ""}
+          onClick={() => navigateToTab("okr")}
+          title="OKR"
+          type="button"
+        >
+          <BarChart3 size={19} />
+          <span>OKR</span>
+        </button>
+        {canAccessTab(role, "et") && (
+          <button
+            aria-current={tab === "et" ? "page" : undefined}
+            className={tab === "et" ? "active" : ""}
+            onClick={() => navigateToTab("et")}
+            title="Năng lực ET"
+            type="button"
+          >
+            <ClipboardCheck size={19} />
+            <span>ET</span>
+          </button>
+        )}
+        <button
+          aria-current={tab === "fi" ? "page" : undefined}
+          className={tab === "fi" ? "active" : ""}
+          onClick={() => navigateToTab("fi")}
+          title="FI"
+          type="button"
+        >
+          <Lightbulb size={19} />
+          <span>FI</span>
+        </button>
+        {canAccessTab(role, "admin") && (
+          <button
+            aria-current={tab === "admin" ? "page" : undefined}
+            className={tab === "admin" ? "active" : ""}
+            onClick={() => navigateToTab("admin")}
+            title="Quản trị"
+            type="button"
+          >
+            <History size={19} />
+            <span>Admin</span>
+          </button>
+        )}
+      </nav>
     </main>
   );
 }

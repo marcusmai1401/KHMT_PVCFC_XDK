@@ -13282,3 +13282,559 @@ pre {
   font-weight: 600;
   color: var(--brand-green-deep);
 }
+
+/* ============================================================
+   Mobile UX shell and responsive consolidation
+   ============================================================ */
+
+.mobile-account-actions,
+.mobile-bottom-nav {
+  display: none;
+}
+
+.notifications.is-open .notification-list {
+  display: grid;
+}
+
+.notification-empty {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 12px;
+}
+
+@media (max-width: 1024px) {
+  .content-grid,
+  .fi-dashboard-main,
+  .fi-dashboard-chart-row,
+  .fi-dashboard-aux,
+  .et-grid,
+  .et-notes,
+  .et-top-lists,
+  .admin-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .content-grid {
+    gap: 14px;
+    padding: 18px 20px;
+  }
+
+  .panel {
+    padding: 18px;
+  }
+
+  .matrix,
+  .okr-exec-table-shell,
+  .okr-objective-table,
+  .fi-dashboard-table-wrap,
+  .table-scroll,
+  .framework-score-grid,
+  .et-heatmap,
+  .et-timeline {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .et-heatmap,
+  .et-timeline {
+    display: block;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-shell,
+  .app-shell.sidebar-collapsed {
+    display: block;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .workspace {
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding-bottom: calc(82px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .topbar,
+  .fi-workspace-shell .topbar {
+    align-items: flex-start;
+    gap: 8px 10px;
+    padding: 10px 14px;
+    position: sticky;
+    top: 0;
+    z-index: 80;
+  }
+
+  .topbar-heading {
+    flex: 1 1 160px;
+    min-width: 0;
+  }
+
+  .topbar-heading h1 {
+    font-size: 17px;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .topbar p {
+    font-size: 11.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .topbar-tools {
+    flex: 0 1 auto;
+    gap: 6px;
+    margin-left: auto;
+    min-width: 0;
+  }
+
+  .topbar-tools > svg {
+    display: none;
+  }
+
+  .mobile-account-actions {
+    display: inline-flex;
+    gap: 6px;
+  }
+
+  .mobile-account-button,
+  .notifications > button,
+  .topbar-snapshot-btn,
+  .edit-mode-toggle {
+    border-radius: 10px;
+    justify-content: center;
+    min-height: 38px;
+    min-width: 38px;
+    padding: 7px;
+  }
+
+  .mobile-account-button {
+    background: #f8fafc;
+    border: 1px solid #d8e2ec;
+    color: #334155;
+  }
+
+  .topbar-snapshot-btn span,
+  .edit-mode-toggle > span:not(.edit-mode-switch) {
+    display: none;
+  }
+
+  .edit-mode-toggle {
+    gap: 6px;
+  }
+
+  .edit-mode-switch {
+    height: 18px;
+    width: 30px;
+  }
+
+  .edit-mode-switch span {
+    height: 14px;
+    width: 14px;
+  }
+
+  .edit-mode-toggle.is-on .edit-mode-switch span {
+    transform: translateX(12px);
+  }
+
+  .notifications:hover:not(.is-open) .notification-list {
+    display: none;
+  }
+
+  .notification-list {
+    border-radius: 12px;
+    left: 12px;
+    max-height: min(420px, calc(100dvh - var(--app-topbar-h, 64px) - 100px));
+    min-width: 0;
+    overflow: auto;
+    position: fixed;
+    right: 12px;
+    top: calc(var(--app-topbar-h, 64px) + 8px);
+    z-index: 95;
+  }
+
+  .topbar-tabs {
+    flex-basis: 100%;
+    order: 3;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .topbar-tabs .segmented-control {
+    display: flex;
+    flex-wrap: nowrap;
+    min-width: 100%;
+    width: max-content;
+  }
+
+  .topbar-tabs .segmented-control button {
+    flex: 0 0 auto;
+    min-height: 40px;
+    min-width: max-content;
+    padding-inline: 12px;
+  }
+
+  .okr-module-tabs {
+    overflow-x: auto;
+    padding: 14px 14px 0;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .okr-module-tabs .segmented-control {
+    display: flex;
+    flex-wrap: nowrap;
+    min-width: 100%;
+    width: max-content;
+  }
+
+  .okr-module-tabs button {
+    flex: 0 0 auto;
+    min-height: 40px;
+    min-width: max-content;
+  }
+
+  .mobile-bottom-nav {
+    background: rgba(255, 255, 255, 0.96);
+    border-top: 1px solid #dbe4ee;
+    box-shadow: 0 -12px 28px -22px rgba(15, 23, 42, 0.55);
+    display: grid;
+    gap: 4px;
+    grid-auto-columns: 1fr;
+    grid-auto-flow: column;
+    inset: auto 0 0 0;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+    position: fixed;
+    z-index: 90;
+  }
+
+  .mobile-bottom-nav button {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 12px;
+    color: #64748b;
+    display: grid;
+    gap: 3px;
+    justify-items: center;
+    min-height: 52px;
+    min-width: 0;
+    padding: 6px 4px;
+  }
+
+  .mobile-bottom-nav button:hover,
+  .mobile-bottom-nav button.active {
+    background: #e9f6ef;
+    color: var(--brand-green-deep);
+  }
+
+  .mobile-bottom-nav button.active {
+    border-left: 0;
+    box-shadow: inset 0 0 0 1px #b7e4c8;
+    font-weight: 800;
+  }
+
+  .mobile-bottom-nav button span {
+    font-size: 11px;
+    line-height: 1;
+  }
+
+  .workflow-item,
+  .fi-review-panel .workflow-item,
+  .fi-processing-panel .workflow-item,
+  .report-row {
+    grid-template-columns: 1fr;
+  }
+
+  .toolbar,
+  .panel-header,
+  .fi-list-block-head,
+  .fi-dashboard-header,
+  .fi-dashboard-section-title,
+  .image-viewer-toolbar,
+  .modal-actions {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 700px) {
+  body {
+    overflow-x: hidden;
+  }
+
+  button,
+  .icon-button,
+  input,
+  select,
+  textarea {
+    font-size: 14px;
+  }
+
+  button,
+  .icon-button {
+    min-height: 44px;
+  }
+
+  .auth-shell {
+    align-items: start;
+    overflow: auto;
+    padding: 14px;
+    place-items: start center;
+  }
+
+  .auth-content {
+    gap: 16px;
+    max-width: 460px;
+    width: 100%;
+  }
+
+  .auth-card {
+    border-radius: 18px;
+    order: 1;
+    padding: 24px 18px;
+    width: 100%;
+  }
+
+  .auth-card-head {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+  }
+
+  .auth-card-head h1 {
+    font-size: 22px;
+  }
+
+  .auth-input input,
+  .auth-submit {
+    min-height: 48px;
+  }
+
+  .auth-hero {
+    gap: 12px;
+    order: 2;
+    width: 100%;
+  }
+
+  .auth-hero-brand {
+    flex-direction: row;
+    gap: 12px;
+    justify-content: center;
+    text-align: left;
+  }
+
+  .auth-hero-logo {
+    border-radius: 14px;
+    height: 52px;
+    width: 52px;
+  }
+
+  .auth-hero-logo img {
+    height: 40px;
+    width: 40px;
+  }
+
+  .auth-hero-name strong {
+    font-size: 15px;
+    white-space: normal;
+  }
+
+  .auth-hero-factory,
+  .auth-hero-tagline {
+    font-size: 11px;
+  }
+
+  .auth-hero-lede,
+  .auth-hero-features,
+  .auth-hero-foot {
+    display: none;
+  }
+
+  .content-grid,
+  .web-input-shell,
+  .fi-register-layout,
+  .fi-account-source,
+  .fi-dashboard-kpis,
+  .fi-dashboard-team-grid,
+  .fi-dashboard-aux,
+  .admin-fi-kpis,
+  .admin-fi-detail-grid,
+  .detail-grid,
+  .framework-summary-grid,
+  .framework-item-card,
+  .monthly-overview-grid,
+  .objective-visual-grid,
+  .chart-grid,
+  .okr-card-grid,
+  .okr-progress-grid,
+  .objective-status-grid,
+  .kpi-badge-grid,
+  .kr-summary-grid,
+  .training-month-grid,
+  .o3-stop-team-grid,
+  .competency-fi-kpis,
+  .competency-fi-team-grid,
+  .training-summary-panel,
+  .competency-position-list,
+  .initiatives-fi-layout,
+  .radar-layout,
+  .conclusion-grid,
+  .et-personnel-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .content-grid {
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .panel {
+    border-radius: 10px;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .panel-header {
+    gap: 10px;
+  }
+
+  .panel-header > *,
+  .toolbar > *,
+  .fi-detail-actions > *,
+  .modal-actions > * {
+    min-width: 0;
+  }
+
+  .toolbar,
+  .fi-detail-actions,
+  .modal-actions,
+  .fi-inline-review-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .toolbar button,
+  .fi-detail-actions button,
+  .modal-actions button,
+  .fi-inline-review-actions button {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .fi-dashboard-hero,
+  .fi-detail-header,
+  .okr-matrix-summary-heading,
+  .okr-objective-card-header,
+  .okr-exec-matrix-header,
+  .kpi-section-header,
+  .fi-edit-modal-head,
+  .fi-inline-review-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .fi-dashboard-hero {
+    border-radius: 12px;
+    padding: 16px;
+  }
+
+  .fi-dashboard-hero-title h2 {
+    font-size: 18px;
+  }
+
+  .fi-dashboard-hero-stats,
+  .fi-team-numbers,
+  .okr-exec-summary-section,
+  .kpi-section-grid,
+  .okr-team-summary-list,
+  .legacy-team-picker,
+  .level-editor {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .fi-history-toolbar {
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .fi-history-toolbar-lead {
+    width: 100%;
+  }
+
+  .fi-history-toolbar-tail {
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .fi-history-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fi-history-stat {
+    min-height: 86px;
+  }
+
+  .fi-edit-modal-backdrop {
+    padding: 8px;
+  }
+
+  .fi-edit-modal {
+    border-radius: 10px;
+    max-height: calc(100dvh - 16px);
+  }
+
+  .fi-edit-modal-actions {
+    bottom: 0;
+    position: sticky;
+    z-index: 2;
+  }
+
+  .kr-input-panel .kr-card-head,
+  .kr-input-panel .kr-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .kr-input-panel .kr-assessment-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kr-input-panel .kr-assessment-pill {
+    justify-content: center;
+    min-height: 46px;
+  }
+
+  .okr-exec-table,
+  .okr-objective-table-row {
+    min-width: 760px;
+  }
+
+  .okr-matrix-table,
+  .fi-dashboard-table {
+    min-width: 680px;
+  }
+
+  .image-viewer-backdrop {
+    padding: 8px;
+  }
+
+  .image-viewer {
+    width: 100%;
+  }
+
+  .image-viewer-stage {
+    grid-template-columns: 38px minmax(0, 1fr) 38px;
+    min-height: 56vh;
+  }
+}

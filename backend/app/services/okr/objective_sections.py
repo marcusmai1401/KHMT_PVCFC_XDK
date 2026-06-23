@@ -830,10 +830,14 @@ def _apply_dashboard_narratives(sections: list[ObjectiveSection], narratives: di
     kr_details = narratives.get("kr_details") or {}
     o6_counts = narratives.get("o6_counts") or {}
     extras = narratives.get("extras") or {}
+    report = narratives.get("report") or {}
 
     for section in sections:
         code = section.get("objective_code")
         obj = objectives.get(str(code)) or {}
+        section_report = report.get(str(code))
+        if section_report and (section_report.get("krs") or section_report.get("notes")):
+            section["report"] = section_report
         if obj.get("target") is not None:
             section["target"] = obj.get("target")
         if obj.get("result") is not None:

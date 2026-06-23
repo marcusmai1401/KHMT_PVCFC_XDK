@@ -72,6 +72,17 @@ export interface VisualBlock {
   payload?: Record<string, any>;
 }
 
+export interface ObjectiveReportKR {
+  code: string;
+  title: string;
+  lines: string[];
+}
+
+export interface ObjectiveReport {
+  krs: ObjectiveReportKR[];
+  notes: string[];
+}
+
 export interface ObjectiveSectionPayload {
   objective_code?: ObjectiveCode | string;
   title?: string;
@@ -82,6 +93,7 @@ export interface ObjectiveSectionPayload {
   headline?: string | null;
   visuals?: VisualBlock[];
   notes?: string[];
+  report?: ObjectiveReport | null;
   source_references?: string[];
 }
 

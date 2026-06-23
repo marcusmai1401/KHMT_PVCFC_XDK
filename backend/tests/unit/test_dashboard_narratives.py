@@ -71,6 +71,43 @@ def test_extract_dashboard_narratives_full():
     assert result["extras"]["competency_positions"] == "8 vị trí chức danh"
     assert result["extras"]["cbcnv"] == "33 CBCNV (KTV)"
 
+    # The verbatim per-objective report groups KR headings and loose notes,
+    # dropping chart-only labels (numbers, "Mục tiêu"/"Kết quả", radar legends).
+    report = result["report"]
+    o4_codes = [kr["code"] for kr in report["O4"]["krs"]]
+    assert "O4.KR2" in o4_codes
+    # Body prose is preserved verbatim somewhere in the objective report: attached
+    # to the KR when it shares the heading's text box, otherwise as a loose note.
+    o4_text = " ".join(
+        [line for kr in report["O4"]["krs"] for line in kr["lines"]] + report["O4"]["notes"]
+    )
+    assert "lập trình" in o4_text
+    o5_kr8 = next(kr for kr in report["O5"]["krs"] if kr["code"] == "O5.KR8")
+    assert "Rà soát ống tubing" in o5_kr8["title"]
+    assert any("TBCH" in line for line in o5_kr8["lines"])
+    assert any("VI PHẠM" in note for note in report["O1"]["notes"])
+
+
+def test_dashboard_report_excludes_team_additions():
+    """The per-team "Hạng mục phát sinh" blocks must not enter the report."""
+    workbook = _workbook_with_boxes(
+        [
+            _anchor(0, 175, ["KR 02 Cải tiến hệ thống robot"]),
+            _anchor(0, 218, [
+                "HẠNG MỤC PHÁT SINH ĐỘI TBHTĐK",
+                "1. Hoàn thành khai báo tín hiệu modbus",
+            ]),
+        ]
+    )
+
+    report = extract_dashboard_narratives(workbook)["report"]
+
+    all_text = " ".join(
+        note for band in report.values() for note in band["notes"]
+    )
+    assert "PHÁT SINH" not in all_text
+    assert "modbus" not in all_text
+
 
 def test_extract_dashboard_narratives_handles_missing_drawings():
     """A workbook without any drawing parts must yield empty (not raise)."""
@@ -84,4 +121,5 @@ def test_extract_dashboard_narratives_handles_missing_drawings():
         "violations": [],
         "o6_counts": {},
         "extras": {},
+        "report": {},
     }

@@ -2,6 +2,7 @@ import { ChevronRight, GraduationCap, ShieldCheck, Trophy, Wrench, Zap } from "l
 import type React from "react";
 import type { ObjectiveSectionPayload, ObjectiveStatus } from "../types/dashboard";
 import { NoDataBlock, NoPlanBlock } from "./EmptyBlocks";
+import { ObjectiveReport } from "./ObjectiveReport";
 import { ObjectiveStatusBadge } from "./ObjectiveStatusBadge";
 import { VisualBlockRenderer } from "./VisualBlockRenderer";
 
@@ -60,7 +61,9 @@ export function ObjectiveSection({
     });
   }
 
-  const hasContent = visuals.length > 0 || hasConclusion;
+  const report = section.report;
+  const hasReport = Boolean(report && ((report.krs?.length ?? 0) > 0 || (report.notes?.length ?? 0) > 0));
+  const hasContent = visuals.length > 0 || hasConclusion || hasReport;
 
   return (
     <section className="objective-section" data-objective-code={code}>
@@ -95,6 +98,7 @@ export function ObjectiveSection({
             {visuals.map((visual, index) => <VisualBlockRenderer block={visual} key={visual.id || index} />)}
           </div>
         ) : null}
+        {hasReport && report ? <ObjectiveReport report={report} /> : null}
         {!hasContent && status === "no_plan" ? <NoPlanBlock /> : null}
         {!hasContent && status !== "no_plan" ? <NoDataBlock /> : null}
       </div>

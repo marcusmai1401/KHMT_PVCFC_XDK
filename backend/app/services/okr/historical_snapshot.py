@@ -367,6 +367,85 @@ def _is_narrative_line(line: str) -> bool:
     return len(text) >= 18 and " " in text
 
 
+# Standalone chart-axis fragments, pillar tags and bare labels that must never
+# enter the textual report (they only make sense next to their chart).
+_REPORT_AXIS_NOISE = {
+    "thuc hien", "ke", "hoach", "ke hoach", "luy ke", "so lan to chuc",
+    "et", "am", "pm", "fi", "oi", "she", "tcdk", "tbch", "tbdl", "tbhtdk",
+    "tieu chi danh gia", "muc tieu", "ket qua",
+}
+# A text box whose heading already renders as a dedicated chart is skipped so the
+# report does not duplicate it: the per-team additions ("Hạng mục phát sinh") that
+# the user does not want, and the STOP programme headers (shown as O3 charts).
+_REPORT_SKIP_HEADINGS = ("hang muc phat sinh", "chuong trinh stop")
+
+
+def _is_report_noise(line: str) -> bool:
+    text = line.strip()
+    if not text:
+        return True
+    if re.match(r"^[\d.,]+\s*%?$", text):  # pure number / percent (chart data label)
+        return True
+    if re.match(r"^\d+%\s*:", text):  # radar legend "25%: Xây dựng"
+        return True
+    return _plain_text(text) in _REPORT_AXIS_NOISE
+
+
+def _kr_number(code: str) -> int:
+    try:
+        return int(code.split(".KR", 1)[1])
+    except (IndexError, ValueError):
+        return 999
+
+
+def _build_objective_report(boxes: list[dict[str, Any]]) -> dict[str, Any]:
+    """Group every Dashboard text box into a verbatim, per-objective report.
+
+    Each objective gets its KR headings (with any in-box progress lines kept
+    word-for-word) plus a list of loose ``notes``. The team-specific "Hạng mục
+    phát sinh" blocks and already-charted STOP headers are dropped. This is what
+    lets the web dashboard reproduce the full Excel narrative without rewording.
+    """
+    report: dict[str, Any] = {}
+    for band in ("O1", "O2", "O3", "O4", "O5", "O6"):
+        band_boxes = sorted(
+            (box for box in boxes if _narrative_band(box) == band),
+            key=lambda box: (box["row"], box["col"]),
+        )
+        groups: dict[str, dict[str, Any]] = {}
+        notes: list[str] = []
+        for box in band_boxes:
+            if any(skip in _plain_text(box["lines"][0]) for skip in _REPORT_SKIP_HEADINGS):
+                continue
+            current: dict[str, Any] | None = None
+            for line in box["lines"]:
+                head = _KR_HEAD.match(line)
+                if head:
+                    # "Lũy kế" headers repeat a charted KR just to label numbers;
+                    # skip the heading line but keep writing into the open group.
+                    if "luy ke" in _plain_text(line):
+                        continue
+                    code = f"{band}.KR{int(head.group(1))}"
+                    current = groups.get(code)
+                    if current is None:
+                        current = {"code": code, "title": line.strip(), "lines": []}
+                        groups[code] = current
+                    continue
+                if _OBJ_HEAD.match(line):
+                    current = None
+                    continue
+                if _is_report_noise(line):
+                    continue
+                if current is not None:
+                    current["lines"].append(line.strip())
+                else:
+                    notes.append(line.strip())
+        krs = sorted(groups.values(), key=lambda group: _kr_number(group["code"]))
+        if krs or notes:
+            report[band] = {"krs": krs, "notes": notes}
+    return report
+
+
 def extract_dashboard_narratives(workbook_bytes: bytes) -> dict[str, Any]:
     """Extract the free-text narrative content of the Dashboard sheet (drawing text boxes).
 
@@ -381,11 +460,13 @@ def extract_dashboard_narratives(workbook_bytes: bytes) -> dict[str, Any]:
         "violations": [],
         "o6_counts": {},
         "extras": {},
+        "report": {},
     }
     try:
         boxes = _narrative_boxes(workbook_bytes)
     except Exception:
         return result
+    result["report"] = _build_objective_report(boxes)
 
     for box in boxes:
         first = box["lines"][0]

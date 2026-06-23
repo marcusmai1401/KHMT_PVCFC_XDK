@@ -11635,11 +11635,21 @@ pre {
   border-radius: 10px;
   padding: 11px 12px;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
   transition: all 0.2s ease;
   box-shadow: 0 1px 2px rgba(180, 83, 9, 0.04);
+}
+
+/* The KR code badge + team-status pills share one wrapping row so the
+   description below always gets the full card width (no vertical sliver). */
+.visual-id-o6_culture .narrative-item-head {
+  align-items: center;
+}
+
+.visual-id-o6_culture .narrative-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .visual-id-o6_culture .narrative-item:hover {
@@ -13390,6 +13400,149 @@ pre {
 }
 
 .o6-org-count b { color: var(--brand-green-deep); font-weight: 800; }
+
+/* ─────────────────────────────────────────────────────────────
+   Objective report — verbatim narrative copied from the Dashboard
+   sheet (KR headings + per-KR progress + loose notes).
+   ───────────────────────────────────────────────────────────── */
+.objective-report {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--border);
+  display: grid;
+  gap: 12px;
+}
+
+.objective-report-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.objective-report-head-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--accent-light);
+  color: var(--accent);
+  border: 1px solid rgba(44, 57, 142, 0.15);
+}
+
+.objective-report-head h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: 0.01em;
+}
+
+.objective-report-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  align-items: start;
+}
+
+.objective-report-kr {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--brand-navy);
+  border-radius: 10px;
+  background: var(--bg-card);
+}
+
+.objective-report-kr-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+
+.objective-report-kr-code {
+  flex: none;
+  align-self: flex-start;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #ffffff;
+  background: var(--brand-navy);
+  padding: 3px 7px;
+  border-radius: 6px;
+}
+
+.objective-report-kr-title {
+  flex: 1 1 55%;
+  min-width: 0;
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #1e293b;
+  overflow-wrap: anywhere;
+}
+
+.objective-report-kr-status {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brand-green-deep);
+  background: var(--brand-green-soft);
+  border: 1px solid #c7ead7;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.objective-report-lines,
+.objective-report-notes ul {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 4px;
+  list-style: disc;
+}
+
+.objective-report-lines li,
+.objective-report-notes li {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #334155;
+  overflow-wrap: anywhere;
+}
+
+.objective-report-notes {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: var(--bg-main);
+}
+
+.objective-report-notes-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.objective-report-notes li {
+  color: #475569;
+}
+
+.app-shell.mobile-view .objective-report-grid {
+  grid-template-columns: 1fr;
+}
 
 /* O5 training / competency footnotes */
 .training-payment {

@@ -34,6 +34,14 @@
   font-family: "Be Vietnam Pro", "Inter", "Segoe UI", ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: 14px;
   letter-spacing: 0;
+
+  /* iOS/Safari mobile hygiene:
+     - text-size-adjust: stop iOS inflating text on landscape rotation
+     - tap-highlight: remove the grey/blue flash on tap (we provide :active states)
+     - overflow-x clip: belt-and-suspenders against any single element blowout */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 
 * {
@@ -1276,7 +1284,14 @@ h2 {
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
   display: grid;
   gap: 0;
+  /* Constrain the body row (minmax(0,1fr)) so it scrolls and the sticky
+     header + footer actions stay on screen instead of being clipped when
+     the SK content is long. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
   max-height: calc(100vh - 56px);
+  /* dvh tracks the dynamic Safari toolbar on iOS so the footer never hides
+     behind it (vh keeps the static fallback for older browsers). */
+  max-height: calc(100dvh - 56px);
   overflow: hidden;
   width: min(920px, 100%);
 }
@@ -1349,7 +1364,12 @@ h2 {
 .fi-edit-modal-body {
   display: grid;
   gap: 16px;
+  /* min-height:0 lets this grid row actually shrink below its content so the
+     overflow:auto engages (otherwise the row grows and the footer is clipped). */
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 20px 22px;
 }
 
@@ -1444,6 +1464,13 @@ h2 {
 
   .fi-edit-modal {
     max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+  }
+
+  .fi-edit-modal-close {
+    height: 44px;
+    min-height: 44px;
+    width: 44px;
   }
 
   .fi-edit-modal-head,
@@ -6395,6 +6422,7 @@ th {
   display: grid;
   gap: 12px;
   max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
   padding: 12px;
   width: min(980px, 100%);
 }
@@ -7788,6 +7816,7 @@ th {
   display: grid;
   gap: 0;
   max-height: min(760px, calc(100vh - 40px));
+  max-height: min(760px, calc(100dvh - 40px));
   max-width: 860px;
   overflow: auto;
   padding: 0;
@@ -7816,6 +7845,14 @@ th {
   height: 36px;
   padding: 0;
   width: 36px;
+}
+
+@media (max-width: 700px) {
+  .et-personnel-modal-close {
+    height: 44px;
+    min-height: 44px;
+    width: 44px;
+  }
 }
 
 .et-personnel-modal-banner {
@@ -10567,7 +10604,8 @@ pre {
   border: none;
   outline: none;
   padding: 13px 14px 13px 42px;
-  font-size: 14.5px;
+  /* 16px keeps iOS Safari from zooming the page when the field is focused */
+  font-size: 16px;
   color: #0f172a;
   font-weight: 500;
   min-height: 48px;
@@ -13417,6 +13455,10 @@ pre {
   min-height: 100vh;
   min-height: 100dvh;
   padding-bottom: calc(82px + env(safe-area-inset-bottom, 0px));
+  /* Keep body content clear of the notch when the device is in landscape
+     (viewport-fit=cover lets content extend under the inset). Portrait = 0. */
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 .app-shell.mobile-view .topbar,
@@ -13426,7 +13468,11 @@ pre {
   row-gap: 8px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  padding: 9px 12px;
+  /* Full-bleed bar (negative margins cancel the workspace safe-area padding)
+     with its inner content kept clear of the landscape notch. */
+  padding: 9px calc(12px + env(safe-area-inset-right, 0px)) 9px calc(12px + env(safe-area-inset-left, 0px));
+  margin-left: calc(-1 * env(safe-area-inset-left, 0px));
+  margin-right: calc(-1 * env(safe-area-inset-right, 0px));
   position: sticky;
   top: 0;
   z-index: 80;
@@ -13477,8 +13523,8 @@ pre {
 .app-shell.mobile-view .notifications > button {
   border-radius: 10px;
   justify-content: center;
-  min-height: 40px;
-  min-width: 40px;
+  min-height: 44px;
+  min-width: 44px;
   padding: 8px;
 }
 
@@ -13498,6 +13544,8 @@ pre {
   max-height: min(420px, calc(100dvh - var(--app-topbar-h, 58px) - 100px));
   min-width: 0;
   overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   position: fixed;
   right: 12px;
   top: calc(var(--app-topbar-h, 58px) + 8px);
@@ -13536,7 +13584,7 @@ pre {
   background: #f8fafc;
   border: 1px solid #dbe4ee;
   flex: 0 0 auto;
-  min-height: 38px;
+  min-height: 44px;
   min-width: max-content;
   padding: 7px 12px;
 }
@@ -13562,7 +13610,7 @@ pre {
 
 .app-shell.mobile-view .okr-module-tabs button {
   flex: 0 0 auto;
-  min-height: 38px;
+  min-height: 44px;
   min-width: max-content;
 }
 
@@ -13575,7 +13623,9 @@ pre {
   grid-auto-columns: 1fr;
   grid-auto-flow: column;
   inset: auto 0 0 0;
-  padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+  padding: 8px calc(10px + env(safe-area-inset-right, 0px))
+    calc(8px + env(safe-area-inset-bottom, 0px))
+    calc(10px + env(safe-area-inset-left, 0px));
   position: fixed;
   z-index: 90;
 }
@@ -13692,6 +13742,54 @@ pre {
 .app-shell.mobile-view textarea,
 .app-shell.mobile-view input {
   max-width: 100%;
+  /* ≥16px so iOS Safari doesn't zoom the viewport on focus */
+  font-size: 16px;
+}
+
+/* ── Touch targets (iOS HIG ≥44px) ───────────────────────────────────────
+   The generic `button { min-height: 44px }` (≤700px block) is outranked by
+   `.segmented-control button` (0,1,1) and the form fields carried no
+   min-height, so on a phone they measured 30–38px — fiddly to tap. Bring the
+   real interactive controls up to a comfortable finger size. Scoped to
+   .mobile-view (≤900px) so the desktop density is untouched. Checkboxes /
+   radios are excluded — they keep their own custom sizing (e.g. auth remember). */
+.app-shell.mobile-view input:not([type="checkbox"]):not([type="radio"]),
+.app-shell.mobile-view select {
+  min-height: 44px;
+}
+
+/* Compact secondary filter chips (FI history / review filters, admin filters):
+   30px → 40px is a big tap-comfort win without making a wrapping segmented
+   group look oversized. */
+.app-shell.mobile-view .segmented-control button {
+  min-height: 40px;
+}
+
+/* Small icon buttons that pin an explicit `height` (so the generic
+   `button { min-height }` can't lift them) — give them a full 44px box. */
+.app-shell.mobile-view .fi-history-reload {
+  height: 44px;
+  min-width: 44px;
+}
+
+/* ── Touch press feedback ─────────────────────────────────────────────────
+   -webkit-tap-highlight-color is suppressed globally, so without an explicit
+   pressed state the main touch controls feel dead on iPhone. Native iOS dims
+   a control on touch-down; mirror that with a quick opacity dip. Touch-only
+   (hover:none + coarse pointer) so mouse users keep their hover affordances,
+   and opacity (not transform) keeps it safe for reduced-motion + sticky/fixed
+   bars. `.segmented-control button` already covers the topbar & OKR tab
+   strips since those are segmented-control buttons. */
+@media (hover: none) and (pointer: coarse) {
+  .app-shell.mobile-view .mobile-bottom-nav button:active,
+  .app-shell.mobile-view .segmented-control button:active,
+  .app-shell.mobile-view .mobile-account-button:active,
+  .app-shell.mobile-view .notifications > button:active,
+  .app-shell.mobile-view .fi-history-stat:active,
+  .app-shell.mobile-view .fi-history-reload:active {
+    opacity: 0.6;
+    transition-duration: 80ms;
+  }
 }
 
 .app-shell.mobile-view .conclusion-card > header {
@@ -13805,6 +13903,8 @@ pre {
     min-height: 100vh;
     min-height: 100dvh;
     padding-bottom: calc(82px + env(safe-area-inset-bottom, 0px));
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
   }
 
   .topbar,
@@ -13903,6 +14003,8 @@ pre {
     max-height: min(420px, calc(100dvh - var(--app-topbar-h, 64px) - 100px));
     min-width: 0;
     overflow: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     position: fixed;
     right: 12px;
     top: calc(var(--app-topbar-h, 64px) + 8px);
@@ -13960,7 +14062,9 @@ pre {
     grid-auto-columns: 1fr;
     grid-auto-flow: column;
     inset: auto 0 0 0;
-    padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+    padding: 8px calc(10px + env(safe-area-inset-right, 0px))
+      calc(8px + env(safe-area-inset-bottom, 0px))
+      calc(10px + env(safe-area-inset-left, 0px));
     position: fixed;
     z-index: 90;
   }
@@ -14021,16 +14125,19 @@ pre {
   }
 
   button,
-  .icon-button,
-  input,
-  select,
-  textarea {
+  .icon-button {
     font-size: 14px;
+    min-height: 44px;
   }
 
-  button,
-  .icon-button {
-    min-height: 44px;
+  /* iOS Safari zooms the page when a focused field is < 16px. Keep all text
+     entry controls at 16px on phones (incl. the auth/login & change-password
+     fields, which live outside .app-shell). */
+  input,
+  select,
+  textarea,
+  .auth-input input {
+    font-size: 16px;
   }
 
   .auth-shell {

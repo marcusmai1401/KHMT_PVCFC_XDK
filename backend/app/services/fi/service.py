@@ -456,13 +456,15 @@ def clear_khmt(
 
 
 def _ensure_khmt_editable(record: SKCTKTModel, actor: str, role: str, principal_team: str | None) -> None:
+    if record.status not in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}:
+        raise ValueError("Only Approved or Completed SK-CTKT can be assigned to KHMT")
+    if role == Role.ADMIN.value:
+        return
     if role != Role.TEAM_ACCOUNT.value:
         raise PermissionError("Chỉ tài khoản đội/tổ được ghi nhận tháng KHMT")
     team_code = principal_team or actor
     if record.team != team_code:
         raise PermissionError("Tài khoản đội/tổ chỉ được ghi nhận KHMT cho đội/tổ của mình")
-    if record.status not in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}:
-        raise ValueError("Only Approved or Completed SK-CTKT can be assigned to KHMT")
 
 
 FI_DASHBOARD_TEAMS = ["TBCH", "TBĐL", "TBHTĐK", "TCĐK"]

@@ -362,6 +362,7 @@ function khmtAssignmentYear(item: any) {
 
 export function canSelectKhmtMonth(role: string, currentUserId: string, item: any, currentTeam?: string | null) {
   if (!KHMT_ASSIGNABLE_STATUSES.includes(item?.status)) return false;
+  if (role === ADMIN_ROLE) return true;
   if (role !== TEAM_ROLE) return false;
   const ownerTeam = currentTeam ?? currentUserId;
   return FI_TEAMS.includes(ownerTeam) && item?.team === ownerTeam;
@@ -414,8 +415,7 @@ export function visibleActionsForSk(role: string, currentUserId: string, item: a
     !(role === FI_COORDINATOR_ROLE && (item.author_user_id === currentUserId || recordSubmitterId(item) === currentUserId));
   const canAssign =
     !item.is_historical_import &&
-    role === TEAM_ROLE &&
-    item.team === currentUserId &&
+    (role === ADMIN_ROLE || (role === TEAM_ROLE && item.team === currentUserId)) &&
     ["Approved", "Completed"].includes(item.status);
   const canDelete =
     role === ADMIN_ROLE ||

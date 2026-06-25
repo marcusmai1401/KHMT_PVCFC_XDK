@@ -72,10 +72,11 @@ describe("FI action visibility", () => {
   it("keeps direct KHMT assignment on the owning team account", () => {
     const approved = { status: "Approved", author_user_id: "TBCH", team: "TBCH" };
 
-    expect(visibleActionsForSk("Admin", "admin", approved)).toEqual(["reviewDecision", "delete"]);
+    expect(visibleActionsForSk("Admin", "admin", approved)).toEqual(["reviewDecision", "assignKhmt", "delete"]);
     expect(visibleActionsForSk("Admin", "admin", { ...approved, author_user_id: "admin" })).toEqual([
       "edit",
       "reviewDecision",
+      "assignKhmt",
       "delete",
     ]);
     expect(visibleActionsForSk("Team_Account", "TBCH", approved)).toEqual(["edit", "assignKhmt"]);
@@ -90,14 +91,15 @@ describe("FI action visibility", () => {
     expect(visibleActionsForSk("Team_Account", "TBCH", approved, false)).toEqual(["edit", "assignKhmt"]);
   });
 
-  it("allows only the owning team account to choose KHMT month", () => {
+  it("allows admin and the owning team account to choose KHMT month", () => {
     const approved = { status: "Approved", team: "TBCH" };
 
-    expect(canSelectKhmtMonth("Admin", "admin", approved)).toBe(false);
+    expect(canSelectKhmtMonth("Admin", "admin", approved)).toBe(true);
     expect(canSelectKhmtMonth("Team_Account", "TBCH", approved)).toBe(true);
     expect(canSelectKhmtMonth("Team_Account", "user1", approved, "TBCH")).toBe(true);
     expect(canSelectKhmtMonth("Team_Account", "TBĐL", approved)).toBe(false);
     expect(canSelectKhmtMonth("FI_Coordinator", "fi", approved)).toBe(false);
+    expect(canSelectKhmtMonth("Admin", "admin", { ...approved, status: "Submitted" })).toBe(false);
     expect(canSelectKhmtMonth("Team_Account", "TBCH", { ...approved, status: "Submitted" })).toBe(false);
   });
 

@@ -464,6 +464,20 @@ def test_legacy_sk_is_history_and_can_be_reviewed_from_history(client, admin_hea
     assert transition.json()["status"] == "Approved"
     assert transition.json()["is_historical_import"] is True
 
+    admin_khmt = client.post(
+        "/api/v1/fi/sk-ctkt/sk-legacy/assign-khmt",
+        headers=admin_headers,
+        json={"month": 8, "year": 2026},
+    )
+    assert admin_khmt.status_code == 200, admin_khmt.text
+    assert admin_khmt.json()["consider_for_khmt"] is True
+    assert admin_khmt.json()["khmt_month"] == 8
+
+    admin_clear_khmt = client.delete("/api/v1/fi/sk-ctkt/sk-legacy/assign-khmt", headers=admin_headers)
+    assert admin_clear_khmt.status_code == 200, admin_clear_khmt.text
+    assert admin_clear_khmt.json()["consider_for_khmt"] is False
+    assert admin_clear_khmt.json()["khmt_month"] is None
+
     foreign_khmt = client.post(
         "/api/v1/fi/sk-ctkt/sk-legacy/assign-khmt",
         headers=other_team_headers,

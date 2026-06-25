@@ -340,7 +340,7 @@ def complete(record_id: str, payload: TransitionRequest = TransitionRequest(), p
 def assign(
     record_id: str,
     payload: KHMTAssignRequest,
-    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT)),
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
     try:
@@ -369,7 +369,7 @@ def assign(
 @router.delete("/sk-ctkt/{record_id}/assign-khmt")
 def clear_assignment(
     record_id: str,
-    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT)),
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
     try:

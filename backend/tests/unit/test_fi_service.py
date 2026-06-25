@@ -262,9 +262,6 @@ def test_team_account_assign_khmt_is_limited_to_own_team(db_session):
     transition_sk_ctkt(db_session, record.id, "submit", "TBCH", "Team_Account")
     transition_sk_ctkt(db_session, record.id, "approve", "fi1", "FI_Coordinator")
 
-    with pytest.raises(PermissionError, match="Chỉ tài khoản đội/tổ"):
-        assign_khmt(db_session, record.id, 6, 2026, "admin", "Admin")
-
     with pytest.raises(PermissionError, match="đội/tổ của mình"):
         assign_khmt(db_session, record.id, 6, 2026, "TBĐL", "Team_Account")
 
@@ -272,6 +269,35 @@ def test_team_account_assign_khmt_is_limited_to_own_team(db_session):
 
     assert updated.consider_for_khmt is True
     assert updated.khmt_month == 6
+
+
+def test_admin_can_assign_and_clear_khmt_for_any_team(db_session):
+    record = create_sk_ctkt(
+        db_session,
+        {
+            "author_name": "A",
+            "team": "TBCH",
+            "title": "Title",
+            "content_description": "Content",
+            "completion_plan": "T6/2026",
+            "year": 2026,
+        },
+        "TBCH",
+    )
+    transition_sk_ctkt(db_session, record.id, "submit", "TBCH", "Team_Account")
+    transition_sk_ctkt(db_session, record.id, "approve", "fi1", "FI_Coordinator")
+
+    assigned = assign_khmt(db_session, record.id, 8, 2026, "admin", "Admin")
+
+    assert assigned.consider_for_khmt is True
+    assert assigned.khmt_month == 8
+    assert assigned.khmt_year == 2026
+
+    cleared = clear_khmt(db_session, record.id, "admin", "Admin")
+
+    assert cleared.consider_for_khmt is False
+    assert cleared.khmt_month is None
+    assert cleared.khmt_year is None
 
 
 def test_fi_dashboard_aggregates_status_and_khmt(db_session):

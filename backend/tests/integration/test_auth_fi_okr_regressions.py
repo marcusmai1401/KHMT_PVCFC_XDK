@@ -216,6 +216,39 @@ def test_team_account_can_register_on_behalf_of_other(client, admin_headers):
     assert fallback.json()["author_user_id"] == "TBCH"
 
 
+def test_admin_can_register_on_behalf_of_other(client, admin_headers):
+    """Admin đăng ký hộ nhưng SK vẫn thuộc về nhân sự được chọn."""
+    _create_user(client, admin_headers, "admin-proxy-author", role="Staff", team="TBĐL")
+
+    created = client.post(
+        "/api/v1/fi/sk-ctkt",
+        headers=admin_headers,
+        json={
+            "author_name": "Tên payload sẽ bị chuẩn hóa",
+            "author_user_id": "admin-proxy-author",
+            "team": "TBCH",
+            "title": "Admin đăng ký hộ",
+            "content_description": "Nội dung",
+            "completion_plan": "T6/2026",
+            "registration_month": 6,
+            "registration_year": 2026,
+        },
+    )
+
+    assert created.status_code == 200, created.text
+    payload = created.json()
+    assert payload["author_name"] == "admin-proxy-author"
+    assert payload["author_user_id"] == "admin-proxy-author"
+    assert payload["team"] == "TBĐL"
+    assert payload["status"] == "Submitted"
+    assert "-TBĐL-" in payload["sk_code"]
+    assert payload["status_history"][0]["comments"]["submitted_by"] == "admin"
+
+    deleted = client.delete(f"/api/v1/fi/sk-ctkt/{payload['id']}", headers=admin_headers)
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json() == {"deleted": True}
+
+
 def test_fi_team_create_is_submitted_immediately(client, admin_headers):
     team_headers = _login(client, "TBCH", "tbch-pass")
     fi_headers = _login(client, "fi", "fi-pass")
@@ -446,6 +479,11 @@ def test_legacy_sk_is_history_and_can_be_reviewed_from_history(client, admin_hea
     assert khmt.status_code == 200, khmt.text
     assert khmt.json()["consider_for_khmt"] is True
     assert khmt.json()["khmt_month"] == 7
+
+    deleted = client.delete("/api/v1/fi/sk-ctkt/sk-legacy", headers=admin_headers)
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json() == {"deleted": True}
+    assert client.get("/api/v1/fi/sk-ctkt/sk-legacy", headers=admin_headers).status_code == 404
 
 
 def test_okr_duplicate_requires_confirmation_and_export_is_valid_xlsx(client, admin_headers):

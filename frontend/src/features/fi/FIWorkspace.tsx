@@ -39,6 +39,7 @@ const ADMIN_ROLE = "Admin";
 // FI_Coordinator (Phạm Thanh Quyền) cũng là tác giả cho team TBHTĐK,
 // không chỉ là người xét duyệt.
 const AUTHOR_ROLES = [TEAM_ROLE, STAFF_ROLE, FI_COORDINATOR_ROLE];
+const AUTHOR_PICKER_ROLES = [...AUTHOR_ROLES, ADMIN_ROLE];
 const FI_TEAMS = ["TBCH", "TBĐL", "TBHTĐK", "TCĐK"];
 const TEAM_DISPLAY_LABELS: Record<string, string> = {
   Workshop_Staff: "Xưởng quản lí",
@@ -417,8 +418,8 @@ export function visibleActionsForSk(role: string, currentUserId: string, item: a
     item.team === currentUserId &&
     ["Approved", "Completed"].includes(item.status);
   const canDelete =
-    !item.is_historical_import &&
-    (role === ADMIN_ROLE || (isAuthor && canManageAsOwner && OWNER_DELETABLE_STATUSES.includes(item.status)));
+    role === ADMIN_ROLE ||
+    (!item.is_historical_import && isAuthor && canManageAsOwner && OWNER_DELETABLE_STATUSES.includes(item.status));
   if (canEdit) actions.push("edit");
   if (canReviewDecision) actions.push("reviewDecision");
   if (canAssign) actions.push("assignKhmt");
@@ -1095,13 +1096,15 @@ export function FIWorkspace({
   // Node trong topbar (do App cung cấp) để render hàng tab lên chung với tiêu đề.
   tabsHost?: HTMLElement | null;
 }) {
+  const canUseAuthorPicker = AUTHOR_PICKER_ROLES.includes(role);
   const teamFromAccount = currentTeam ?? (AUTHOR_ROLES.includes(role) ? currentUserId : null);
   const isLockedToTeam = AUTHOR_ROLES.includes(role) && teamFromAccount && FI_TEAMS.includes(teamFromAccount);
   const defaultFormTeam = isLockedToTeam && teamFromAccount ? teamFromAccount : "TBCH";
   const defaultAuthorName = AUTHOR_ROLES.includes(role)
     ? (typeof displayName === "string" && displayName.includes(" - ") ? displayName.split(" - ")[0] : displayName ?? "")
     : "";
-  const accountAuthorName = defaultAuthorName || currentUserId;
+  const registrarName = (typeof displayName === "string" && displayName.includes(" - ") ? displayName.split(" - ")[0] : displayName) || currentUserId;
+  const accountAuthorName = AUTHOR_ROLES.includes(role) ? defaultAuthorName || currentUserId : "";
   const accountTeam = AUTHOR_ROLES.includes(role) ? teamFromAccount : null;
   const canRegister = AUTHOR_ROLES.includes(role) || (role === ADMIN_ROLE && editMode);
   const canReview = REVIEWER_ROLES.includes(role);
@@ -1181,7 +1184,17 @@ export function FIWorkspace({
   }, [role]);
 
   useEffect(() => {
-    if (!AUTHOR_ROLES.includes(role)) return;
+    if (!canUseAuthorPicker) return;
+    if (!AUTHOR_ROLES.includes(role)) {
+      setForm((current) => ({
+        ...current,
+        author_name: "",
+        author_user_id: "",
+        team: defaultFormTeam,
+      }));
+      setAuthorQuery("");
+      return;
+    }
     setForm((current) => ({
       ...current,
       author_name: accountAuthorName,
@@ -1189,12 +1202,12 @@ export function FIWorkspace({
       team: accountTeam ?? current.team,
     }));
     setAuthorQuery(accountAuthorName);
-  }, [role, accountAuthorName, accountTeam]);
+  }, [role, accountAuthorName, accountTeam, canUseAuthorPicker, currentUserId, defaultFormTeam]);
 
   // Nạp danh sách nhân sự cho combobox tác giả (chỉ với vai trò được phép đăng ký).
   // Nếu không tải được vẫn cho nhập tay tên tác giả nên lỗi được bỏ qua êm.
   useEffect(() => {
-    if (!AUTHOR_ROLES.includes(role)) return;
+    if (!canUseAuthorPicker) return;
     let active = true;
     api.listTaggableEmployees()
       .then((rows) => {
@@ -1204,7 +1217,7 @@ export function FIWorkspace({
     return () => {
       active = false;
     };
-  }, [role]);
+  }, [canUseAuthorPicker]);
 
   // Sắp xếp: chính mình lên đầu → cùng đội/tổ → còn lại theo bảng chữ cái (tiếng Việt).
   const sortedAuthorOptions = useMemo(() => {
@@ -1232,7 +1245,7 @@ export function FIWorkspace({
   }, [sortedAuthorOptions, authorQuery, form.author_name]);
 
   const isProxyAuthor =
-    AUTHOR_ROLES.includes(role) &&
+    canUseAuthorPicker &&
     form.author_user_id.trim().length > 0 &&
     form.author_user_id !== currentUserId;
 
@@ -1243,9 +1256,14 @@ export function FIWorkspace({
     setAuthorPickerOpen(false);
   };
 
-  const resetAuthorToSelf = () => {
-    setForm((current) => ({ ...current, author_name: accountAuthorName, author_user_id: currentUserId, team: accountTeam ?? current.team }));
-    setAuthorQuery(accountAuthorName);
+  const resetAuthorSelection = () => {
+    if (AUTHOR_ROLES.includes(role)) {
+      setForm((current) => ({ ...current, author_name: accountAuthorName, author_user_id: currentUserId, team: accountTeam ?? current.team }));
+      setAuthorQuery(accountAuthorName);
+    } else {
+      setForm((current) => ({ ...current, author_name: "", author_user_id: "", team: defaultFormTeam }));
+      setAuthorQuery("");
+    }
     setAuthorPickerOpen(false);
   };
 
@@ -1295,20 +1313,20 @@ export function FIWorkspace({
     // Client-side validation: prevent submitting empty registrations.
     const missing: string[] = [];
     // Tác giả: với vai trò đăng ký, dùng tên đã chọn/nhập; trống thì quay về chính chủ.
-    const selectedAuthor = AUTHOR_ROLES.includes(role)
+    const selectedAuthor = canUseAuthorPicker
       ? sortedAuthorOptions.find((option) => option.id === form.author_user_id)
       : null;
-    const authorName = AUTHOR_ROLES.includes(role)
-      ? form.author_name.trim() || accountAuthorName
+    const authorName = canUseAuthorPicker
+      ? form.author_name.trim() || (AUTHOR_ROLES.includes(role) ? accountAuthorName : "")
       : form.author_name;
-    const authorUserId = AUTHOR_ROLES.includes(role)
-      ? form.author_user_id || selectedAuthor?.id || currentUserId
+    const authorUserId = canUseAuthorPicker
+      ? form.author_user_id || selectedAuthor?.id || (AUTHOR_ROLES.includes(role) ? currentUserId : "")
       : form.author_user_id;
-    const team = AUTHOR_ROLES.includes(role)
-      ? selectedAuthor?.team || form.team || accountTeam
+    const team = canUseAuthorPicker
+      ? selectedAuthor?.team || form.team || (AUTHOR_ROLES.includes(role) ? accountTeam : "")
       : form.team;
     if (!authorName.trim()) missing.push("Tác giả");
-    if (!authorUserId?.trim() && AUTHOR_ROLES.includes(role)) missing.push("Tài khoản tác giả");
+    if (!authorUserId?.trim() && canUseAuthorPicker) missing.push("Tài khoản tác giả");
     if (!team?.trim()) missing.push("Đội/tổ tác giả");
     if (!form.title.trim()) missing.push("Tên SK-CTKT");
     if (!form.content_description.trim()) missing.push("Nội dung đăng ký");
@@ -1333,7 +1351,7 @@ export function FIWorkspace({
       registration_month: form.registration_month,
       registration_year: form.registration_year,
     };
-    const payload = AUTHOR_ROLES.includes(role)
+    const payload = canUseAuthorPicker
       ? { ...basePayload, author_name: authorName, author_user_id: authorUserId, team }
       : basePayload;
     const filesToUpload = [...evidenceFiles];
@@ -1360,13 +1378,13 @@ export function FIWorkspace({
           ...current,
           author_name: AUTHOR_ROLES.includes(role) ? accountAuthorName : "",
           author_user_id: AUTHOR_ROLES.includes(role) ? currentUserId : "",
-          team: AUTHOR_ROLES.includes(role) ? accountTeam ?? current.team : current.team,
+          team: AUTHOR_ROLES.includes(role) ? accountTeam ?? current.team : defaultFormTeam,
           title: "",
           content_description: "",
           completion_done: false,
           completion_plan_date: isoDateInput(addMonths(today, 1)),
         }));
-        if (AUTHOR_ROLES.includes(role)) setAuthorQuery(accountAuthorName);
+        if (canUseAuthorPicker) setAuthorQuery(AUTHOR_ROLES.includes(role) ? accountAuthorName : "");
       }
     } catch (err: any) {
       setError(err.message);
@@ -2260,7 +2278,7 @@ export function FIWorkspace({
 	            Điền đầy đủ thông tin để gửi sáng kiến/cải tiến kỹ thuật vào quy trình xét duyệt.
 	          </p>
 	          <div className="form-stack">
-	            {AUTHOR_ROLES.includes(role) ? (
+	            {canUseAuthorPicker ? (
 	              <div className="fi-account-source" aria-label="Thông tin tài khoản đăng ký">
 	                <div className="fi-author-cell">
 	                  <span>Tác giả</span>
@@ -2358,8 +2376,10 @@ export function FIWorkspace({
 	                  {isProxyAuthor && (
 	                    <small className="fi-author-proxy">
 	                      <Info size={13} aria-hidden="true" />
-	                      <span>Đang đăng ký giúp · người gửi: <strong>{accountAuthorName}</strong></span>
-	                      <button type="button" onClick={resetAuthorToSelf}>Chọn lại tôi</button>
+	                      <span>Đang đăng ký giúp · người gửi: <strong>{registrarName}</strong></span>
+	                      <button type="button" onClick={resetAuthorSelection}>
+                          {AUTHOR_ROLES.includes(role) ? "Chọn lại tôi" : "Chọn lại"}
+                        </button>
 	                    </small>
 	                  )}
 	                </div>
@@ -3312,6 +3332,17 @@ export function FIWorkspace({
                           >
                             <ClipboardCheck size={15} />
                             <span>Đánh giá</span>
+                          </button>
+                        )}
+                        {actions.includes("delete") && (
+                          <button
+                            aria-label={`Xóa ${item.sk_code || item.title}`}
+                            className="legacy-icon-action danger-button"
+                            title="Xóa SK khỏi hệ thống"
+                            onClick={() => handleDelete(item)}
+                            type="button"
+                          >
+                            <Trash2 size={15} />
                           </button>
                         )}
                         <button className="legacy-row-action" onClick={() => openHistoryItem(item)} type="button">

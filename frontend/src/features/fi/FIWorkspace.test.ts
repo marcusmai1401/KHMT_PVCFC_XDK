@@ -60,10 +60,13 @@ describe("FI action visibility", () => {
     expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Submitted" })).toEqual([]);
   });
 
-  it("allows historical pending items to be reviewed but not deleted", () => {
+  it("allows historical items to be reviewed and lets Admin delete them", () => {
     expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Submitted", is_historical_import: true })).toEqual(["reviewDecision"]);
     expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Deferred", is_historical_import: true })).toEqual([]);
-    expect(visibleActionsForSk("Admin", "admin", { status: "Approved", is_historical_import: true })).toEqual(["reviewDecision"]);
+    expect(visibleActionsForSk("Admin", "admin", { status: "Approved", is_historical_import: true })).toEqual([
+      "reviewDecision",
+      "delete",
+    ]);
   });
 
   it("keeps direct KHMT assignment on the owning team account", () => {

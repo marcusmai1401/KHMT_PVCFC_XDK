@@ -40,7 +40,7 @@ Khuyến nghị bật `Required reviewers` để mỗi lần deploy production p
 - Port `80` mở ra ngoài.
 - Thư mục backup `/backup/okr` sẽ được script tạo nếu chưa có.
 
-Workflow dùng lại `deploy_prod.py`, nên hành vi deploy giống cách deploy thủ công hiện tại:
+Workflow dùng lại `deploy_prod.py` trong GitHub Actions:
 
 - Build archive source.
 - Upload lên VPS.
@@ -50,7 +50,7 @@ Workflow dùng lại `deploy_prod.py`, nên hành vi deploy giống cách deploy
 - Seed user accounts nhưng mặc định không reset password.
 - Kiểm tra `/health`.
 
-## Manual deploy
+## Chạy workflow thủ công
 
 Trong tab `Actions`, chọn `CI and Production Deploy` -> `Run workflow`.
 

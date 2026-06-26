@@ -254,9 +254,9 @@ HTTP sẽ được Caddy chuyển hướng sang HTTPS. IP VPS dự phòng khi DN
 http://103.200.20.225/
 ```
 
-### Khi nào cần deploy thủ công?
+### Chạy lại deploy qua GitHub Actions
 
-Thông thường không cần deploy thủ công nữa. Nếu cần chạy lại deploy cho cùng một commit:
+Nếu cần chạy lại deploy cho cùng một commit:
 
 Chạy bằng script:
 

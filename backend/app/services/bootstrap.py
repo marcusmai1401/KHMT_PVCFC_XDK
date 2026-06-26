@@ -217,7 +217,6 @@ def _seed_demo_users(db: Session) -> None:
         user.is_active = False
     for item in DEMO_USERS:
         user = db.get(User, item["id"])
-        password_hash = hash_password(str(item["password"]))
         role = item["role"].value
         if user is None:
             db.add(
@@ -225,7 +224,7 @@ def _seed_demo_users(db: Session) -> None:
                     id=str(item["id"]),
                     display_name=str(item["display_name"]),
                     full_name=str(item["display_name"]),
-                    password_hash=password_hash,
+                    password_hash=hash_password(str(item["password"])),
                     role=role,
                     team=item.get("team"),
                     is_active=True,
@@ -235,7 +234,6 @@ def _seed_demo_users(db: Session) -> None:
             continue
         user.display_name = str(item["display_name"])
         user.full_name = str(item["display_name"])
-        user.password_hash = password_hash
         user.role = role
         user.team = item.get("team")
         user.is_active = True

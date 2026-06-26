@@ -141,8 +141,8 @@ jobs:
           if [ "${IMPORT_BM01}" != "true" ]; then
             deploy_args+=(--skip-import-bm01)
           fi
-          if [ "${RESET_USER_PASSWORDS}" != "true" ]; then
-            deploy_args+=(--no-reset-user-passwords)
+          if [ "${RESET_USER_PASSWORDS}" == "true" ]; then
+            deploy_args+=(--reset-user-passwords)
           fi
 
           python deploy_prod.py "${deploy_args[@]}"

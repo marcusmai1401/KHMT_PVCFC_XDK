@@ -209,6 +209,12 @@ echo "Deploy complete"
 
 
 def main() -> int:
+    if os.getenv("GITHUB_ACTIONS") != "true":
+        raise SystemExit(
+            "Direct VPS deploy is disabled. Use GitHub Actions via "
+            "`./deploy_github_actions.sh --watch` or the Actions tab."
+        )
+
     parser = argparse.ArgumentParser(description="Deploy OKR system to the production VPS.")
     parser.add_argument("--host", default=os.getenv("VPS_HOST", DEFAULT_HOST))
     parser.add_argument("--port", type=int, default=int(os.getenv("VPS_PORT", DEFAULT_PORT)))
@@ -221,9 +227,9 @@ def main() -> int:
         help="Bỏ qua bước chạy scripts/seed_users_xuong_dk.py.",
     )
     parser.add_argument(
-        "--no-reset-user-passwords",
+        "--reset-user-passwords",
         action="store_true",
-        help="Khi seed user, KHÔNG reset password mặc định cho user đã tồn tại.",
+        help="Khi seed user, reset password mặc định cho user đã tồn tại.",
     )
     parser.add_argument(
         "--skip-et-seed",
@@ -261,7 +267,7 @@ def main() -> int:
                     remote_archive,
                     args.skip_import_bm01,
                     seed_users=not args.skip_user_seed,
-                    reset_user_passwords=not args.no_reset_user_passwords,
+                    reset_user_passwords=args.reset_user_passwords,
                     seed_et_data=not args.skip_et_seed,
                 ),
             )

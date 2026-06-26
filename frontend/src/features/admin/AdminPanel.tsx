@@ -5,7 +5,6 @@ import {
   Copy,
   Database,
   FileText,
-  History,
   KeyRound,
   RefreshCw,
   RotateCcw,
@@ -19,17 +18,10 @@ import { api } from "../../api/client";
 import { displayTeam, isKhmtConsidered, khmtLabel } from "../fi/FIWorkspace";
 
 type AdminTab = "fi" | "accounts";
-type FiScope = "current" | "all" | "historical";
 
 const adminTabs: Array<{ value: AdminTab; label: string; icon: typeof FileText; helper: string }> = [
   { value: "fi", label: "FI", icon: FileText, helper: "SK-CTKT" },
   { value: "accounts", label: "Tài khoản", icon: Users2, helper: "Login & pass" },
-];
-
-const fiScopes: Array<{ value: FiScope; label: string }> = [
-  { value: "current", label: "Hiện hành" },
-  { value: "all", label: "Tất cả" },
-  { value: "historical", label: "Lịch sử" },
 ];
 
 const roleLabels: Record<string, string> = {
@@ -114,14 +106,7 @@ function formatRegistration(item: any) {
   return "Chưa rõ";
 }
 
-function sourceLabel(item: any) {
-  return item.is_historical_import ? "Excel lịch sử" : "Hệ thống";
-}
-
 function compareFiRows(left: any, right: any) {
-  if (Boolean(left.is_historical_import) !== Boolean(right.is_historical_import)) {
-    return left.is_historical_import ? 1 : -1;
-  }
   const leftTime = new Date(String(left.created_at ?? "").replace(" ", "T")).getTime() || 0;
   const rightTime = new Date(String(right.created_at ?? "").replace(" ", "T")).getTime() || 0;
   return rightTime - leftTime || Number(left.bm01_source_row ?? 0) - Number(right.bm01_source_row ?? 0);
@@ -149,7 +134,6 @@ export function AdminPanel() {
   const [auditRows, setAuditRows] = useState<any[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [scope, setScope] = useState<FiScope>("current");
   const [teamFilter, setTeamFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -221,14 +205,9 @@ export function AdminPanel() {
     ];
   }, [fiRows]);
 
-  const currentRows = useMemo(() => fiRows.filter((row) => !row.is_historical_import), [fiRows]);
-  const historicalRows = useMemo(() => fiRows.filter((row) => row.is_historical_import), [fiRows]);
-
   const filteredRows = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     return fiRows.filter((row) => {
-      if (scope === "current" && row.is_historical_import) return false;
-      if (scope === "historical" && !row.is_historical_import) return false;
       if (teamFilter !== "all" && row.team !== teamFilter) return false;
       if (statusFilter !== "all" && row.status !== statusFilter) return false;
       if (!keyword) return true;
@@ -240,11 +219,10 @@ export function AdminPanel() {
         row.team,
         row.content_description,
         row.completion_plan,
-        row.bm01_source_file,
       ].join(" ").toLowerCase();
       return haystack.includes(keyword);
     });
-  }, [fiRows, scope, search, teamFilter, statusFilter]);
+  }, [fiRows, search, teamFilter, statusFilter]);
 
   const accountActivityRows = useMemo(() => {
     return users
@@ -312,6 +290,7 @@ export function AdminPanel() {
   ]);
 
   const totals = dashboard?.totals ?? {};
+  const approvedCount = Number(totals.review_passed ?? fiRows.filter((row) => ["Approved", "Completed"].includes(row.status)).length);
   const pendingCount = Number(totals.pending ?? fiRows.filter((row) => ["Submitted", "NeedMoreInfo", "Reviewed"].includes(row.status)).length);
   const khmtCount = Number(totals.khmt_considered ?? fiRows.filter(isKhmtConsidered).length);
   const activeUsers = users.filter((user) => user.is_active).length;
@@ -326,19 +305,19 @@ export function AdminPanel() {
           <Database size={18} />
           <span>Tổng SK</span>
           <strong>{fiRows.length}</strong>
-          <small>{currentRows.length} hiện hành · {historicalRows.length} lịch sử</small>
+          <small>Tất cả hồ sơ FI đang có dữ liệu</small>
         </div>
         <div className="admin-fi-kpi current">
           <ShieldCheck size={18} />
-          <span>Hiện hành</span>
-          <strong>{currentRows.length}</strong>
-          <small>Đã gửi vào luồng FI, không tính bản nháp</small>
+          <span>Đã xét đạt</span>
+          <strong>{approvedCount}</strong>
+          <small>{khmtCount} hồ sơ đã vào KHMT</small>
         </div>
         <div className="admin-fi-kpi">
-          <History size={18} />
-          <span>Lịch sử</span>
-          <strong>{historicalRows.length}</strong>
-          <small>Dữ liệu nhập từ Excel</small>
+          <Clock3 size={18} />
+          <span>Chờ xử lý</span>
+          <strong>{pendingCount}</strong>
+          <small>Cần tiếp tục xét duyệt</small>
         </div>
         <div className="admin-fi-kpi">
           <CheckCircle2 size={18} />
@@ -348,53 +327,7 @@ export function AdminPanel() {
         </div>
       </div>
 
-      {currentRows.length > 0 && (
-        <div className="admin-current-strip">
-          <div className="admin-current-strip-head">
-            <Clock3 size={17} />
-            <strong>Hồ sơ hiện hành đang có trên hệ thống</strong>
-          </div>
-          <div className="admin-current-list">
-            {currentRows.map((row) => (
-              <button
-                className="admin-current-item"
-                key={row.id}
-                onClick={() => {
-                  setScope("current");
-                  setTeamFilter("all");
-                  setStatusFilter("all");
-                  setSearch("");
-                  setExpandedId(expandedId === row.id ? null : row.id);
-                }}
-                type="button"
-              >
-                <span>{row.sk_code}</span>
-                <strong>{row.title}</strong>
-                <small>
-                  {row.author_name} ({row.author_user_id}) · {displayTeam(row.team)} · tạo {formatDateTime(row.created_at)}
-                </small>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="admin-fi-controls">
-        <div className="segmented-control" aria-label="Phạm vi dữ liệu FI">
-          {fiScopes.map((item) => (
-            <button
-              className={scope === item.value ? "active" : ""}
-              key={item.value}
-              onClick={() => {
-                setScope(item.value);
-                setExpandedId(null);
-              }}
-              type="button"
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
         <label className="admin-filter-field">
           Đội/tổ
           <select value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)}>
@@ -435,7 +368,6 @@ export function AdminPanel() {
               <th>Thời điểm tạo</th>
               <th>Kết luận</th>
               <th>KHMT</th>
-              <th>Nguồn</th>
               <th>Chi tiết</th>
             </tr>
           </thead>
@@ -445,7 +377,7 @@ export function AdminPanel() {
               const history = Array.isArray(row.status_history) ? row.status_history : [];
               return (
                 <Fragment key={row.id}>
-                  <tr className={row.is_historical_import ? "" : "admin-current-row"}>
+                  <tr>
                     <td><strong>{row.sk_code}</strong></td>
                     <td className="admin-fi-title-cell">{row.title}</td>
                     <td>
@@ -469,11 +401,6 @@ export function AdminPanel() {
                       </span>
                     </td>
                     <td>
-                      <span className={`admin-source-pill ${row.is_historical_import ? "historical" : "current"}`}>
-                        {sourceLabel(row)}
-                      </span>
-                    </td>
-                    <td>
                       <button
                         className="admin-detail-button"
                         onClick={() => setExpandedId(expanded ? null : row.id)}
@@ -486,7 +413,7 @@ export function AdminPanel() {
                   </tr>
                   {expanded && (
                     <tr className="admin-detail-row">
-                      <td colSpan={10}>
+                      <td colSpan={9}>
                         <div className="admin-fi-detail">
                           <div className="admin-fi-detail-grid">
                             <div>
@@ -514,14 +441,6 @@ export function AdminPanel() {
                               <strong>{formatDateTime(row.updated_at)}</strong>
                             </div>
                             <div>
-                              <span>Nguồn Excel</span>
-                              <strong>{row.bm01_source_sheet ? `${row.bm01_source_sheet}!${row.bm01_source_row ?? ""}` : "Không"}</strong>
-                            </div>
-                            <div>
-                              <span>File nguồn</span>
-                              <strong>{row.bm01_source_file || "Không"}</strong>
-                            </div>
-                            <div>
                               <span>Xét KHMT</span>
                               <strong>{row.consider_for_khmt ? "Có" : "Không"}</strong>
                             </div>
@@ -532,10 +451,6 @@ export function AdminPanel() {
                             <div>
                               <span>Công khai</span>
                               <strong>{row.is_public ? "Có" : "Không"}</strong>
-                            </div>
-                            <div>
-                              <span>Dữ liệu lịch sử</span>
-                              <strong>{row.is_historical_import ? "Có" : "Không"}</strong>
                             </div>
                           </div>
                           <div className="admin-fi-detail-section">

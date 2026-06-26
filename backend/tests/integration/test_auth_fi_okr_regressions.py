@@ -610,7 +610,7 @@ def test_admin_exports_fi_reports_with_history_filters(client, admin_headers):
         sheet = workbook["Du lieu FI"]
         assert sheet["A1"].value == "DANH SÁCH FI/SK-CTKT"
         assert sheet.freeze_panes == "A5"
-        assert sheet.auto_filter.ref.startswith("A4:Z")
+        assert sheet.auto_filter.ref.startswith("A4:P")
         headers = [cell.value for cell in sheet[4]]
         assert headers[:6] == [
             "STT",
@@ -620,6 +620,19 @@ def test_admin_exports_fi_reports_with_history_filters(client, admin_headers):
             "Tài khoản tác giả",
             "Đội/tổ",
         ]
+        assert headers[-1] == "Ghi chú quyết định"
+        assert not {
+            "Nguồn",
+            "File nguồn",
+            "Sheet/dòng nguồn",
+            "Ngày tạo",
+            "Ngày gửi duyệt",
+            "Ngày xét duyệt",
+            "Ngày phê duyệt",
+            "Ngày hoàn thành",
+            "Cập nhật cuối",
+            "ID",
+        }.intersection(headers)
         first_data_row = next(sheet.iter_rows(min_row=5, max_row=5))
         assert first_data_row[8].fill.fill_type == "solid"
         return [row[1] for row in sheet.iter_rows(min_row=5, values_only=True)]

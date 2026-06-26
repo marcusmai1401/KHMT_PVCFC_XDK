@@ -166,7 +166,7 @@ function displayImportedStatus(value: string) {
 }
 
 function displayHistoryStatus(item: any) {
-  return item.is_historical_import ? displayImportedStatus(item.status) : displayStatus(item.status);
+  return displayImportedStatus(item.status);
 }
 
 function reviewDecisionFromStatus(status: string): ReviewDecision {
@@ -303,7 +303,7 @@ function actorLabel(actor: string | null | undefined) {
     fi: "Đầu mối SK",
     leader: "Lãnh đạo Xưởng",
     test: "Tài khoản kiểm thử",
-    "historical-import": "Dữ liệu lịch sử",
+    "historical-import": "Hệ thống",
   };
   return labels[actor] ?? actor;
 }
@@ -313,7 +313,7 @@ function historyDetail(history: any) {
   const comments = typeof history.comments === "string" ? history.comments.trim() : "";
   const structuredComments = typeof history.comments === "object" && history.comments !== null ? history.comments : null;
   if (reason === "web_registration") {
-    return { label: "Nguồn ghi nhận", text: "Đăng ký trên hệ thống" };
+    return { label: "Ghi nhận", text: "Đăng ký mới" };
   }
   if (reason === "khmt_assignment" || reason === "khmt_legacy_note") {
     const month = structuredComments?.khmt_month;
@@ -2892,7 +2892,7 @@ export function FIWorkspace({
               <div className="fi-dashboard-kpi-icon"><ClipboardList size={20} /></div>
               <span>Tổng SK</span>
               <strong>{formatCount(dashboardTotalCount)}</strong>
-              <small>{formatCount(dashboardTotals.current)} hiện hành · {formatCount(dashboardTotals.historical)} lịch sử</small>
+              <small>{formatCount(dashboardApprovedCount)} đã xét đạt · {formatCount(dashboardPendingCount)} chưa duyệt</small>
             </div>
             <div className="fi-dashboard-kpi success">
               <div className="fi-dashboard-kpi-icon"><CheckCircle2 size={20} /></div>
@@ -2978,7 +2978,7 @@ export function FIWorkspace({
                       <header className="fi-team-detail-head">
                         <div>
                           <span className="fi-team-detail-name">{displayTeam(team.team)}</span>
-                          <small>{formatCount(team.current)} hiện hành · {formatCount(team.historical)} lịch sử</small>
+                          <small>{formatCount(teamPassed)} đã xét đạt · {formatCount(teamPending)} chưa duyệt</small>
                         </div>
                         <div className="fi-team-detail-total">
                           <span>Tổng SK</span>
@@ -3229,7 +3229,7 @@ export function FIWorkspace({
                 >
                   <span>Tổng SK</span>
                   <strong>{formatCount(totalForRate)}</strong>
-                  <small>{formatCount(historyTeamSummary.current ?? 0)} hiện hành · {formatCount(historyTeamSummary.historical ?? 0)} lịch sử</small>
+                  <small>{formatCount(passed)} đã xét đồng ý · {formatCount(historyTeamSummary.pending ?? 0)} chưa duyệt</small>
                 </button>
                 <button
                   type="button"
@@ -3458,7 +3458,7 @@ export function FIWorkspace({
                             {detailImages.length > 0 && <em>({detailImages.length})</em>}
                           </span>
                           {isHistorical && detailImages.length === 0 && (
-                            <small className="muted"><Info size={13} /> Dữ liệu nhập từ Excel — không có ảnh minh chứng.</small>
+                            <small className="muted"><Info size={13} /> Chưa có ảnh minh chứng.</small>
                           )}
                         </div>
                         {detailImages.length > 0 ? (

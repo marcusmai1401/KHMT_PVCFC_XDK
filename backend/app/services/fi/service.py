@@ -529,16 +529,6 @@ FI_EXPORT_DATA_HEADERS = [
     "Nội dung",
     "Nhận xét FI/BM01",
     "Ghi chú quyết định",
-    "Nguồn",
-    "File nguồn",
-    "Sheet/dòng nguồn",
-    "Ngày tạo",
-    "Ngày gửi duyệt",
-    "Ngày xét duyệt",
-    "Ngày phê duyệt",
-    "Ngày hoàn thành",
-    "Cập nhật cuối",
-    "ID",
 ]
 FI_EXPORT_DATA_HEADER_ROW = 4
 
@@ -843,14 +833,6 @@ def _fi_khmt_label(record: SKCTKTModel) -> str:
     return "Chưa vào KHMT"
 
 
-def _fi_source_reference(record: SKCTKTModel) -> str:
-    if record.bm01_source_sheet:
-        return f"{record.bm01_source_sheet}!{record.bm01_source_row or ''}"
-    if record.bm01_source_row:
-        return str(record.bm01_source_row)
-    return ""
-
-
 def _fi_review_note(record: SKCTKTModel) -> str:
     return record.fi_coordinator_comments or record.bm01_raw_conclusion or ""
 
@@ -1006,16 +988,6 @@ def _write_fi_export_rows(sheet, records: list[SKCTKTModel], generated_at: datet
             record.content_description,
             _fi_review_note(record),
             record.decision_note or "",
-            "Excel lịch sử" if record.is_historical_import else "Hệ thống",
-            record.bm01_source_file or "",
-            _fi_source_reference(record),
-            _excel_datetime(record.created_at),
-            _excel_datetime(record.submitted_at),
-            _excel_datetime(record.reviewed_at),
-            _excel_datetime(record.approved_at),
-            _excel_datetime(record.completed_at),
-            _excel_datetime(record.updated_at),
-            record.id,
         ]
         for col_index, value in enumerate(row_values, start=1):
             sheet.cell(row_index, col_index).value = value
@@ -1173,7 +1145,7 @@ def _style_fi_data_sheet(sheet) -> None:
             cell.alignment = Alignment(vertical="top", wrap_text=True)
             if isinstance(cell.value, datetime):
                 cell.number_format = "dd/mm/yyyy hh:mm"
-        for col_index in [1, 6, 7, 8, 9, 10, 11, 12, 17, 19]:
+        for col_index in [1, 6, 7, 8, 9, 10, 11, 12]:
             sheet.cell(row_index, col_index).alignment = Alignment(
                 horizontal="center",
                 vertical="center",
@@ -1183,7 +1155,6 @@ def _style_fi_data_sheet(sheet) -> None:
         _apply_fi_export_tone(sheet.cell(row_index, 9), str(sheet.cell(row_index, 9).value or ""))
         _apply_fi_export_tone(sheet.cell(row_index, 10), str(sheet.cell(row_index, 10).value or ""))
         _apply_fi_export_tone(sheet.cell(row_index, 12), str(sheet.cell(row_index, 12).value or ""))
-        _apply_source_tone(sheet.cell(row_index, 17), str(sheet.cell(row_index, 17).value or ""))
         sheet.row_dimensions[row_index].height = 42
 
     widths = [
@@ -1203,16 +1174,6 @@ def _style_fi_data_sheet(sheet) -> None:
         52,
         36,
         34,
-        16,
-        28,
-        20,
-        18,
-        18,
-        18,
-        18,
-        18,
-        18,
-        26,
     ]
     for col_index, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(col_index)].width = width
@@ -1230,12 +1191,6 @@ def _apply_fi_export_tone(cell, value: str) -> None:
     fill_color, font_color = tone
     cell.fill = PatternFill("solid", fgColor=fill_color)
     cell.font = Font(bold=True, color=font_color)
-
-
-def _apply_source_tone(cell, value: str) -> None:
-    if value == "Excel lịch sử":
-        cell.fill = PatternFill("solid", fgColor="F1F5F9")
-        cell.font = Font(bold=True, color="475569")
 
 
 def _fi_export_tone(value: str) -> tuple[str, str] | None:

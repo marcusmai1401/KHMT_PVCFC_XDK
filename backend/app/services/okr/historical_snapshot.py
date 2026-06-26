@@ -414,20 +414,34 @@ def _build_objective_report(boxes: list[dict[str, Any]]) -> dict[str, Any]:
         )
         groups: dict[str, dict[str, Any]] = {}
         notes: list[str] = []
+        # KR a *heading-less* box attaches to. In Feb/Mar/Apr the Excel splits a
+        # KR heading and its progress into separate boxes stacked vertically; we
+        # carry the last unambiguous heading so the body lands under its KR
+        # instead of in the loose-notes bucket. Reset when a box carries several
+        # different KR headings (e.g. Feb lists KR02/04/05/06/03 in one box), so
+        # we never guess which KR an orphan body belongs to.
+        carry_code: str | None = None
         for box in band_boxes:
             if any(skip in _plain_text(box["lines"][0]) for skip in _REPORT_SKIP_HEADINGS):
                 continue
             current: dict[str, Any] | None = None
+            heading_codes: list[str] = []
             for line in box["lines"]:
                 head = _KR_HEAD.match(line)
                 if head:
-                    # "Lũy kế" headers repeat a charted KR just to label numbers;
-                    # skip the heading line but keep writing into the open group.
-                    if "luy ke" in _plain_text(line):
-                        continue
                     code = f"{band}.KR{int(head.group(1))}"
-                    current = groups.get(code)
-                    if current is None:
+                    if code not in heading_codes:
+                        heading_codes.append(code)
+                    existing = groups.get(code)
+                    if existing is not None:
+                        # A repeated heading for a KR already seen (e.g. the
+                        # "BÁO CÁO LŨY KẾ" cumulative chart header next to the base
+                        # one): keep writing body lines into the original group but
+                        # drop the duplicate heading text. NOTE: only true duplicates
+                        # are dropped — a first-seen heading whose status contains
+                        # "Lũy kế" (e.g. KR10 "… - Lũy kế 186/201 HM") is preserved.
+                        current = existing
+                    else:
                         current = {"code": code, "title": line.strip(), "lines": []}
                         groups[code] = current
                     continue
@@ -436,10 +450,15 @@ def _build_objective_report(boxes: list[dict[str, Any]]) -> dict[str, Any]:
                     continue
                 if _is_report_noise(line):
                     continue
-                if current is not None:
-                    current["lines"].append(line.strip())
+                target = current
+                if target is None and not heading_codes and carry_code in groups:
+                    target = groups[carry_code]
+                if target is not None:
+                    target["lines"].append(line.strip())
                 else:
                     notes.append(line.strip())
+            if heading_codes:
+                carry_code = heading_codes[0] if len(heading_codes) == 1 else None
         krs = sorted(groups.values(), key=lambda group: _kr_number(group["code"]))
         if krs or notes:
             report[band] = {"krs": krs, "notes": notes}

@@ -1,0 +1,2613 @@
+{
+ "02": {
+  "O1": {
+   "raw_excel_lines": [
+    {
+     "col": 0,
+     "row": 27,
+     "tag": "",
+     "text": "VI PHẠM QUY ĐỊNH CỦA NHÀ MÁY/ CÔNG TY"
+    },
+    {
+     "col": 0,
+     "row": 29,
+     "tag": "",
+     "text": "KHÔNG có nhân sự vi phạm"
+    },
+    {
+     "col": 0,
+     "row": 33,
+     "tag": "",
+     "text": "O1: Không có Sự cố gây dừng máy hay mất sản lượng do lỗi chủ quan của con người - Mục tiêu: 0 vụ - Kết quả: 0 vụ"
+    },
+    {
+     "col": 1,
+     "row": 38,
+     "tag": "",
+     "text": "Hoàn thành"
+    },
+    {
+     "col": 1,
+     "row": 41,
+     "tag": "",
+     "text": "Không hoàn thành thành"
+    },
+    {
+     "col": 0,
+     "row": 44,
+     "tag": "",
+     "text": "KR01 Đảm bảo công tác BD có kế hoạch có đầy đủ hướng dẫn"
+    },
+    {
+     "col": 0,
+     "row": 49,
+     "tag": "",
+     "text": "KR02 Đảm bảo công tác sửa chữa đột xuất có nhận diện mối nguy và ĐGRR đối với hạng mục có mối nguy ảnh hưởng đến giảm tải, gián đoạn sản xuất"
+    },
+    {
+     "col": 0,
+     "row": 56,
+     "tag": "",
+     "text": "KR03 Đảm bảo công tác lắp đặt cải tiến cải tạo có nhận diện mối nguy và ĐGRR đối với hạng mục có mối nguy"
+    }
+   ],
+   "rendered_report": {
+    "krs": [
+     {
+      "chip": "KR1",
+      "displayed_title": "Đảm bảo công tác BD có kế hoạch có đầy đủ hướng dẫn",
+      "displayed_status_pill": null,
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR2",
+      "displayed_title": "Đảm bảo công tác sửa chữa đột xuất có nhận diện mối nguy và ĐGRR đối với hạng mục có mối nguy ảnh hưởng đến giảm tải, gián đoạn sản xuất",
+      "displayed_status_pill": null,
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR3",
+      "displayed_title": "Đảm bảo công tác lắp đặt cải tiến cải tạo có nhận diện mối nguy và ĐGRR đối với hạng mục có mối nguy",
+      "displayed_status_pill": null,
+      "displayed_lines": []
+     }
+    ],
+    "notes": [
+     "VI PHẠM QUY ĐỊNH CỦA NHÀ MÁY/ CÔNG TY",
+     "KHÔNG có nhân sự vi phạm",
+     "Hoàn thành",
+     "Không hoàn thành thành"
+    ]
+   }
+  },
+  "O2": {
+   "raw_excel_lines": [
+    {
+     "col": 0,
+     "row": 62,
+     "tag": "",
+     "text": "O2: Đảm bảo tính ổn định của thiết bị điều khiển - Mục tiêu: ≤ 0,0 giờ - Kết quả: 0,0 giờ (Theo b/c ĐTSC)"
+    },
+    {
+     "col": 0,
+     "row": 67,
+     "tag": "",
+     "text": "KR02 BÁO CÁO CÔNG TÁC BDĐK"
+    },
+    {
+     "col": 0,
+     "row": 67,
+     "tag": "",
+     "text": "* Đội TBCH"
+    },
+    {
+     "col": 0,
+     "row": 67,
+     "tag": "",
+     "text": "Các hạng mục còn lại sẽ hoàn thành đến cuối tháng"
+    },
+    {
+     "col": 0,
+     "row": 67,
+     "tag": "",
+     "text": "* Đội TBĐ"
+    },
+    {
+     "col": 0,
+     "row": 67,
+     "tag": "",
+     "text": "Các hạng mục còn lại sẽ hoàn thành đến cuối tháng"
+    },
+    {
+     "col": 12,
+     "row": 67,
+     "tag": "",
+     "text": "KR02 BÁO CÁO LŨY KẾ CÔNG TÁC BDĐK"
+    },
+    {
+     "col": 12,
+     "row": 67,
+     "tag": "",
+     "text": "2328"
+    },
+    {
+     "col": 12,
+     "row": 67,
+     "tag": "",
+     "text": "2572"
+    },
+    {
+     "col": 12,
+     "row": 67,
+     "tag": "",
+     "text": "90,5%"
+    },
+    {
+     "col": 12,
+     "row": 67,
+     "tag": "",
+     "text": "Thực hiện"
+    },
+    {
+     "col": 12,
+     "row": 67,
+     "tag": "",
+     "text": "Kế"
+    },
+    {
+     "col": 12,
+     "row": 67,
+     "tag": "",
+     "text": "hoạch"
+    },
+    {
+     "col": 0,
+     "row": 98,
+     "tag": "",
+     "text": "KR03 BÁO CÁO CÔNG TÁC SỬA CHỮA ĐỘT XUÁT"
+    },
+    {
+     "col": 0,
+     "row": 98,
+     "tag": "",
+     "text": "Tồn đọng 2 hạng mục chưa đạt vì lý do khách quan:"
+    },
+    {
+     "col": 0,
+     "row": 98,
+     "tag": "",
+     "text": "+ 1 hết tồn kho: thanh gạt Barrier cổng D2-Relay output"
+    },
+    {
+     "col": 0,
+     "row": 98,
+     "tag": "",
+     "text": "+ 1  06FT-1037 lắp giáo kiểm tra, sau tết thực hiện."
+    },
+    {
+     "col": 13,
+     "row": 98,
+     "tag": "",
+     "text": "KR03 BÁO CÁO LŨY KẾ CÔNG TÁC SỬA CHỮA ĐỘT XUÁT"
+    },
+    {
+     "col": 13,
+     "row": 98,
+     "tag": "",
+     "text": "409"
+    },
+    {
+     "col": 13,
+     "row": 98,
+     "tag": "",
+     "text": "417"
+    },
+    {
+     "col": 13,
+     "row": 98,
+     "tag": "",
+     "text": "98,08%"
+    },
+    {
+     "col": 13,
+     "row": 98,
+     "tag": "",
+     "text": "Thực hiện"
+    },
+    {
+     "col": 13,
+     "row": 98,
+     "tag": "",
+     "text": "Kế"
+    },
+    {
+     "col": 13,
+     "row": 98,
+     "tag": "",
+     "text": "hoạch"
+    },
+    {
+     "col": 0,
+     "row": 120,
+     "tag": "",
+     "text": "KR04 BÁO CÁO CÔNG TÁC BẢO DƯỠNG TỔNG THỂ TỔ TB ĐL & ĐK"
+    },
+    {
+     "col": 0,
+     "row": 120,
+     "tag": "",
+     "text": "Vượt tiến độ 4h"
+    },
+    {
+     "col": 0,
+     "row": 120,
+     "tag": "",
+     "text": "Hoàn thành đạt 99% khối lượng & chất lượng"
+    },
+    {
+     "col": 0,
+     "row": 120,
+     "tag": "",
+     "text": "TBD"
+    },
+    {
+     "col": 0,
+     "row": 120,
+     "tag": "",
+     "text": "MỤC TIÊU"
+    },
+    {
+     "col": 0,
+     "row": 120,
+     "tag": "",
+     "text": "KẾT QUẢ"
+    },
+    {
+     "col": 0,
+     "row": 134,
+     "tag": "",
+     "text": "KR05  TRIỂN KHAI HẠNG MỤC NÂNG CAO ĐỘ TIN CẬY"
+    },
+    {
+     "col": 0,
+     "row": 134,
+     "tag": "",
+     "text": "TBD"
+    },
+    {
+     "col": 13,
+     "row": 134,
+     "tag": "",
+     "text": "KR06 TRIỂN KHAI HÀNH ĐỘNG KHẮC PHỤC PHÒNG NGỪA"
+    },
+    {
+     "col": 13,
+     "row": 134,
+     "tag": "",
+     "text": "Không có kế hoạch trong tháng"
+    }
+   ],
+   "rendered_report": {
+    "krs": [
+     {
+      "chip": "KR2",
+      "displayed_title": "BÁO CÁO CÔNG TÁC BDĐK",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Đội TBCH",
+       "Các hạng mục còn lại sẽ hoàn thành đến cuối tháng",
+       "Đội TBĐ",
+       "Các hạng mục còn lại sẽ hoàn thành đến cuối tháng"
+      ]
+     },
+     {
+      "chip": "KR3",
+      "displayed_title": "BÁO CÁO CÔNG TÁC SỬA CHỮA ĐỘT XUÁT",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Tồn đọng 2 hạng mục chưa đạt vì lý do khách quan:",
+       "1 hết tồn kho: thanh gạt Barrier cổng D2-Relay output",
+       "1  06FT-1037 lắp giáo kiểm tra, sau tết thực hiện."
+      ]
+     },
+     {
+      "chip": "KR4",
+      "displayed_title": "BÁO CÁO CÔNG TÁC BẢO DƯỠNG TỔNG THỂ TỔ TB ĐL & ĐK",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Vượt tiến độ 4h",
+       "Hoàn thành đạt 99% khối lượng & chất lượng",
+       "TBD"
+      ]
+     },
+     {
+      "chip": "KR5",
+      "displayed_title": "TRIỂN KHAI HẠNG MỤC NÂNG CAO ĐỘ TIN CẬY",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "TBD"
+      ]
+     },
+     {
+      "chip": "KR6",
+      "displayed_title": "TRIỂN KHAI HÀNH ĐỘNG KHẮC PHỤC PHÒNG NGỪA",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Không có kế hoạch trong tháng"
+      ]
+     }
+    ],
+    "notes": []
+   }
+  },
+  "O3": {
+   "raw_excel_lines": [
+    {
+     "col": 0,
+     "row": 145,
+     "tag": "",
+     "text": "O3: Không có tai nạn và sự cố liên quan đến an toàn sức khỏe môi trường bị xử lý bởi cơ quan chức năng"
+    },
+    {
+     "col": 2,
+     "row": 150,
+     "tag": "",
+     "text": "KR2 CHƯƠNG TRÌNH STOP TRONG THÁNG"
+    }
+   ],
+   "rendered_report": {
+    "krs": [],
+    "notes": []
+   }
+  },
+  "O4": {
+   "raw_excel_lines": [
+    {
+     "col": 0,
+     "row": 175,
+     "tag": "",
+     "text": "O4: Triển khai các hạng mục cải hoán thuộc chuyên môn phụ trách"
+    },
+    {
+     "col": 0,
+     "row": 175,
+     "tag": "",
+     "text": "KR 02 Cải tiến lại hệ thống robot NPK line A,B,C để gắp được bao 25kg"
+    },
+    {
+     "col": 0,
+     "row": 175,
+     "tag": "",
+     "text": "KR 04 Mở rộng  hệ thống Fire and Gas theo kết quả Gas mapping report"
+    },
+    {
+     "col": 0,
+     "row": 175,
+     "tag": "",
+     "text": "KR 05 Cải tạo hệ thống tiếp địa cho thiết bị đo lường, van điều khiển và hệ thống điều khiển"
+    },
+    {
+     "col": 0,
+     "row": 175,
+     "tag": "",
+     "text": "KR 06 Cải tạo hệ thống máng cáp"
+    },
+    {
+     "col": 0,
+     "row": 175,
+     "tag": "",
+     "text": "KR 03 Triển khai dự án lắp đặt 2 hệ thống Depalletizing"
+    },
+    {
+     "col": 1,
+     "row": 183,
+     "tag": "",
+     "text": "- Cấu hình hệ thống để gấp bao 25kg đạt: 100 %"
+    },
+    {
+     "col": 1,
+     "row": 183,
+     "tag": "",
+     "text": "- Thực hiện lắp đặt hệ thống ép bao và chỉnh sửa lại gripper: 0%"
+    },
+    {
+     "col": 1,
+     "row": 183,
+     "tag": "",
+     "text": "Ghi chú: Chưa triển khai thực hiện các hạng mục cơ khí do Nhà thầu đang thực hiện làm vách ngăn"
+    },
+    {
+     "col": 1,
+     "row": 193,
+     "tag": "",
+     "text": "Phase I: Xin chủ trương:"
+    },
+    {
+     "col": 1,
+     "row": 193,
+     "tag": "",
+     "text": "- Phân tích báo giá 3 NCC Weldtec, TPT và Yaskawa, làm báo cáo tổng thể đề xuất (90%) (Đang review)"
+    },
+    {
+     "col": 1,
+     "row": 193,
+     "tag": "",
+     "text": "- Làm việc với NCC Thịnh Tiến Đạt về giải pháp Layer Depalletizing system (Tiếp tục thực hiện trong Tuần 09)"
+    },
+    {
+     "col": 1,
+     "row": 205,
+     "tag": "",
+     "text": "Phase I: Công tác chuẩn bị"
+    },
+    {
+     "col": 1,
+     "row": 205,
+     "tag": "",
+     "text": "- Tình hình các ĐHMS/DV: Đã ban hành 1/3 YCMS, Sẽ trình lại 2 YCMS/DV khi chủ trương được phê duyệt"
+    },
+    {
+     "col": 1,
+     "row": 205,
+     "tag": "",
+     "text": "- Phương án thực hiện: 36%"
+    },
+    {
+     "col": 1,
+     "row": 205,
+     "tag": "",
+     "text": "Ghi chú: Đang trình báo cáo chủ trương đến TGĐ (Bước 3/10 TK B.GĐNM) (Trình 3nd)"
+    },
+    {
+     "col": 1,
+     "row": 218,
+     "tag": "",
+     "text": "Đã hoàn thành họp thống nhất đối tượng thực hiện, làm rõ phạm vi công việc"
+    },
+    {
+     "col": 1,
+     "row": 218,
+     "tag": "",
+     "text": "Ghi chú: Không thay đổi trong tháng"
+    },
+    {
+     "col": 1,
+     "row": 228,
+     "tag": "",
+     "text": "Viết đầu bài kỹ thuật yêu cầu dịch dụ \"Cung cấp vật tư, dịch vụ thi công gia cố máng cáp Điện - Điều khiển toàn Nhà máy\" hoàn thành 60%"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "HẠNG MỤC PHÁT SINH ĐỘI TBHTĐK"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "1. Thực hiện di dời các đầu dò báo cháy > 0.3 m theo WR từ P.AT"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "2. Cập nhật các tài liệu loop diagram, Interlock Logic diagram, Alarm trip setpoint"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "3. Kiểm tra thông tin và mã hóa mã vật tư mới theo yêu cầu từ ĐMMS"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "4. Kiểm tra thiết bị hệ thống DCS, PLC, ESD, MPS, báo cháy và chữa cháy tự động toàn Nhà máy trước khi nghỉ tết nguyên đán"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "5. Tham gia hiện trạng báo cháy Khảo sát Kho 12.000 tấn nội bộ Nhà máy"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "6. Thực hiện ĐGRR và cập nhật địa chỉ cách ly theo y/c từ P. KTBD 06PT0219, 06LT1023, 31PT0139, 31PT0105B"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "7. Hỗ trợ Download chương trình cho PLC và HMI hệ thống AHU"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "8. Đọc tài liệu \"PVCFC_Technical Proposal for Upgrading Nitrogen package_v1\" do Siemens cung cấp"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "9. Thực hiện WO link các tín hiệu hiển thị lên Graphic DCS Ure"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "HẠNG MỤC PHÁT SINH ĐỘI TBĐL"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "1. Hoàn thành lắp đặt các pát sắt 304 cải tạo tuyến cáp dưới mương cùng nhà thầu các tuyến đường có cáp trong nhà máy;"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "2. Hoàn thành rà soát các thiết bị đo phân loại I, IIa và xử lý 4 hạng mục có rủi ro (Gia cố cable gland 31PT-0105B, 31PT-0139, xử lý cable gland 06PT-0210, xử lý màn hình 06LT-1023)"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "3. Tiếp nhận, kiểm tra các PI/TI từ tổ TCĐK, sửa chữa các thiết bị từ các đơn vị trong nhà máy;"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "4. Thực hiện thu hồi 4 CAM quan sát xuất hàng xá theo yêu cầu của TCNM;"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "5. Xử lý 08TT-0062 bị bung support giữ sensor và thay thế dây kéo dài mới;"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "6. Đã lắp đặt thêm 2 box chắn gió 04PXT-2032A/C, đang đợi đánh giá kết nối ống impluse line;"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "7. Hoàn thành vệ sinh, thay thế bu lông, lắp mới mái che các thiết bị đo mức kiểu radar X.NPK;"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "8. Thực hiện, rà soát hệ thống ACS, camera an ninh, công nghệ trước khi nghỉ Tết;"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "HẠNG MỤC PHÁT SINH ĐỘI TBCH"
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "1. Hoàn thành nhận vật tư, tháo xử lý 4 van cụm 20000 phát hiện rò seal (20KV-2019, 20KV-2020, 20KV-1005, 20KV-2003) phát sinh trong BDĐK."
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "2. Hoàn thành thực hiện 12 hạng mục BDCH khi dừng máy xưởng NPK."
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "3. Hoàn thành thay các bình đệm dung môi bị lão hóa và chỉnh lại tia mực các máy in 48Priner 01-08."
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "4. Hoàn thành thay box local OP2 bị bể và thay cylinder cửa thô/tinh bị rò khí, ăn mòn của Shiploader C/D."
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "5. Hoàn thành Xử lý lỗi máy in Linx8830 không in được do báo lỗi module chính."
+    },
+    {
+     "col": 0,
+     "row": 236,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "6. Hoàn thành triển khai thực hiện rà soát 336 hạng mục van diều khiển nhóm 1 trước khi nghỉ Tết Nguyên đán. 7. Đã phát hiện và xử lý kịp thời 9 hạng mục van điều khiển (bao gồm: 04FV-4201, 04FV-4202, 04HV-3024, 04LV-3012A, 29FV-2201, 06HV-1005, 06HV-1102, 07TV-2612, 04PCV-4308) có phát sinh lỗi có nguy cơ gây fail van làm ảnh hưởng đến hoạt động của nhà máy"
+    }
+   ],
+   "rendered_report": {
+    "krs": [
+     {
+      "chip": "KR2",
+      "displayed_title": "Cải tiến lại hệ thống robot NPK line A,B,C để gắp được bao 25kg",
+      "displayed_status_pill": null,
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR3",
+      "displayed_title": "Triển khai dự án lắp đặt 2 hệ thống Depalletizing",
+      "displayed_status_pill": null,
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR4",
+      "displayed_title": "Mở rộng  hệ thống Fire and Gas theo kết quả Gas mapping report",
+      "displayed_status_pill": null,
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR5",
+      "displayed_title": "Cải tạo hệ thống tiếp địa cho thiết bị đo lường, van điều khiển và hệ thống điều khiển",
+      "displayed_status_pill": null,
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR6",
+      "displayed_title": "Cải tạo hệ thống máng cáp",
+      "displayed_status_pill": null,
+      "displayed_lines": []
+     }
+    ],
+    "notes": [
+     "Cấu hình hệ thống để gấp bao 25kg đạt: 100 %",
+     "Thực hiện lắp đặt hệ thống ép bao và chỉnh sửa lại gripper: 0%",
+     "Ghi chú: Chưa triển khai thực hiện các hạng mục cơ khí do Nhà thầu đang thực hiện làm vách ngăn",
+     "Phase I: Xin chủ trương:",
+     "Phân tích báo giá 3 NCC Weldtec, TPT và Yaskawa, làm báo cáo tổng thể đề xuất (90%) (Đang review)",
+     "Làm việc với NCC Thịnh Tiến Đạt về giải pháp Layer Depalletizing system (Tiếp tục thực hiện trong Tuần 09)",
+     "Phase I: Công tác chuẩn bị",
+     "Tình hình các ĐHMS/DV: Đã ban hành 1/3 YCMS, Sẽ trình lại 2 YCMS/DV khi chủ trương được phê duyệt",
+     "Phương án thực hiện: 36%",
+     "Ghi chú: Đang trình báo cáo chủ trương đến TGĐ (Bước 3/10 TK B.GĐNM) (Trình 3nd)",
+     "Đã hoàn thành họp thống nhất đối tượng thực hiện, làm rõ phạm vi công việc",
+     "Ghi chú: Không thay đổi trong tháng",
+     "Viết đầu bài kỹ thuật yêu cầu dịch dụ \"Cung cấp vật tư, dịch vụ thi công gia cố máng cáp Điện - Điều khiển toàn Nhà máy\" hoàn thành 60%"
+    ]
+   }
+  },
+  "O5": {
+   "raw_excel_lines": [
+    {
+     "col": 22,
+     "row": 14,
+     "tag": "",
+     "text": "TIÊU CHÍ ĐÁNH GIÁ"
+    },
+    {
+     "col": 27,
+     "row": 33,
+     "tag": "",
+     "text": "O5: Triển khai các trụ cột TPM thuộc chuyên môn phụ trách"
+    },
+    {
+     "col": 27,
+     "row": 37,
+     "tag": "",
+     "text": "ET"
+    },
+    {
+     "col": 21,
+     "row": 39,
+     "tag": "",
+     "text": "TCĐK"
+    },
+    {
+     "col": 31,
+     "row": 39,
+     "tag": "",
+     "text": "MỤC TIÊU"
+    },
+    {
+     "col": 41,
+     "row": 39,
+     "tag": "",
+     "text": "KẾT QUẢ"
+    },
+    {
+     "col": 38,
+     "row": 41,
+     "tag": "",
+     "text": "Hoàn thành 1 KNL cho vị trí KTV BDSC TBHTĐK"
+    },
+    {
+     "col": 38,
+     "row": 41,
+     "tag": "",
+     "text": "Đang tiếp tục triển khai cho KTV BDSC TBĐ"
+    },
+    {
+     "col": 28,
+     "row": 42,
+     "tag": "",
+     "text": "KR 1. Xây dựng khung năng lực"
+    },
+    {
+     "col": 29,
+     "row": 44,
+     "tag": "",
+     "text": "8 vị trí chức danh"
+    },
+    {
+     "col": 41,
+     "row": 45,
+     "tag": "",
+     "text": "Trễ kế hoạch"
+    },
+    {
+     "col": 38,
+     "row": 48,
+     "tag": "",
+     "text": "Chưa thực hiện do chưa xây dựng xong KNL"
+    },
+    {
+     "col": 28,
+     "row": 49,
+     "tag": "",
+     "text": "KR 2. Đánh giá năng lực cho CBCNV"
+    },
+    {
+     "col": 29,
+     "row": 51,
+     "tag": "",
+     "text": "33 CBCNV"
+    },
+    {
+     "col": 41,
+     "row": 52,
+     "tag": "",
+     "text": "Trễ kế hoạch"
+    },
+    {
+     "col": 28,
+     "row": 55,
+     "tag": "",
+     "text": "KR 3. Triển khai đào tạo nội bộ theo kế hoạch được phê duyệt"
+    },
+    {
+     "col": 33,
+     "row": 57,
+     "tag": "",
+     "text": "Thực hiện"
+    },
+    {
+     "col": 36,
+     "row": 57,
+     "tag": "",
+     "text": "Kế"
+    },
+    {
+     "col": 36,
+     "row": 57,
+     "tag": "",
+     "text": "hoạch"
+    },
+    {
+     "col": 34,
+     "row": 58,
+     "tag": "",
+     "text": "71"
+    },
+    {
+     "col": 38,
+     "row": 58,
+     "tag": "",
+     "text": "1126"
+    },
+    {
+     "col": 40,
+     "row": 58,
+     "tag": "",
+     "text": "6,31%"
+    },
+    {
+     "col": 43,
+     "row": 63,
+     "tag": "",
+     "text": "Thanh toán lần I: 0h"
+    },
+    {
+     "col": 28,
+     "row": 82,
+     "tag": "",
+     "text": "KR 4. Tổ chức hội thảo chuyên môn - Không có KH trong tháng"
+    },
+    {
+     "col": 28,
+     "row": 87,
+     "tag": "",
+     "text": "KR 5. Triển khai đào tạo bên ngoài theo kế hoạch được phê duyệt - Không có KH trong tháng"
+    },
+    {
+     "col": 28,
+     "row": 91,
+     "tag": "",
+     "text": "KR 6. Triển khai chuẩn hóa giáo trình đào tạo theo kế hoạch được phê duyệt- Không có KH trong tháng"
+    },
+    {
+     "col": 27,
+     "row": 96,
+     "tag": "",
+     "text": "AM"
+    },
+    {
+     "col": 28,
+     "row": 96,
+     "tag": "",
+     "text": "KR 7. Thiết kế tagname dán lên thiết bị, Junction box thể hiện chức năng, thông số thiết bị range đo, môi chất đo,… thông tin chức năng được mã hóa bằng màu sắc ví dụ: màu đỏ thể interlock, cam điều khiển, xanh hiển thị,… - Hoàn thành họp thống nhất sơ đồ, đối tượng thực hiện"
+    },
+    {
+     "col": 27,
+     "row": 104,
+     "tag": "",
+     "text": "KR 8. Rà soát ống turbing van điều khiển và thiết bị đo - Không có KH trong tháng"
+    },
+    {
+     "col": 27,
+     "row": 110,
+     "tag": "",
+     "text": "KR 9. Tiêu chuẩn hóa lắp đặt thiết bị đo lường và van điều khiển - Không có KH trong tháng"
+    },
+    {
+     "col": 27,
+     "row": 115,
+     "tag": "",
+     "text": "KR 10. Xử lý các thẻ TPM tag - Lũy kế 176/196 HM ~ 89.7 %"
+    },
+    {
+     "col": 27,
+     "row": 115,
+     "tag": "",
+     "text": "Trong tháng 2 đã xử lý 2/2 HM"
+    },
+    {
+     "col": 27,
+     "row": 123,
+     "tag": "",
+     "text": "PM"
+    },
+    {
+     "col": 28,
+     "row": 124,
+     "tag": "",
+     "text": "KR 11. Rà soát cập nhật lại kế hoạch bảo dưỡng theo phương thức bảo dưỡng để tăng hiệu quả trong công tác bảo dưỡng (áp dụng đối với Phân xưởng/hệ thống do X. ĐK phụ trách công tác lập kế hoạch)"
+    },
+    {
+     "col": 39,
+     "row": 132,
+     "tag": "",
+     "text": "Không có KH trong tháng"
+    },
+    {
+     "col": 28,
+     "row": 133,
+     "tag": "",
+     "text": "- Đội TBCH: SP/NPK/GN/Quan trắc/Phân tích/TB đo khí cầm tay;"
+    },
+    {
+     "col": 28,
+     "row": 133,
+     "tag": "",
+     "text": "- Đội TB Đo: PI,TI/ ACC/ PA/Camera/Bộ đàm;"
+    },
+    {
+     "col": 28,
+     "row": 133,
+     "tag": "",
+     "text": "- Đội TBHTĐK: Hệ thống phòng cháy"
+    },
+    {
+     "col": 27,
+     "row": 145,
+     "tag": "",
+     "text": "KR12 SÁNG KIẾN ĐƯỢC CÔNG NHẬN CẤP TIỂU BAN ĐIỀU KHIỂN"
+    },
+    {
+     "col": 27,
+     "row": 145,
+     "tag": "",
+     "text": "MỤC TIÊU"
+    },
+    {
+     "col": 27,
+     "row": 145,
+     "tag": "",
+     "text": "8 SÁNG KIẾN"
+    },
+    {
+     "col": 27,
+     "row": 145,
+     "tag": "",
+     "text": "KẾT QUẢ"
+    },
+    {
+     "col": 27,
+     "row": 145,
+     "tag": "",
+     "text": "0 SÁNG KIẾN"
+    },
+    {
+     "col": 27,
+     "row": 145,
+     "tag": "",
+     "text": "FI"
+    }
+   ],
+   "rendered_report": {
+    "krs": [
+     {
+      "chip": "KR1",
+      "displayed_title": "Xây dựng khung năng lực",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "8 vị trí chức danh",
+       "Trễ kế hoạch",
+       "Chưa thực hiện do chưa xây dựng xong KNL"
+      ]
+     },
+     {
+      "chip": "KR2",
+      "displayed_title": "Đánh giá năng lực cho CBCNV",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "33 CBCNV",
+       "Trễ kế hoạch"
+      ]
+     },
+     {
+      "chip": "KR3",
+      "displayed_title": "Triển khai đào tạo nội bộ theo kế hoạch được phê duyệt",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Thanh toán lần I: 0h"
+      ]
+     },
+     {
+      "chip": "KR4",
+      "displayed_title": "Tổ chức hội thảo chuyên môn",
+      "displayed_status_pill": "Không có KH trong tháng",
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR5",
+      "displayed_title": "Triển khai đào tạo bên ngoài theo kế hoạch được phê duyệt",
+      "displayed_status_pill": "Không có KH trong tháng",
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR6",
+      "displayed_title": "Triển khai chuẩn hóa giáo trình đào tạo theo kế hoạch được phê duyệt",
+      "displayed_status_pill": "Không có KH trong tháng",
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR7",
+      "displayed_title": "Thiết kế tagname dán lên thiết bị, Junction box thể hiện chức năng, thông số thiết bị range đo, môi chất đo,… thông tin chức năng được mã hóa bằng màu sắc ví dụ: màu đỏ thể interlock, cam điều khiển, xanh hiển thị,…",
+      "displayed_status_pill": "Hoàn thành họp thống nhất sơ đồ, đối tượng thực hiện",
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR8",
+      "displayed_title": "Rà soát ống turbing van điều khiển và thiết bị đo",
+      "displayed_status_pill": "Không có KH trong tháng",
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR9",
+      "displayed_title": "Tiêu chuẩn hóa lắp đặt thiết bị đo lường và van điều khiển",
+      "displayed_status_pill": "Không có KH trong tháng",
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR10",
+      "displayed_title": "Xử lý các thẻ TPM tag",
+      "displayed_status_pill": "Lũy kế 176/196 HM ~ 89.7 %",
+      "displayed_lines": [
+       "Trong tháng 2 đã xử lý 2/2 HM"
+      ]
+     },
+     {
+      "chip": "KR11",
+      "displayed_title": "Rà soát cập nhật lại kế hoạch bảo dưỡng theo phương thức bảo dưỡng để tăng hiệu quả trong công tác bảo dưỡng (áp dụng đối với Phân xưởng/hệ thống do X. ĐK phụ trách công tác lập kế hoạch)",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Không có KH trong tháng",
+       "Đội TBCH: SP/NPK/GN/Quan trắc/Phân tích/TB đo khí cầm tay;",
+       "Đội TB Đo: PI,TI/ ACC/ PA/Camera/Bộ đàm;",
+       "Đội TBHTĐK: Hệ thống phòng cháy"
+      ]
+     },
+     {
+      "chip": "KR12",
+      "displayed_title": "SÁNG KIẾN ĐƯỢC CÔNG NHẬN CẤP TIỂU BAN ĐIỀU KHIỂN",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "8 SÁNG KIẾN",
+       "0 SÁNG KIẾN"
+      ]
+     }
+    ],
+    "notes": [
+     "Hoàn thành 1 KNL cho vị trí KTV BDSC TBHTĐK",
+     "Đang tiếp tục triển khai cho KTV BDSC TBĐ"
+    ]
+   }
+  },
+  "O6": {
+   "raw_excel_lines": [
+    {
+     "col": 15,
+     "row": 150,
+     "tag": "",
+     "text": "KR2 BÁO CÁO LŨY KẾ CHƯƠNG TRÌNH STOP"
+    },
+    {
+     "col": 27,
+     "row": 154,
+     "tag": "",
+     "text": "KR13 CÓ Ý TƯỞNG/CTKT"
+    },
+    {
+     "col": 27,
+     "row": 154,
+     "tag": "",
+     "text": "KR13 LŨY KẾ Ý TƯỞNG/CTKT"
+    },
+    {
+     "col": 27,
+     "row": 154,
+     "tag": "",
+     "text": "Đội thiết bị chấp hành: 3"
+    },
+    {
+     "col": 27,
+     "row": 154,
+     "tag": "",
+     "text": "Đội thiết bị hệ thống điều khiển: 1"
+    },
+    {
+     "col": 27,
+     "row": 154,
+     "tag": "",
+     "text": "Đội thiết bị đo lường: 1"
+    },
+    {
+     "col": 27,
+     "row": 154,
+     "tag": "",
+     "text": "Tổ trực ca điều khiển:  3"
+    },
+    {
+     "col": 14,
+     "row": 167,
+     "tag": "",
+     "text": "Thực hiện"
+    },
+    {
+     "col": 18,
+     "row": 167,
+     "tag": "",
+     "text": "Kế"
+    },
+    {
+     "col": 18,
+     "row": 167,
+     "tag": "",
+     "text": "hoạch"
+    },
+    {
+     "col": 16,
+     "row": 168,
+     "tag": "",
+     "text": "110"
+    },
+    {
+     "col": 19,
+     "row": 168,
+     "tag": "",
+     "text": "200"
+    },
+    {
+     "col": 22,
+     "row": 168,
+     "tag": "",
+     "text": "55,0%"
+    },
+    {
+     "col": 26,
+     "row": 169,
+     "tag": "",
+     "text": "O6: Văn hóa doanh nghiệp"
+    },
+    {
+     "col": 26,
+     "row": 173,
+     "tag": "",
+     "text": "KR1 RÈN LUYỆN CHẠY BỘ"
+    },
+    {
+     "col": 26,
+     "row": 173,
+     "tag": "",
+     "text": "KR 2 HỘI THAO QUÝ/CHƯƠNG TRÌNH CHUNG"
+    },
+    {
+     "col": 29,
+     "row": 180,
+     "tag": "",
+     "text": "Không có KH trong  tháng"
+    },
+    {
+     "col": 28,
+     "row": 197,
+     "tag": "",
+     "text": "Số lần tổ chức"
+    },
+    {
+     "col": 30,
+     "row": 197,
+     "tag": "",
+     "text": "1"
+    },
+    {
+     "col": 30,
+     "row": 197,
+     "tag": "",
+     "text": "Lũy kế"
+    },
+    {
+     "col": 30,
+     "row": 197,
+     "tag": "",
+     "text": "Mục tiêu"
+    },
+    {
+     "col": 30,
+     "row": 197,
+     "tag": "",
+     "text": "20"
+    },
+    {
+     "col": 37,
+     "row": 197,
+     "tag": "",
+     "text": "Số lần tổ chức"
+    },
+    {
+     "col": 39,
+     "row": 197,
+     "tag": "",
+     "text": "0"
+    },
+    {
+     "col": 39,
+     "row": 197,
+     "tag": "",
+     "text": "Lũy kế"
+    },
+    {
+     "col": 39,
+     "row": 197,
+     "tag": "",
+     "text": "Mục tiêu"
+    },
+    {
+     "col": 39,
+     "row": 197,
+     "tag": "",
+     "text": "4"
+    },
+    {
+     "col": 30,
+     "row": 202,
+     "tag": "",
+     "text": "KR 3 CHIA SẼ VĂN HÓA/QUI TRÌNH"
+    },
+    {
+     "col": 30,
+     "row": 212,
+     "tag": "",
+     "text": "Số lần tổ chức"
+    },
+    {
+     "col": 33,
+     "row": 212,
+     "tag": "",
+     "text": "0"
+    },
+    {
+     "col": 33,
+     "row": 212,
+     "tag": "",
+     "text": "Lũy kế"
+    },
+    {
+     "col": 33,
+     "row": 212,
+     "tag": "",
+     "text": "Mục tiêu"
+    },
+    {
+     "col": 33,
+     "row": 212,
+     "tag": "",
+     "text": "11"
+    }
+   ],
+   "rendered_report": {
+    "krs": [
+     {
+      "chip": "KR1",
+      "displayed_title": "RÈN LUYỆN CHẠY BỘ",
+      "displayed_status_pill": null,
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR2",
+      "displayed_title": "HỘI THAO QUÝ/CHƯƠNG TRÌNH CHUNG",
+      "displayed_status_pill": null,
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR3",
+      "displayed_title": "CHIA SẼ VĂN HÓA/QUI TRÌNH",
+      "displayed_status_pill": null,
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR13",
+      "displayed_title": "CÓ Ý TƯỞNG/CTKT",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Đội thiết bị chấp hành: 3",
+       "Đội thiết bị hệ thống điều khiển: 1",
+       "Đội thiết bị đo lường: 1",
+       "Tổ trực ca điều khiển:  3"
+      ]
+     }
+    ],
+    "notes": [
+     "Không có KH trong  tháng"
+    ]
+   }
+  }
+ },
+ "03": {
+  "O1": {
+   "raw_excel_lines": [
+    {
+     "col": 0,
+     "row": 27,
+     "tag": "",
+     "text": "VI PHẠM QUY ĐỊNH CỦA NHÀ MÁY/ CÔNG TY"
+    },
+    {
+     "col": 0,
+     "row": 29,
+     "tag": "",
+     "text": "Một nhân sự Đội TBCH vi phạm quy trình cấp phép làm việc"
+    },
+    {
+     "col": 0,
+     "row": 33,
+     "tag": "",
+     "text": "O1: Không có Sự cố gây dừng máy hay mất sản lượng do lỗi chủ quan của con người - Mục tiêu: 0 vụ - Kết quả: 0 vụ"
+    },
+    {
+     "col": 1,
+     "row": 38,
+     "tag": "",
+     "text": "Hoàn thành"
+    },
+    {
+     "col": 1,
+     "row": 41,
+     "tag": "",
+     "text": "Không hoàn thành thành"
+    },
+    {
+     "col": 0,
+     "row": 44,
+     "tag": "",
+     "text": "KR01 Đảm bảo công tác BD có kế hoạch có đầy đủ hướng dẫn"
+    },
+    {
+     "col": 0,
+     "row": 49,
+     "tag": "",
+     "text": "KR02 Đảm bảo công tác sửa chữa đột xuất có nhận diện mối nguy và ĐGRR đối với hạng mục có mối nguy ảnh hưởng đến giảm tải, gián đoạn sản xuất"
+    },
+    {
+     "col": 0,
+     "row": 56,
+     "tag": "",
+     "text": "KR03 Đảm bảo công tác lắp đặt cải tiến cải tạo có nhận diện mối nguy và ĐGRR đối với hạng mục có mối nguy"
+    }
+   ],
+   "rendered_report": {
+    "krs": [
+     {
+      "chip": "KR1",
+      "displayed_title": "Đảm bảo công tác BD có kế hoạch có đầy đủ hướng dẫn",
+      "displayed_status_pill": null,
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR2",
+      "displayed_title": "Đảm bảo công tác sửa chữa đột xuất có nhận diện mối nguy và ĐGRR đối với hạng mục có mối nguy ảnh hưởng đến giảm tải, gián đoạn sản xuất",
+      "displayed_status_pill": null,
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR3",
+      "displayed_title": "Đảm bảo công tác lắp đặt cải tiến cải tạo có nhận diện mối nguy và ĐGRR đối với hạng mục có mối nguy",
+      "displayed_status_pill": null,
+      "displayed_lines": []
+     }
+    ],
+    "notes": [
+     "VI PHẠM QUY ĐỊNH CỦA NHÀ MÁY/ CÔNG TY",
+     "Một nhân sự Đội TBCH vi phạm quy trình cấp phép làm việc",
+     "Hoàn thành",
+     "Không hoàn thành thành"
+    ]
+   }
+  },
+  "O2": {
+   "raw_excel_lines": [
+    {
+     "col": 0,
+     "row": 62,
+     "tag": "",
+     "text": "O2: Đảm bảo tính ổn định của thiết bị điều khiển - Mục tiêu: ≤ 0,0 giờ - Kết quả: 0,0 giờ (Theo b/c ĐTSC)"
+    },
+    {
+     "col": 0,
+     "row": 67,
+     "tag": "",
+     "text": "KR02 BÁO CÁO CÔNG TÁC BDĐK"
+    },
+    {
+     "col": 0,
+     "row": 67,
+     "tag": "",
+     "text": "* Đội TBCH"
+    },
+    {
+     "col": 0,
+     "row": 67,
+     "tag": "",
+     "text": "Các hạng mục còn lại sẽ hoàn thành đến cuối tháng"
+    },
+    {
+     "col": 0,
+     "row": 67,
+     "tag": "",
+     "text": "* Đội TBĐ"
+    },
+    {
+     "col": 0,
+     "row": 67,
+     "tag": "",
+     "text": "Các hạng mục còn lại sẽ hoàn thành đến cuối tháng"
+    },
+    {
+     "col": 12,
+     "row": 67,
+     "tag": "",
+     "text": "KR02 BÁO CÁO LŨY KẾ CÔNG TÁC BDĐK"
+    },
+    {
+     "col": 12,
+     "row": 67,
+     "tag": "",
+     "text": "3604"
+    },
+    {
+     "col": 12,
+     "row": 67,
+     "tag": "",
+     "text": "3966"
+    },
+    {
+     "col": 12,
+     "row": 67,
+     "tag": "",
+     "text": "90,9%"
+    },
+    {
+     "col": 12,
+     "row": 67,
+     "tag": "",
+     "text": "Thực hiện"
+    },
+    {
+     "col": 12,
+     "row": 67,
+     "tag": "",
+     "text": "Kế"
+    },
+    {
+     "col": 12,
+     "row": 67,
+     "tag": "",
+     "text": "hoạch"
+    },
+    {
+     "col": 0,
+     "row": 98,
+     "tag": "",
+     "text": "KR03 BÁO CÁO CÔNG TÁC SỬA CHỮA ĐỘT XUÁT"
+    },
+    {
+     "col": 0,
+     "row": 98,
+     "tag": "",
+     "text": "Tồn đọng 4 hạng mục chưa đạt vì lý do khách quan:"
+    },
+    {
+     "col": 0,
+     "row": 98,
+     "tag": "",
+     "text": "+ 03 hết tồn kho:21TT1001, 04TT-5038, 07TT-2663"
+    },
+    {
+     "col": 0,
+     "row": 98,
+     "tag": "",
+     "text": "+ 01 Chưa bàn giao V07602B: support encoder"
+    },
+    {
+     "col": 13,
+     "row": 98,
+     "tag": "",
+     "text": "KR03 BÁO CÁO LŨY KẾ CÔNG TÁC SỬA CHỮA ĐỘT XUÁT"
+    },
+    {
+     "col": 13,
+     "row": 98,
+     "tag": "",
+     "text": "759"
+    },
+    {
+     "col": 13,
+     "row": 98,
+     "tag": "",
+     "text": "771"
+    },
+    {
+     "col": 13,
+     "row": 98,
+     "tag": "",
+     "text": "98,44%"
+    },
+    {
+     "col": 13,
+     "row": 98,
+     "tag": "",
+     "text": "Thực hiện"
+    },
+    {
+     "col": 13,
+     "row": 98,
+     "tag": "",
+     "text": "Kế"
+    },
+    {
+     "col": 13,
+     "row": 98,
+     "tag": "",
+     "text": "hoạch"
+    },
+    {
+     "col": 0,
+     "row": 120,
+     "tag": "",
+     "text": "KR04 BÁO CÁO CÔNG TÁC BẢO DƯỠNG TỔNG THỂ TỔ TB ĐL & ĐK"
+    },
+    {
+     "col": 0,
+     "row": 120,
+     "tag": "",
+     "text": "Vượt tiến độ 4h"
+    },
+    {
+     "col": 0,
+     "row": 120,
+     "tag": "",
+     "text": "Hoàn thành đạt 99% khối lượng & chất lượng"
+    },
+    {
+     "col": 0,
+     "row": 120,
+     "tag": "",
+     "text": "TBD"
+    },
+    {
+     "col": 0,
+     "row": 120,
+     "tag": "",
+     "text": "MỤC TIÊU"
+    },
+    {
+     "col": 0,
+     "row": 120,
+     "tag": "",
+     "text": "KẾT QUẢ"
+    },
+    {
+     "col": 0,
+     "row": 134,
+     "tag": "",
+     "text": "KR05  TRIỂN KHAI HẠNG MỤC NÂNG CAO ĐỘ TIN CẬY"
+    },
+    {
+     "col": 0,
+     "row": 134,
+     "tag": "",
+     "text": "TBD"
+    },
+    {
+     "col": 13,
+     "row": 134,
+     "tag": "",
+     "text": "KR06 TRIỂN KHAI HÀNH ĐỘNG KHẮC PHỤC PHÒNG NGỪA"
+    },
+    {
+     "col": 13,
+     "row": 134,
+     "tag": "",
+     "text": "Không có kế hoạch trong tháng"
+    }
+   ],
+   "rendered_report": {
+    "krs": [
+     {
+      "chip": "KR2",
+      "displayed_title": "BÁO CÁO CÔNG TÁC BDĐK",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Đội TBCH",
+       "Các hạng mục còn lại sẽ hoàn thành đến cuối tháng",
+       "Đội TBĐ",
+       "Các hạng mục còn lại sẽ hoàn thành đến cuối tháng"
+      ]
+     },
+     {
+      "chip": "KR3",
+      "displayed_title": "BÁO CÁO CÔNG TÁC SỬA CHỮA ĐỘT XUÁT",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Tồn đọng 4 hạng mục chưa đạt vì lý do khách quan:",
+       "03 hết tồn kho:21TT1001, 04TT-5038, 07TT-2663",
+       "01 Chưa bàn giao V07602B: support encoder"
+      ]
+     },
+     {
+      "chip": "KR4",
+      "displayed_title": "BÁO CÁO CÔNG TÁC BẢO DƯỠNG TỔNG THỂ TỔ TB ĐL & ĐK",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Vượt tiến độ 4h",
+       "Hoàn thành đạt 99% khối lượng & chất lượng",
+       "TBD"
+      ]
+     },
+     {
+      "chip": "KR5",
+      "displayed_title": "TRIỂN KHAI HẠNG MỤC NÂNG CAO ĐỘ TIN CẬY",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "TBD"
+      ]
+     },
+     {
+      "chip": "KR6",
+      "displayed_title": "TRIỂN KHAI HÀNH ĐỘNG KHẮC PHỤC PHÒNG NGỪA",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Không có kế hoạch trong tháng"
+      ]
+     }
+    ],
+    "notes": []
+   }
+  },
+  "O3": {
+   "raw_excel_lines": [
+    {
+     "col": 0,
+     "row": 145,
+     "tag": "",
+     "text": "O3: Không có tai nạn và sự cố liên quan đến an toàn sức khỏe môi trường bị xử lý bởi cơ quan chức năng"
+    },
+    {
+     "col": 2,
+     "row": 150,
+     "tag": "",
+     "text": "KR2 CHƯƠNG TRÌNH STOP TRONG THÁNG"
+    }
+   ],
+   "rendered_report": {
+    "krs": [],
+    "notes": []
+   }
+  },
+  "O4": {
+   "raw_excel_lines": [
+    {
+     "col": 0,
+     "row": 175,
+     "tag": "",
+     "text": "O4: Triển khai các hạng mục cải hoán thuộc chuyên môn phụ trách"
+    },
+    {
+     "col": 1,
+     "row": 180,
+     "tag": "",
+     "text": "KR 02 Cải tiến lại hệ thống robot NPK line A,B,C để gắp được bao 25kg"
+    },
+    {
+     "col": 1,
+     "row": 183,
+     "tag": "",
+     "text": "- Hoàn thành lập trình tọa độ và cấu hình lớp bao cho loại bao 25kg"
+    },
+    {
+     "col": 1,
+     "row": 183,
+     "tag": "",
+     "text": "- Đang hiện lắp đặt bộ dẫn hướng bao dự kiến hoàn thành 01/04/2026"
+    },
+    {
+     "col": 1,
+     "row": 190,
+     "tag": "",
+     "text": "KR 03 Triển khai dự án lắp đặt 2 hệ thống Depalletizing"
+    },
+    {
+     "col": 1,
+     "row": 193,
+     "tag": "",
+     "text": "- Hoàn thành báo cáo với B.GĐNM"
+    },
+    {
+     "col": 1,
+     "row": 193,
+     "tag": "",
+     "text": "- Sau khi nghe phân tích và với các tham mưu từ đơn vị chuyên môn, B.GĐNM thống nhất PA triển  khai lắp đặt cho 1 line với 2 robot/line công suất 1000-1200bao/giờ"
+    },
+    {
+     "col": 1,
+     "row": 193,
+     "tag": "",
+     "text": "- Đã báo cáo trực tiếp đến TGĐ giải pháp thực hiện => P.KTBD trình báo cáo chủ trương. Xưởng Điều khiển tổ chức triển khai thực hiện khi chủ trương được phê duyệt"
+    },
+    {
+     "col": 1,
+     "row": 205,
+     "tag": "",
+     "text": "KR 04 Mở rộng  hệ thống Fire and Gas theo kết quả Gas mapping report"
+    },
+    {
+     "col": 1,
+     "row": 208,
+     "tag": "",
+     "text": "- Tình hình các ĐHMS/DV: Đã ban hành 1/3 YCMS, Sẽ trình lại 2 YCMS/DV khi chủ trương được phê duyệt"
+    },
+    {
+     "col": 1,
+     "row": 208,
+     "tag": "",
+     "text": "- Phương án thực hiện: 36% (tạm dừng do ưu tiên các báo cáo chủ trương)"
+    },
+    {
+     "col": 1,
+     "row": 208,
+     "tag": "",
+     "text": "Ghi chú: Đang trình báo cáo chủ trương đến TGĐ (Bước 10/10 TGĐ) (Trình 3rd) => TGĐ trả lại và chỉ đạo báo cáo trực tiếp => Đã báo cáo trực tiếp  TGĐ =>  Báo cáo chủ trương đã được duyệt => Đang trình lại các Đơn hàng YCMS/DV"
+    },
+    {
+     "col": 1,
+     "row": 217,
+     "tag": "",
+     "text": "KR 05 Cải tạo hệ thống tiếp địa cho thiết bị đo lường, van điều khiển và hệ thống điều khiển"
+    },
+    {
+     "col": 1,
+     "row": 220,
+     "tag": "",
+     "text": "- Danh mục Van, JB cần cải tạo: 100%"
+    },
+    {
+     "col": 1,
+     "row": 220,
+     "tag": "",
+     "text": "- Danh mục TBĐ cần cải tạo: 80%"
+    },
+    {
+     "col": 1,
+     "row": 220,
+     "tag": "",
+     "text": "- Bốc tách khối lượng vật tư: 50%"
+    },
+    {
+     "col": 1,
+     "row": 229,
+     "tag": "",
+     "text": "KR 06 Cải tạo hệ thống máng cáp"
+    },
+    {
+     "col": 1,
+     "row": 232,
+     "tag": "",
+     "text": "Viết đầu bài kỹ thuật yêu cầu dịch dụ \"Cung cấp vật tư, dịch vụ thi công gia cố máng cáp Điện - Điều khiển toàn Nhà máy\" hoàn thành 90%"
+    },
+    {
+     "col": 1,
+     "row": 232,
+     "tag": "",
+     "text": "(Đang trong giai đoạn góp ý đầu bài)"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "HẠNG MỤC PHÁT SINH ĐỘI TBHTĐK"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "1. Thực hiện di dời các đầu dò báo cháy > 0.3 m theo WR từ P.AT: hoàn thành di dời đầu dò không cần giàn giáo: 35/35 đầu dò, di dời có giàn giáo: 13/82 đầu dò, lắp mới có giàn giáo: 10/21 đầu dò"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "2. Cập nhật các tài liệu loop diagram, Interlock Logic diagram, Alarm trip setpoint"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "3. Kiểm tra thông tin và mã hóa mã vật tư mới theo yêu cầu từ ĐMMS"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "4. Kiểm tra, góp ý bản vẽ thiết bị hệ thống báo cháy lắp mới cụm khí công nghiệp, dự án mái che khu xuất hàng xá, căn tin mới để Ban QLDA và nhà thầu chỉnh sửa trước khi thẩm duyệt"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "5. Thiết kế bảng MIMIC để kết nối các thiết bị hệ thống báo cháy lắp mới"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "6. Cập nhật I/O wiring hệ thống PLC Nito phục vụ nâng cấp"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "7. Thực hiện khảo sát tín hiệu trên hệ thống cân định lượng, kiểm tra tín hiệu truyền thông Modbus về DCS, lập trình tính giá trị trung bình Kg/m trên DCS."
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "8. Trịnh Văn Kiều trực ca Ngày 11/03/2026 thay Nguyễn Tấn Đời, 13/03/2026 thay D. Q. Thạnh."
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "9. Kiểm tra giá trị kích hoạt logic Auto Start các bơm dầu của quạt và bơm các phân xưởng và tham gia họp đánh giá thay đổi setpoint."
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "HẠNG MỤC PHÁT SINH ĐỘI TBĐL"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "1. Hoàn thành lắp đặt đánh giá mẫu máng cáp mương thoát nước tại cổng A2;"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "2. Hoàn thành thay thế các ốc kết nối flange thiết bị màng bị ăn mòn 21LT-1010A/B/E/G/H;"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "3. Hoàn thành thay thế thiết bị mới 21LT-1010C/D/F;"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "4. Tiếp nhận, kiểm tra các PI/TI từ tổ TCĐK, sửa chữa các thiết bị từ các đơn vị trong nhà máy;"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "5. Hoàn thành lắp đặt lại camera trạm cân đã tháo trước đó cho nhà thầu làm đường;"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "6. Thay thế thiết bị sensor nhiệt độ và dây kéo dài 21TT-1010H bị chập chờn;"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "7. Thay thế sensor quạt D 21TT-1010D bị hỏng 1 sensor dự phòng và thay ngăn ngừa dây kéo dài;"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "8. Thay thế ngăn ngừa dây kéo dài 04TE-3131, 04TE-3132, 04TE-3133, 04TE-3134 có dấu hiệu bị lão hóa;"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "9. Phối hợp ca xử lý PI van Deluge khôi phục kịp thời do bị hỏng ren;"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "10. Hoàn thành kiểm tra, xử lý các cable gland 04LT-5017, 04PT-5012, 06PT-0262, 06PT-0264, 06FT-0260, 06PXT-0257B, 04FXT-3021C;"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "11. Xử lý các hạng mục TPM tag xưởng Amo;"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "HẠNG MỤC PHÁT SINH ĐỘI TBCH"
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "1. Hoàn thành nhận vật tư, tháo xử lý 4 van cụm 20000 phát hiện rò seal (20KV-2082 , 20KV-2093A, 20KV-2095A) phát sinh trong BDĐK."
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "2. Hoàn thành thực hiện 4 hạng mục BDCH khi dừng máy xưởng NPK (L08202B, L08202C, H08025, H08012, H08014)."
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "3. Hoàn thành thực hiện kiểm tra chức năng đánh giá tình trạng rò passing van 29HV-2004 theo yêu cầu VH, gia công support và bổ sung mái che cho van."
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "4. Hoàn thành thực hiện gia công support và lắp mái che mới cho các van khắc phục tồn động phát hiện sau khi rà soát van ĐK nhóm 1 (04PV-2076, 04FV-3021A. 04PV-3015B, 04UV-3039, 06FV-1005A, 04TV-3029, 04UV-2036A, 41PV-1005C, 41PCV-1013, 41PV-1011, 04UV-2128, 04FV-2028)."
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "5. Hoàn thành Phối hợp nhà thầu VMS kiểm tra, xử lý các máy in nghẹt, máy báo module đệm đầy."
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "6. Hoàn thành thay box local OP2 bị bể và thay cylinder cửa thô/tinh bị rò khí, ăn mòn của Shiploader C/D."
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "7. Hoàn thành Phối hợp nhà thầu xử lý lỗi máy in Linx8830 không in được do báo lỗi module chính."
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "8. Hoàn thành Phối họp với Ban KT và Phòng an toàn đi đánh giá lại các chỉ tiêu lắp bổ sung thêm trong trạm quan trắc AMO và NPK để thực hiện công tác tiếp nhận dự án."
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "9. Hoàn thành Phối hợp P.KTBD tìm hiểu nguyên nhân máy nén hoạt động không đủ tải. Thực hiện tháo solenoid, kết nối ống khí test stop và slide valve và thay thế bộ bái vị trí slide valve để đánh giá."
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "10. Hoàn thành soạn thảo 2 HDBD thiết bị đo O2 và TDS cụm CO2 thực phẩm theo yêu cầu của P. CN để hoàn thiện hồ sơ phục vụ đoàn đánh giá tiêu chuẩn ISO / FSSC 22000."
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "11. Hoàn thành giám sát NCC thực hiện dịch vụ lắp thêm 3 bộ đếm bao tại các line đóng bao xưởng NPK."
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "12. Hoàn thành YCKT dịch vụ \"Thi công chuyển đổi tín hiệu van từ  FF sang 4-20mA và lắp đặt chuyển đổi Single solenoid sang Redundancy solenoid\"."
+    },
+    {
+     "col": 0,
+     "row": 241,
+     "tag": "TEAM-ADD(excluded)",
+     "text": "13. Đang thực hiện cải tạo cân đóng bao Line C sang dùng cơ cấu Servo motor tiến độ đạt 70% dự kiến hoàn thành vào cuối tháng 3."
+    }
+   ],
+   "rendered_report": {
+    "krs": [
+     {
+      "chip": "KR2",
+      "displayed_title": "Cải tiến lại hệ thống robot NPK line A,B,C để gắp được bao 25kg",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Hoàn thành lập trình tọa độ và cấu hình lớp bao cho loại bao 25kg",
+       "Đang hiện lắp đặt bộ dẫn hướng bao dự kiến hoàn thành 01/04/2026"
+      ]
+     },
+     {
+      "chip": "KR3",
+      "displayed_title": "Triển khai dự án lắp đặt 2 hệ thống Depalletizing",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Hoàn thành báo cáo với B.GĐNM",
+       "Sau khi nghe phân tích và với các tham mưu từ đơn vị chuyên môn, B.GĐNM thống nhất PA triển  khai lắp đặt cho 1 line với 2 robot/line công suất 1000-1200bao/giờ",
+       "Đã báo cáo trực tiếp đến TGĐ giải pháp thực hiện => P.KTBD trình báo cáo chủ trương. Xưởng Điều khiển tổ chức triển khai thực hiện khi chủ trương được phê duyệt"
+      ]
+     },
+     {
+      "chip": "KR4",
+      "displayed_title": "Mở rộng  hệ thống Fire and Gas theo kết quả Gas mapping report",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Tình hình các ĐHMS/DV: Đã ban hành 1/3 YCMS, Sẽ trình lại 2 YCMS/DV khi chủ trương được phê duyệt",
+       "Phương án thực hiện: 36% (tạm dừng do ưu tiên các báo cáo chủ trương)",
+       "Ghi chú: Đang trình báo cáo chủ trương đến TGĐ (Bước 10/10 TGĐ) (Trình 3rd) => TGĐ trả lại và chỉ đạo báo cáo trực tiếp => Đã báo cáo trực tiếp  TGĐ =>  Báo cáo chủ trương đã được duyệt => Đang trình lại các Đơn hàng YCMS/DV"
+      ]
+     },
+     {
+      "chip": "KR5",
+      "displayed_title": "Cải tạo hệ thống tiếp địa cho thiết bị đo lường, van điều khiển và hệ thống điều khiển",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Danh mục Van, JB cần cải tạo: 100%",
+       "Danh mục TBĐ cần cải tạo: 80%",
+       "Bốc tách khối lượng vật tư: 50%"
+      ]
+     },
+     {
+      "chip": "KR6",
+      "displayed_title": "Cải tạo hệ thống máng cáp",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Viết đầu bài kỹ thuật yêu cầu dịch dụ \"Cung cấp vật tư, dịch vụ thi công gia cố máng cáp Điện - Điều khiển toàn Nhà máy\" hoàn thành 90%",
+       "(Đang trong giai đoạn góp ý đầu bài)"
+      ]
+     }
+    ],
+    "notes": []
+   }
+  },
+  "O5": {
+   "raw_excel_lines": [
+    {
+     "col": 22,
+     "row": 14,
+     "tag": "",
+     "text": "TIÊU CHÍ ĐÁNH GIÁ"
+    },
+    {
+     "col": 27,
+     "row": 33,
+     "tag": "",
+     "text": "O5: Triển khai các trụ cột TPM thuộc chuyên môn phụ trách"
+    },
+    {
+     "col": 27,
+     "row": 37,
+     "tag": "",
+     "text": "ET"
+    },
+    {
+     "col": 21,
+     "row": 39,
+     "tag": "",
+     "text": "TCĐK"
+    },
+    {
+     "col": 31,
+     "row": 39,
+     "tag": "",
+     "text": "MỤC TIÊU"
+    },
+    {
+     "col": 27,
+     "row": 42,
+     "tag": "",
+     "text": "KR 1. Xây dựng khung năng lực"
+    },
+    {
+     "col": 29,
+     "row": 44,
+     "tag": "",
+     "text": "8 vị trí chức danh"
+    },
+    {
+     "col": 35,
+     "row": 58,
+     "tag": "",
+     "text": "25%: Xây dựng"
+    },
+    {
+     "col": 35,
+     "row": 58,
+     "tag": "",
+     "text": "50%: Review góp ý"
+    },
+    {
+     "col": 35,
+     "row": 58,
+     "tag": "",
+     "text": "75%: Phản biện"
+    },
+    {
+     "col": 35,
+     "row": 58,
+     "tag": "",
+     "text": "100%: Chuẩn hóa KNL và bậc"
+    },
+    {
+     "col": 27,
+     "row": 64,
+     "tag": "",
+     "text": "KR 2. Đánh giá năng lực cho CBCNV"
+    },
+    {
+     "col": 35,
+     "row": 64,
+     "tag": "",
+     "text": "Chưa thực hiện do chưa xây dựng xong KNL"
+    },
+    {
+     "col": 29,
+     "row": 67,
+     "tag": "",
+     "text": "33 CBCNV (KTV)"
+    },
+    {
+     "col": 38,
+     "row": 67,
+     "tag": "",
+     "text": "Trễ kế hoạch"
+    },
+    {
+     "col": 27,
+     "row": 69,
+     "tag": "",
+     "text": "KR 3. Triển khai đào tạo nội bộ theo kế hoạch được phê duyệt"
+    },
+    {
+     "col": 31,
+     "row": 72,
+     "tag": "",
+     "text": "15,72%"
+    },
+    {
+     "col": 31,
+     "row": 72,
+     "tag": "",
+     "text": "177"
+    },
+    {
+     "col": 31,
+     "row": 72,
+     "tag": "",
+     "text": "1126"
+    },
+    {
+     "col": 31,
+     "row": 72,
+     "tag": "",
+     "text": "Thực hiện"
+    },
+    {
+     "col": 31,
+     "row": 72,
+     "tag": "",
+     "text": "Kế"
+    },
+    {
+     "col": 31,
+     "row": 72,
+     "tag": "",
+     "text": "hoạch"
+    },
+    {
+     "col": 43,
+     "row": 74,
+     "tag": "",
+     "text": "Thanh toán lần I: 0h"
+    },
+    {
+     "col": 27,
+     "row": 96,
+     "tag": "",
+     "text": "AM"
+    },
+    {
+     "col": 28,
+     "row": 96,
+     "tag": "",
+     "text": "KR 7. Thiết kế tagname dán lên thiết bị, Junction box thể hiện chức năng, thông số thiết bị range đo, môi chất đo,… thông tin chức năng được mã hóa bằng màu sắc ví dụ: màu đỏ thể interlock, cam điều khiển, xanh hiển thị,…"
+    },
+    {
+     "col": 28,
+     "row": 96,
+     "tag": "",
+     "text": "Hoàn thành họp thống nhất sơ đồ, đối tượng thực hiện"
+    },
+    {
+     "col": 28,
+     "row": 96,
+     "tag": "",
+     "text": "Ban hành thông báo kế hoạch triển khai AM nội bộ và họp với trưởng trụ cột"
+    },
+    {
+     "col": 27,
+     "row": 104,
+     "tag": "",
+     "text": "KR 8. Rà soát ống turbing van điều khiển và thiết bị đo - Không có KH trong tháng"
+    },
+    {
+     "col": 27,
+     "row": 110,
+     "tag": "",
+     "text": "KR 9. Tiêu chuẩn hóa lắp đặt thiết bị đo lường và van điều khiển - Không có KH trong tháng"
+    },
+    {
+     "col": 27,
+     "row": 115,
+     "tag": "",
+     "text": "KR 10. Xử lý các thẻ TPM tag - Lũy kế 186/201 HM ~ 92.5 %"
+    },
+    {
+     "col": 27,
+     "row": 115,
+     "tag": "",
+     "text": "Trong tháng 3 đã xử lý 7/8 HM"
+    },
+    {
+     "col": 27,
+     "row": 123,
+     "tag": "",
+     "text": "PM"
+    },
+    {
+     "col": 28,
+     "row": 124,
+     "tag": "",
+     "text": "KR 11. Rà soát cập nhật lại kế hoạch bảo dưỡng theo phương thức bảo dưỡng để tăng hiệu quả trong công tác bảo dưỡng (áp dụng đối với Phân xưởng/hệ thống do X. ĐK phụ trách công tác lập kế hoạch)"
+    },
+    {
+     "col": 39,
+     "row": 132,
+     "tag": "",
+     "text": "Không có KH trong tháng"
+    },
+    {
+     "col": 28,
+     "row": 133,
+     "tag": "",
+     "text": "- Đội TBCH: SP/NPK/GN/Quan trắc/Phân tích/TB đo khí cầm tay;"
+    },
+    {
+     "col": 28,
+     "row": 133,
+     "tag": "",
+     "text": "- Đội TB Đo: PI,TI/ ACC/ PA/Camera/Bộ đàm;"
+    },
+    {
+     "col": 28,
+     "row": 133,
+     "tag": "",
+     "text": "- Đội TBHTĐK: Hệ thống phòng cháy"
+    },
+    {
+     "col": 27,
+     "row": 145,
+     "tag": "",
+     "text": "KR12 SÁNG KIẾN ĐƯỢC CÔNG NHẬN CẤP TIỂU BAN ĐIỀU KHIỂN"
+    },
+    {
+     "col": 27,
+     "row": 145,
+     "tag": "",
+     "text": "MỤC TIÊU"
+    },
+    {
+     "col": 27,
+     "row": 145,
+     "tag": "",
+     "text": "8 SÁNG KIẾN"
+    },
+    {
+     "col": 27,
+     "row": 145,
+     "tag": "",
+     "text": "KẾT QUẢ"
+    },
+    {
+     "col": 27,
+     "row": 145,
+     "tag": "",
+     "text": "0 SÁNG KIẾN"
+    },
+    {
+     "col": 27,
+     "row": 145,
+     "tag": "",
+     "text": "FI"
+    }
+   ],
+   "rendered_report": {
+    "krs": [
+     {
+      "chip": "KR1",
+      "displayed_title": "Xây dựng khung năng lực",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "8 vị trí chức danh"
+      ]
+     },
+     {
+      "chip": "KR2",
+      "displayed_title": "Đánh giá năng lực cho CBCNV",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Chưa thực hiện do chưa xây dựng xong KNL",
+       "33 CBCNV (KTV)",
+       "Trễ kế hoạch"
+      ]
+     },
+     {
+      "chip": "KR3",
+      "displayed_title": "Triển khai đào tạo nội bộ theo kế hoạch được phê duyệt",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Thanh toán lần I: 0h"
+      ]
+     },
+     {
+      "chip": "KR7",
+      "displayed_title": "Thiết kế tagname dán lên thiết bị, Junction box thể hiện chức năng, thông số thiết bị range đo, môi chất đo,… thông tin chức năng được mã hóa bằng màu sắc ví dụ: màu đỏ thể interlock, cam điều khiển, xanh hiển thị,…",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Hoàn thành họp thống nhất sơ đồ, đối tượng thực hiện",
+       "Ban hành thông báo kế hoạch triển khai AM nội bộ và họp với trưởng trụ cột"
+      ]
+     },
+     {
+      "chip": "KR8",
+      "displayed_title": "Rà soát ống turbing van điều khiển và thiết bị đo",
+      "displayed_status_pill": "Không có KH trong tháng",
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR9",
+      "displayed_title": "Tiêu chuẩn hóa lắp đặt thiết bị đo lường và van điều khiển",
+      "displayed_status_pill": "Không có KH trong tháng",
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR10",
+      "displayed_title": "Xử lý các thẻ TPM tag",
+      "displayed_status_pill": "Lũy kế 186/201 HM ~ 92.5 %",
+      "displayed_lines": [
+       "Trong tháng 3 đã xử lý 7/8 HM"
+      ]
+     },
+     {
+      "chip": "KR11",
+      "displayed_title": "Rà soát cập nhật lại kế hoạch bảo dưỡng theo phương thức bảo dưỡng để tăng hiệu quả trong công tác bảo dưỡng (áp dụng đối với Phân xưởng/hệ thống do X. ĐK phụ trách công tác lập kế hoạch)",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Không có KH trong tháng",
+       "Đội TBCH: SP/NPK/GN/Quan trắc/Phân tích/TB đo khí cầm tay;",
+       "Đội TB Đo: PI,TI/ ACC/ PA/Camera/Bộ đàm;",
+       "Đội TBHTĐK: Hệ thống phòng cháy"
+      ]
+     },
+     {
+      "chip": "KR12",
+      "displayed_title": "SÁNG KIẾN ĐƯỢC CÔNG NHẬN CẤP TIỂU BAN ĐIỀU KHIỂN",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "8 SÁNG KIẾN",
+       "0 SÁNG KIẾN"
+      ]
+     }
+    ],
+    "notes": []
+   }
+  },
+  "O6": {
+   "raw_excel_lines": [
+    {
+     "col": 15,
+     "row": 150,
+     "tag": "",
+     "text": "KR2 BÁO CÁO LŨY KẾ CHƯƠNG TRÌNH STOP"
+    },
+    {
+     "col": 27,
+     "row": 154,
+     "tag": "",
+     "text": "KR13 CÓ Ý TƯỞNG/CTKT"
+    },
+    {
+     "col": 27,
+     "row": 154,
+     "tag": "",
+     "text": "KR13 LŨY KẾ Ý TƯỞNG/CTKT"
+    },
+    {
+     "col": 27,
+     "row": 154,
+     "tag": "",
+     "text": "Đội thiết bị chấp hành: 1"
+    },
+    {
+     "col": 27,
+     "row": 154,
+     "tag": "",
+     "text": "Đội thiết bị hệ thống điều khiển: 3"
+    },
+    {
+     "col": 27,
+     "row": 154,
+     "tag": "",
+     "text": "Đội thiết bị đo lường: 3"
+    },
+    {
+     "col": 27,
+     "row": 154,
+     "tag": "",
+     "text": "Tổ trực ca điều khiển:  3"
+    },
+    {
+     "col": 14,
+     "row": 167,
+     "tag": "",
+     "text": "Thực hiện"
+    },
+    {
+     "col": 18,
+     "row": 167,
+     "tag": "",
+     "text": "Kế"
+    },
+    {
+     "col": 18,
+     "row": 167,
+     "tag": "",
+     "text": "hoạch"
+    },
+    {
+     "col": 16,
+     "row": 168,
+     "tag": "",
+     "text": "163"
+    },
+    {
+     "col": 19,
+     "row": 168,
+     "tag": "",
+     "text": "200"
+    },
+    {
+     "col": 22,
+     "row": 168,
+     "tag": "",
+     "text": "81,5%"
+    },
+    {
+     "col": 26,
+     "row": 169,
+     "tag": "",
+     "text": "O6: Văn hóa doanh nghiệp"
+    },
+    {
+     "col": 26,
+     "row": 173,
+     "tag": "",
+     "text": "KR1 RÈN LUYỆN CHẠY BỘ"
+    },
+    {
+     "col": 26,
+     "row": 173,
+     "tag": "",
+     "text": "KR 2 HỘI THAO QUÝ/CHƯƠNG TRÌNH CHUNG"
+    },
+    {
+     "col": 28,
+     "row": 197,
+     "tag": "",
+     "text": "Số lần tổ chức"
+    },
+    {
+     "col": 30,
+     "row": 197,
+     "tag": "",
+     "text": "2"
+    },
+    {
+     "col": 30,
+     "row": 197,
+     "tag": "",
+     "text": "Lũy kế"
+    },
+    {
+     "col": 30,
+     "row": 197,
+     "tag": "",
+     "text": "Mục tiêu"
+    },
+    {
+     "col": 30,
+     "row": 197,
+     "tag": "",
+     "text": "20"
+    },
+    {
+     "col": 37,
+     "row": 197,
+     "tag": "",
+     "text": "Số lần tổ chức"
+    },
+    {
+     "col": 39,
+     "row": 197,
+     "tag": "",
+     "text": "1"
+    },
+    {
+     "col": 39,
+     "row": 197,
+     "tag": "",
+     "text": "Lũy kế"
+    },
+    {
+     "col": 39,
+     "row": 197,
+     "tag": "",
+     "text": "Mục tiêu"
+    },
+    {
+     "col": 39,
+     "row": 197,
+     "tag": "",
+     "text": "4"
+    },
+    {
+     "col": 30,
+     "row": 202,
+     "tag": "",
+     "text": "KR 3 CHIA SẼ VĂN HÓA/QUI TRÌNH"
+    },
+    {
+     "col": 30,
+     "row": 212,
+     "tag": "",
+     "text": "Số lần tổ chức"
+    },
+    {
+     "col": 33,
+     "row": 212,
+     "tag": "",
+     "text": "1"
+    },
+    {
+     "col": 33,
+     "row": 212,
+     "tag": "",
+     "text": "Lũy kế"
+    },
+    {
+     "col": 33,
+     "row": 212,
+     "tag": "",
+     "text": "Mục tiêu"
+    },
+    {
+     "col": 33,
+     "row": 212,
+     "tag": "",
+     "text": "11"
+    }
+   ],
+   "rendered_report": {
+    "krs": [
+     {
+      "chip": "KR1",
+      "displayed_title": "RÈN LUYỆN CHẠY BỘ",
+      "displayed_status_pill": null,
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR2",
+      "displayed_title": "HỘI THAO QUÝ/CHƯƠNG TRÌNH CHUNG",
+      "displayed_status_pill": null,
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR3",
+      "displayed_title": "CHIA SẼ VĂN HÓA/QUI TRÌNH",
+      "displayed_status_pill": null,
+      "displayed_lines": []
+     },
+     {
+      "chip": "KR13",
+      "displayed_title": "CÓ Ý TƯỞNG/CTKT",
+      "displayed_status_pill": null,
+      "displayed_lines": [
+       "Đội thiết bị chấp hành: 1",
+       "Đội thiết bị hệ thống điều khiển: 3",
+       "Đội thiết bị đo lường: 3",
+       "Tổ trực ca điều khiển:  3"
+      ]
+     }
+    ],
+    "notes": []
+   }
+  }
+ }
+}

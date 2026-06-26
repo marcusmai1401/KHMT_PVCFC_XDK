@@ -1,0 +1,115 @@
+
+===== MONTH 01: O4 band has 2 boxes =====
+  col= 0 row=175  lines=11
+      | O4: Triển khai các hạng mục cải hoán thuộc chuyên môn phụ trách
+      | KR 02 Cải tiến lại hệ thống robot NPK line A,B,C để gắp được bao 25kg
+      | 57%
+      | ... (+8 more)
+  col= 0 row=218 [TEAM-ADD,skipped] lines=34
+      | HẠNG MỤC PHÁT SINH ĐỘI TBHTĐK
+      | 1. Hoàn thành khai báo tín hiệu modbus và link lên gaphic dự án CO2 thực phẩm tr
+      | 2. Cập nhật các tài liệu loop diagram, Interlock Logic diagram, Alarm trip setpo
+      | ... (+31 more)
+
+===== MONTH 02: O4 band has 7 boxes =====
+  col= 0 row=175  lines=6
+      | O4: Triển khai các hạng mục cải hoán thuộc chuyên môn phụ trách
+      | KR 02 Cải tiến lại hệ thống robot NPK line A,B,C để gắp được bao 25kg
+      | KR 04 Mở rộng  hệ thống Fire and Gas theo kết quả Gas mapping report
+      | ... (+3 more)
+  col= 0 row=236 [TEAM-ADD,skipped] lines=26
+      | HẠNG MỤC PHÁT SINH ĐỘI TBHTĐK
+      | 1. Thực hiện di dời các đầu dò báo cháy > 0.3 m theo WR từ P.AT
+      | 2. Cập nhật các tài liệu loop diagram, Interlock Logic diagram, Alarm trip setpo
+      | ... (+23 more)
+  col= 1 row=183  lines=3
+      | - Cấu hình hệ thống để gấp bao 25kg đạt: 100 %
+      | - Thực hiện lắp đặt hệ thống ép bao và chỉnh sửa lại gripper: 0%
+      | Ghi chú: Chưa triển khai thực hiện các hạng mục cơ khí do Nhà thầu đang thực hiệ
+  col= 1 row=193  lines=3
+      | Phase I: Xin chủ trương:
+      | - Phân tích báo giá 3 NCC Weldtec, TPT và Yaskawa, làm báo cáo tổng thể đề xuất 
+      | - Làm việc với NCC Thịnh Tiến Đạt về giải pháp Layer Depalletizing system (Tiếp 
+  col= 1 row=205  lines=4
+      | Phase I: Công tác chuẩn bị
+      | - Tình hình các ĐHMS/DV: Đã ban hành 1/3 YCMS, Sẽ trình lại 2 YCMS/DV khi chủ tr
+      | - Phương án thực hiện: 36%
+      | ... (+1 more)
+  col= 1 row=218  lines=2
+      | Đã hoàn thành họp thống nhất đối tượng thực hiện, làm rõ phạm vi công việc
+      | Ghi chú: Không thay đổi trong tháng
+  col= 1 row=228  lines=1
+      | Viết đầu bài kỹ thuật yêu cầu dịch dụ "Cung cấp vật tư, dịch vụ thi công gia cố 
+
+===== MONTH 03: O4 band has 12 boxes =====
+  col= 0 row=175  lines=1
+      | O4: Triển khai các hạng mục cải hoán thuộc chuyên môn phụ trách
+  col= 0 row=241 [TEAM-ADD,skipped] lines=36
+      | HẠNG MỤC PHÁT SINH ĐỘI TBHTĐK
+      | 1. Thực hiện di dời các đầu dò báo cháy > 0.3 m theo WR từ P.AT: hoàn thành di d
+      | 2. Cập nhật các tài liệu loop diagram, Interlock Logic diagram, Alarm trip setpo
+      | ... (+33 more)
+  col= 1 row=180  lines=1
+      | KR 02 Cải tiến lại hệ thống robot NPK line A,B,C để gắp được bao 25kg
+  col= 1 row=183  lines=2
+      | - Hoàn thành lập trình tọa độ và cấu hình lớp bao cho loại bao 25kg
+      | - Đang hiện lắp đặt bộ dẫn hướng bao dự kiến hoàn thành 01/04/2026
+  col= 1 row=190  lines=1
+      | KR 03 Triển khai dự án lắp đặt 2 hệ thống Depalletizing
+  col= 1 row=193  lines=3
+      | - Hoàn thành báo cáo với B.GĐNM
+      | - Sau khi nghe phân tích và với các tham mưu từ đơn vị chuyên môn, B.GĐNM thống 
+      | - Đã báo cáo trực tiếp đến TGĐ giải pháp thực hiện => P.KTBD trình báo cáo chủ t
+  col= 1 row=205  lines=1
+      | KR 04 Mở rộng  hệ thống Fire and Gas theo kết quả Gas mapping report
+  col= 1 row=208  lines=3
+      | - Tình hình các ĐHMS/DV: Đã ban hành 1/3 YCMS, Sẽ trình lại 2 YCMS/DV khi chủ tr
+      | - Phương án thực hiện: 36% (tạm dừng do ưu tiên các báo cáo chủ trương)
+      | Ghi chú: Đang trình báo cáo chủ trương đến TGĐ (Bước 10/10 TGĐ) (Trình 3rd) => T
+  col= 1 row=217  lines=1
+      | KR 05 Cải tạo hệ thống tiếp địa cho thiết bị đo lường, van điều khiển và hệ thốn
+  col= 1 row=220  lines=3
+      | - Danh mục Van, JB cần cải tạo: 100%
+      | - Danh mục TBĐ cần cải tạo: 80%
+      | - Bốc tách khối lượng vật tư: 50%
+  col= 1 row=229  lines=1
+      | KR 06 Cải tạo hệ thống máng cáp
+  col= 1 row=232  lines=2
+      | Viết đầu bài kỹ thuật yêu cầu dịch dụ "Cung cấp vật tư, dịch vụ thi công gia cố 
+      | (Đang trong giai đoạn góp ý đầu bài)
+
+===== MONTH 04: O4 band has 11 boxes =====
+  col= 0 row=173  lines=1
+      | O4: Triển khai các hạng mục cải hoán thuộc chuyên môn phụ trách
+  col= 1 row=178  lines=1
+      | KR 02 Cải tiến lại hệ thống robot NPK line A,B,C để gắp được bao 25kg
+  col= 1 row=181  lines=3
+      | Đang thực hiện đạt tiến độ 95%:
+      | - Robot C: Hoàn thành 100%.
+      | - Robot B: Hoàn thành 90% (đang chờ VH đóng bao 25 Kg mới test được).
+  col= 1 row=188  lines=1
+      | KR 03 Triển khai dự án lắp đặt 2 hệ thống Depalletizing
+  col= 1 row=191  lines=4
+      | Đã thống nhất PA triển khai từ TGĐ: Lắp đặt 2 Robot/line và triển khai cho 1 lin
+      | FS: Báo cáo chủ trương đã được phê duyệt
+      | Front end design:
+      | ... (+1 more)
+  col= 1 row=201  lines=1
+      | KR 04 Mở rộng  hệ thống Fire and Gas theo kết quả Gas mapping report
+  col= 1 row=204  lines=8
+      | FS: Báo cáo chủ trương đã được phê duyệt
+      | Front end and detail design:
+      | - Tình hình các đơn hàng:
+      | ... (+5 more)
+  col= 1 row=221  lines=1
+      | KR 05 Cải tạo hệ thống tiếp địa cho thiết bị đo lường, van điều khiển và hệ thốn
+  col= 1 row=224  lines=11
+      | - Họp thống nhất đối tượng cần cải tạo, thống nhất nhiệm vụ: 100%
+      | - Khảo sát vị trí bảng đồng chính: 0%
+      | - Khảo sát vị trí bảng đồng nhánh: 0%
+      | ... (+8 more)
+  col= 1 row=246  lines=1
+      | KR 06 Cải tạo hệ thống máng cáp
+  col= 1 row=249  lines=2
+      | Viết đầu bài kỹ thuật yêu cầu dịch dụ "Cung cấp vật tư, dịch vụ thi công gia cố 
+      | (Đang trong giai đoạn góp ý đầu bài)

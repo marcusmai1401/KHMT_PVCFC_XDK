@@ -1,0 +1,60 @@
+### KR1
+  title: 'Xây dựng khung năng lực'
+  pill : None
+  RAW  : 'KR 1. Xây dựng khung năng lực'
+
+### KR2
+  title: 'Đánh giá năng lực cho CBCNV'
+  pill : None
+  RAW  : 'KR 2. Đánh giá năng lực cho CBCNV'
+
+### KR3
+  title: 'Triển khai đào tạo nội bộ theo kế hoạch được phê duyệt'
+  pill : None
+  RAW  : 'KR 3. Triển khai đào tạo nội bộ theo kế hoạch được phê duyệt'
+
+### KR4
+  title: 'Tổ chức hội thảo chuyên môn'
+  pill : 'Không có KH trong tháng'
+  RAW  : 'KR 4. Tổ chức hội thảo chuyên môn - Không có KH trong tháng'
+
+### KR5
+  title: 'Triển khai đào tạo bên ngoài theo kế hoạch được phê duyệt'
+  pill : 'Không có KH trong tháng'
+  RAW  : 'KR 5. Triển khai đào tạo bên ngoài theo kế hoạch được phê duyệt - Không có KH trong tháng'
+
+### KR6
+  title: 'Triển khai chuẩn hóa giáo trình đào tạo theo kế hoạch được phê duyệt'
+  pill : 'Không có KH trong tháng'
+  RAW  : 'KR 6. Triển khai chuẩn hóa giáo trình đào tạo theo kế hoạch được phê duyệt- Không có KH trong tháng'
+
+### KR7
+  title: 'Thiết kế tagname dán lên thiết bị, Junction box thể hiện chức năng, thông số thiết bị range đo, môi chất đo,… thông tin chức năng được mã hóa bằng màu sắc ví dụ: màu đỏ thể interlock, cam điều khiển, xanh hiển thị,…'
+  pill : 'Hoàn thành họp thống nhất sơ đồ, đối tượng thực hiện'
+  RAW  : 'KR 7. Thiết kế tagname dán lên thiết bị, Junction box thể hiện chức năng, thông số thiết bị range đo, môi chất đo,… thông tin chức năng được mã hóa bằng màu sắc ví dụ: màu đỏ thể interlock, cam điều khiển, xanh hiển thị,… - Hoàn thành họp thống nhất sơ đồ, đối tượng thực hiện'
+
+### KR8
+  title: 'Rà soát ống turbing van điều khiển và thiết bị đo'
+  pill : 'Không có KH trong tháng'
+  RAW  : 'KR 8. Rà soát ống turbing van điều khiển và thiết bị đo - Không có KH trong tháng'
+
+### KR9
+  title: 'Tiêu chuẩn hóa lắp đặt thiết bị đo lường và van điều khiển'
+  pill : 'Không có KH trong tháng'
+  RAW  : 'KR 9. Tiêu chuẩn hóa lắp đặt thiết bị đo lường và van điều khiển - Không có KH trong tháng'
+
+### KR10
+  title: 'Xử lý các thẻ TPM tag'
+  pill : 'Lũy kế 176/196 HM ~ 89.7 %'
+  RAW  : 'KR 10. Xử lý các thẻ TPM tag - Lũy kế 176/196 HM ~ 89.7 %'
+
+### KR11
+  title: 'Rà soát cập nhật lại kế hoạch bảo dưỡng theo phương thức bảo dưỡng để tăng hiệu quả trong công tác bảo dưỡng (áp dụng đối với Phân xưởng/hệ thống do X. ĐK phụ trách công tác lập kế hoạch)'
+  pill : None
+  RAW  : 'KR 11. Rà soát cập nhật lại kế hoạch bảo dưỡng theo phương thức bảo dưỡng để tăng hiệu quả trong công tác bảo dưỡng (áp dụng đối với Phân xưởng/hệ thống do X. ĐK phụ trách công tác lập kế hoạch)'
+
+### KR12
+  title: 'SÁNG KIẾN ĐƯỢC CÔNG NHẬN CẤP TIỂU BAN ĐIỀU KHIỂN'
+  pill : None
+  RAW  : 'KR12 SÁNG KIẾN ĐƯỢC CÔNG NHẬN CẤP TIỂU BAN ĐIỀU KHIỂN'
+

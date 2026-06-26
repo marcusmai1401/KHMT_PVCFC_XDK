@@ -1,0 +1,34 @@
+{
+ "krs": [
+  {
+   "chip": "KR1",
+   "displayed_title": "RÈN LUYỆN CHẠY BỘ",
+   "displayed_status_pill": null,
+   "displayed_lines": []
+  },
+  {
+   "chip": "KR2",
+   "displayed_title": "HỘI THAO QUÝ/CHƯƠNG TRÌNH CHUNG",
+   "displayed_status_pill": null,
+   "displayed_lines": []
+  },
+  {
+   "chip": "KR3",
+   "displayed_title": "CHIA SẼ VĂN HÓA/QUI TRÌNH",
+   "displayed_status_pill": null,
+   "displayed_lines": []
+  },
+  {
+   "chip": "KR13",
+   "displayed_title": "CÓ Ý TƯỞNG/CTKT",
+   "displayed_status_pill": null,
+   "displayed_lines": [
+    "Đội thiết bị chấp hành: 1",
+    "Đội thiết bị hệ thống điều khiển: 3",
+    "Đội thiết bị đo lường: 3",
+    "Tổ trực ca điều khiển:  3"
+   ]
+  }
+ ],
+ "notes": []
+}

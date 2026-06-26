@@ -5,7 +5,8 @@ from typing import Any
 
 from fastapi import HTTPException
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -511,6 +512,35 @@ FI_DECISION_LABELS = {
 }
 FI_KHMT_LABELS = {"in": "Đã vào KHMT", "out": "Chưa vào KHMT"}
 FI_COMPLETION_LABELS = {"done": "Đã hoàn thành", "pending": "Chưa hoàn thành"}
+FI_EXPORT_DATA_HEADERS = [
+    "STT",
+    "Mã SK",
+    "Tên SK-CTKT",
+    "Tác giả",
+    "Tài khoản tác giả",
+    "Đội/tổ",
+    "Tháng đăng ký",
+    "Trạng thái",
+    "Kết luận LĐX",
+    "KHMT",
+    "Tháng KHMT",
+    "Hoàn thành",
+    "Kế hoạch hoàn thành",
+    "Nội dung",
+    "Nhận xét FI/BM01",
+    "Ghi chú quyết định",
+    "Nguồn",
+    "File nguồn",
+    "Sheet/dòng nguồn",
+    "Ngày tạo",
+    "Ngày gửi duyệt",
+    "Ngày xét duyệt",
+    "Ngày phê duyệt",
+    "Ngày hoàn thành",
+    "Cập nhật cuối",
+    "ID",
+]
+FI_EXPORT_DATA_HEADER_ROW = 4
 
 
 def is_fi_reportable(record: SKCTKTModel) -> bool:
@@ -661,7 +691,7 @@ def export_fi_reports_to_excel(db: Session, filters: dict[str, set[Any]]) -> Pat
     generated_at = _utc_now()
 
     _write_fi_export_summary(summary_sheet, records, filters, generated_at)
-    _write_fi_export_rows(data_sheet, records)
+    _write_fi_export_rows(data_sheet, records, generated_at)
     _style_fi_export_workbook(workbook)
 
     export_dir = settings.storage_dir / "exports"
@@ -831,38 +861,81 @@ def _write_fi_export_summary(
     filters: dict[str, set[Any]],
     generated_at: datetime,
 ) -> None:
-    sheet.append(["XUẤT DỮ LIỆU FI/SK-CTKT"])
-    sheet.append(["Thời điểm xuất", _excel_datetime(generated_at)])
-    sheet.append(["Tổng số", len(records)])
-    sheet.append([])
-    sheet.append(["Bộ lọc", "Giá trị"])
-    sheet.append(["Đội/tổ", _filter_value_text(filters.get("teams"), {})])
-    sheet.append(["Tháng đăng ký", _filter_value_text(filters.get("registration_months"), {}, prefix="T")])
-    sheet.append(["Kết luận LĐX", _filter_value_text(filters.get("decisions"), FI_DECISION_LABELS)])
-    sheet.append(["KHMT", _filter_value_text(filters.get("khmt"), FI_KHMT_LABELS)])
-    sheet.append(["Hoàn thành", _filter_value_text(filters.get("completion"), FI_COMPLETION_LABELS)])
-    sheet.append([])
-    _append_counter_block(sheet, "Theo đội/tổ", "Đội/tổ", Counter(record.team for record in records))
-    _append_counter_block(
+    approved_count = sum(1 for record in records if _fi_decision_filter(record) == "approved")
+    khmt_count = sum(1 for record in records if _fi_khmt_filter(record) == "in")
+    done_count = sum(1 for record in records if _fi_completion_filter(record) == "done")
+
+    sheet.merge_cells("A1:H1")
+    sheet["A1"] = "BÁO CÁO FI/SK-CTKT"
+    sheet.merge_cells("A2:H2")
+    sheet["A2"] = "Dữ liệu xuất từ tab Lịch sử FI theo bộ lọc hiện tại trên website"
+    sheet["A4"] = "Thời điểm xuất"
+    sheet["B4"] = _excel_datetime(generated_at)
+    sheet["A5"] = "Phạm vi"
+    sheet["B5"] = "Không bao gồm bản nháp"
+    sheet["A6"] = "Số dòng dữ liệu"
+    sheet["B6"] = len(records)
+
+    _write_summary_card(sheet, "D4", "Tổng SK", len(records), "SK-CTKT")
+    _write_summary_card(sheet, "E4", "Đồng ý", approved_count, "Đạt xét duyệt")
+    _write_summary_card(sheet, "F4", "Đã vào KHMT", khmt_count, "Được ghi nhận")
+    _write_summary_card(sheet, "G4", "Hoàn thành", done_count, "Đã xong")
+
+    filter_rows = [
+        ("Đội/tổ", _filter_value_text(filters.get("teams"), {})),
+        ("Tháng đăng ký", _filter_value_text(filters.get("registration_months"), {}, prefix="T")),
+        ("Kết luận LĐX", _filter_value_text(filters.get("decisions"), FI_DECISION_LABELS)),
+        ("KHMT", _filter_value_text(filters.get("khmt"), FI_KHMT_LABELS)),
+        ("Hoàn thành", _filter_value_text(filters.get("completion"), FI_COMPLETION_LABELS)),
+    ]
+    sheet.merge_cells("A9:B9")
+    sheet["A9"] = "Bộ lọc đang áp dụng"
+    sheet["A10"] = "Bộ lọc"
+    sheet["B10"] = "Giá trị"
+    for row_index, (label, value) in enumerate(filter_rows, start=11):
+        sheet.cell(row_index, 1).value = label
+        sheet.cell(row_index, 2).value = value
+
+    first_stats_row = 18
+    first_group_rows = [
+        _write_counter_table(
+            sheet,
+            first_stats_row,
+            1,
+            "Theo đội/tổ",
+            "Đội/tổ",
+            Counter(record.team for record in records),
+        ),
+        _write_counter_table(
+            sheet,
+            first_stats_row,
+            4,
+            "Theo tháng đăng ký",
+            "Tháng",
+            Counter(_fi_registration_label(record) for record in records),
+        ),
+        _write_counter_table(
+            sheet,
+            first_stats_row,
+            7,
+            "Theo kết luận LĐX",
+            "Kết luận",
+            Counter(FI_DECISION_LABELS[_fi_decision_filter(record)] for record in records),
+        ),
+    ]
+    second_stats_row = max(first_group_rows) + 3
+    _write_counter_table(
         sheet,
-        "Theo tháng đăng ký",
-        "Tháng",
-        Counter(_fi_registration_label(record) for record in records),
-    )
-    _append_counter_block(
-        sheet,
-        "Theo kết luận LĐX",
-        "Kết luận",
-        Counter(FI_DECISION_LABELS[_fi_decision_filter(record)] for record in records),
-    )
-    _append_counter_block(
-        sheet,
+        second_stats_row,
+        1,
         "Theo KHMT",
         "KHMT",
         Counter(FI_KHMT_LABELS[_fi_khmt_filter(record)] for record in records),
     )
-    _append_counter_block(
+    _write_counter_table(
         sheet,
+        second_stats_row,
+        4,
         "Theo hoàn thành",
         "Hoàn thành",
         Counter(FI_COMPLETION_LABELS[_fi_completion_filter(record)] for record in records),
@@ -879,104 +952,310 @@ def _filter_value_text(values: set[Any] | None, labels: dict[str, str], *, prefi
     return ", ".join(rendered)
 
 
-def _append_counter_block(sheet, title: str, label: str, counts: Counter) -> None:
-    sheet.append([])
-    sheet.append([title])
-    sheet.append([label, "Số lượng"])
+def _write_summary_card(sheet, cell_ref: str, title: str, value: int, helper: str) -> None:
+    cell = sheet[cell_ref]
+    cell.value = f"{title}\n{value}\n{helper}"
+
+
+def _write_counter_table(sheet, start_row: int, start_col: int, title: str, label: str, counts: Counter) -> int:
+    sheet.merge_cells(
+        start_row=start_row,
+        start_column=start_col,
+        end_row=start_row,
+        end_column=start_col + 1,
+    )
+    sheet.cell(start_row, start_col).value = title
+    sheet.cell(start_row + 1, start_col).value = label
+    sheet.cell(start_row + 1, start_col + 1).value = "Số lượng"
+    row_index = start_row + 2
+    if not counts:
+        sheet.cell(row_index, start_col).value = "Không có dữ liệu"
+        sheet.cell(row_index, start_col + 1).value = 0
+        return row_index
     for key, count in sorted(counts.items(), key=lambda item: str(item[0])):
-        sheet.append([key, count])
+        sheet.cell(row_index, start_col).value = key
+        sheet.cell(row_index, start_col + 1).value = count
+        row_index += 1
+    return row_index - 1
 
 
-def _write_fi_export_rows(sheet, records: list[SKCTKTModel]) -> None:
-    headers = [
-        "STT",
-        "Mã SK",
-        "Tên SK-CTKT",
-        "Tác giả",
-        "Tài khoản tác giả",
-        "Đội/tổ",
-        "Tháng đăng ký",
-        "Trạng thái",
-        "Kết luận LĐX",
-        "KHMT",
-        "Tháng KHMT",
-        "Hoàn thành",
-        "Kế hoạch hoàn thành",
-        "Nội dung",
-        "Nhận xét FI/BM01",
-        "Ghi chú quyết định",
-        "Nguồn",
-        "File nguồn",
-        "Sheet/dòng nguồn",
-        "Ngày tạo",
-        "Ngày gửi duyệt",
-        "Ngày xét duyệt",
-        "Ngày phê duyệt",
-        "Ngày hoàn thành",
-        "Cập nhật cuối",
-        "ID",
-    ]
-    sheet.append(headers)
+def _write_fi_export_rows(sheet, records: list[SKCTKTModel], generated_at: datetime) -> None:
+    sheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(FI_EXPORT_DATA_HEADERS))
+    sheet["A1"] = "DANH SÁCH FI/SK-CTKT"
+    sheet.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(FI_EXPORT_DATA_HEADERS))
+    generated_label = _excel_datetime(generated_at).strftime("%d/%m/%Y %H:%M")
+    sheet["A2"] = f"Xuất lúc {generated_label} | {len(records)} SK-CTKT"
+    for col_index, header in enumerate(FI_EXPORT_DATA_HEADERS, start=1):
+        sheet.cell(FI_EXPORT_DATA_HEADER_ROW, col_index).value = header
     for index, record in enumerate(records, start=1):
-        sheet.append(
-            [
-                index,
-                record.sk_code,
-                record.title,
-                record.author_name,
-                record.author_user_id,
-                record.team,
-                _fi_registration_label(record),
-                FI_STATUS_LABELS.get(record.status, record.status),
-                FI_DECISION_LABELS[_fi_decision_filter(record)],
-                _fi_khmt_label(record),
-                f"T{record.khmt_month}/{record.khmt_year}" if record.khmt_month and record.khmt_year else "",
-                FI_COMPLETION_LABELS[_fi_completion_filter(record)],
-                record.completion_plan,
-                record.content_description,
-                _fi_review_note(record),
-                record.decision_note or "",
-                "Excel lịch sử" if record.is_historical_import else "Hệ thống",
-                record.bm01_source_file or "",
-                _fi_source_reference(record),
-                _excel_datetime(record.created_at),
-                _excel_datetime(record.submitted_at),
-                _excel_datetime(record.reviewed_at),
-                _excel_datetime(record.approved_at),
-                _excel_datetime(record.completed_at),
-                _excel_datetime(record.updated_at),
-                record.id,
-            ]
-        )
+        row_index = FI_EXPORT_DATA_HEADER_ROW + index
+        row_values = [
+            index,
+            record.sk_code,
+            record.title,
+            record.author_name,
+            record.author_user_id,
+            record.team,
+            _fi_registration_label(record),
+            FI_STATUS_LABELS.get(record.status, record.status),
+            FI_DECISION_LABELS[_fi_decision_filter(record)],
+            _fi_khmt_label(record),
+            f"T{record.khmt_month}/{record.khmt_year}" if record.khmt_month and record.khmt_year else "",
+            FI_COMPLETION_LABELS[_fi_completion_filter(record)],
+            record.completion_plan,
+            record.content_description,
+            _fi_review_note(record),
+            record.decision_note or "",
+            "Excel lịch sử" if record.is_historical_import else "Hệ thống",
+            record.bm01_source_file or "",
+            _fi_source_reference(record),
+            _excel_datetime(record.created_at),
+            _excel_datetime(record.submitted_at),
+            _excel_datetime(record.reviewed_at),
+            _excel_datetime(record.approved_at),
+            _excel_datetime(record.completed_at),
+            _excel_datetime(record.updated_at),
+            record.id,
+        ]
+        for col_index, value in enumerate(row_values, start=1):
+            sheet.cell(row_index, col_index).value = value
 
 
 def _style_fi_export_workbook(workbook: Workbook) -> None:
-    header_fill = PatternFill("solid", fgColor="EAF2FF")
+    _style_fi_summary_sheet(workbook["Tong hop"])
+    _style_fi_data_sheet(workbook["Du lieu FI"])
+
+
+def _style_fi_summary_sheet(sheet) -> None:
+    sheet.sheet_view.showGridLines = False
+    sheet.freeze_panes = "A9"
+    sheet.sheet_properties.tabColor = "1F3A8A"
+    sheet.page_setup.orientation = "landscape"
+    sheet.page_setup.fitToWidth = 1
+    sheet.page_setup.fitToHeight = 0
+    sheet.sheet_properties.pageSetUpPr.fitToPage = True
+    sheet.page_margins.left = 0.25
+    sheet.page_margins.right = 0.25
+    sheet.page_margins.top = 0.5
+    sheet.page_margins.bottom = 0.5
+
     title_fill = PatternFill("solid", fgColor="1F3A8A")
-    title_font = Font(bold=True, color="FFFFFF")
-    header_font = Font(bold=True, color="0F172A")
-    for sheet in workbook.worksheets:
-        for row in sheet.iter_rows():
-            for cell in row:
+    subtitle_fill = PatternFill("solid", fgColor="EAF2FF")
+    section_fill = PatternFill("solid", fgColor="DBEAFE")
+    header_fill = PatternFill("solid", fgColor="EFF6FF")
+    border = _thin_border()
+
+    sheet["A1"].font = Font(bold=True, size=18, color="FFFFFF")
+    sheet["A1"].fill = title_fill
+    sheet["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    sheet["A2"].font = Font(italic=True, color="334155")
+    sheet["A2"].fill = subtitle_fill
+    sheet["A2"].alignment = Alignment(horizontal="center", vertical="center")
+    sheet.row_dimensions[1].height = 30
+    sheet.row_dimensions[2].height = 22
+
+    for row in range(4, 7):
+        sheet.cell(row, 1).font = Font(bold=True, color="334155")
+        sheet.cell(row, 1).fill = header_fill
+        sheet.cell(row, 2).fill = PatternFill("solid", fgColor="FFFFFF")
+        for col in range(1, 3):
+            sheet.cell(row, col).border = border
+            sheet.cell(row, col).alignment = Alignment(vertical="center", wrap_text=True)
+    sheet["B4"].number_format = "dd/mm/yyyy hh:mm"
+    sheet["B6"].font = Font(bold=True, size=14, color="0F172A")
+
+    for col in range(4, 8):
+        cell = sheet.cell(4, col)
+        cell.fill = PatternFill("solid", fgColor="F8FAFC")
+        cell.font = Font(bold=True, color="0F172A")
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = border
+        sheet.column_dimensions[get_column_letter(col)].width = 17
+    sheet.row_dimensions[4].height = 64
+
+    sheet["A9"].font = Font(bold=True, color="FFFFFF")
+    sheet["A9"].fill = title_fill
+    sheet["A10"].font = Font(bold=True, color="0F172A")
+    sheet["B10"].font = Font(bold=True, color="0F172A")
+    sheet["A10"].fill = header_fill
+    sheet["B10"].fill = header_fill
+    for row in range(9, 16):
+        for col in range(1, 3):
+            sheet.cell(row, col).border = border
+            sheet.cell(row, col).alignment = Alignment(vertical="top", wrap_text=True)
+
+    for row in range(1, sheet.max_row + 1):
+        for cell in sheet[row]:
+            if isinstance(cell.value, datetime):
+                cell.number_format = "dd/mm/yyyy hh:mm"
+            if cell.value and cell.row >= 18 and cell.column <= 8:
+                cell.border = border
                 cell.alignment = Alignment(vertical="top", wrap_text=True)
-                if isinstance(cell.value, datetime):
-                    cell.number_format = "dd/mm/yyyy hh:mm"
-        if sheet.max_row >= 1:
-            for cell in sheet[1]:
-                cell.font = title_font if sheet.title == "Tong hop" else header_font
-                cell.fill = title_fill if sheet.title == "Tong hop" else header_fill
-        if sheet.title == "Tong hop":
-            for row_index in range(5, sheet.max_row + 1):
-                first_cell = sheet.cell(row_index, 1)
-                if first_cell.value and not sheet.cell(row_index, 2).value:
-                    first_cell.font = header_font
-                    first_cell.fill = header_fill
-        else:
-            sheet.freeze_panes = "A2"
-            sheet.auto_filter.ref = sheet.dimensions
-        for column_cells in sheet.columns:
-            width = max(len(str(cell.value or "")) for cell in column_cells) + 2
-            sheet.column_dimensions[column_cells[0].column_letter].width = min(max(width, 10), 48)
+                if cell.row > 18 and cell.value == "Số lượng":
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+        row_values = [sheet.cell(row, col).value for col in range(1, 9)]
+        if any(row_values) and not any(row_values[1:]):
+            first_cell = sheet.cell(row, 1)
+            first_cell.fill = section_fill
+            first_cell.font = Font(bold=True, color="1E3A8A")
+        if any(row_values) and any(value == "Số lượng" for value in row_values):
+            for col in range(1, 9):
+                cell = sheet.cell(row, col)
+                if cell.value:
+                    cell.fill = header_fill
+                    cell.font = Font(bold=True, color="0F172A")
+        for start_col in [1, 4, 7]:
+            title_cell = sheet.cell(row, start_col)
+            count_header = sheet.cell(row, start_col + 1)
+            if isinstance(title_cell.value, str) and title_cell.value.startswith("Theo "):
+                for col in [start_col, start_col + 1]:
+                    cell = sheet.cell(row, col)
+                    cell.fill = section_fill
+                    cell.font = Font(bold=True, color="1E3A8A")
+                    cell.border = border
+                    cell.alignment = Alignment(vertical="center", wrap_text=True)
+            if count_header.value == "Số lượng":
+                for col in [start_col, start_col + 1]:
+                    cell = sheet.cell(row, col)
+                    cell.fill = header_fill
+                    cell.font = Font(bold=True, color="0F172A")
+                    cell.border = border
+                    cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    widths = {"A": 22, "B": 36, "C": 4, "D": 22, "E": 14, "F": 18, "G": 24, "H": 14}
+    for column, width in widths.items():
+        sheet.column_dimensions[column].width = width
+
+
+def _style_fi_data_sheet(sheet) -> None:
+    sheet.sheet_view.showGridLines = False
+    sheet.sheet_properties.tabColor = "059669"
+    sheet.freeze_panes = f"A{FI_EXPORT_DATA_HEADER_ROW + 1}"
+    sheet.auto_filter.ref = f"A{FI_EXPORT_DATA_HEADER_ROW}:{get_column_letter(len(FI_EXPORT_DATA_HEADERS))}{sheet.max_row}"
+    sheet.page_setup.orientation = "landscape"
+    sheet.page_setup.fitToWidth = 1
+    sheet.page_setup.fitToHeight = 0
+    sheet.sheet_properties.pageSetUpPr.fitToPage = True
+    sheet.page_margins.left = 0.2
+    sheet.page_margins.right = 0.2
+    sheet.page_margins.top = 0.4
+    sheet.page_margins.bottom = 0.4
+
+    title_fill = PatternFill("solid", fgColor="0F766E")
+    header_fill = PatternFill("solid", fgColor="1F3A8A")
+    stripe_fill = PatternFill("solid", fgColor="F8FAFC")
+    border = _thin_border()
+
+    sheet["A1"].font = Font(bold=True, size=18, color="FFFFFF")
+    sheet["A1"].fill = title_fill
+    sheet["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    sheet["A2"].font = Font(italic=True, color="334155")
+    sheet["A2"].fill = PatternFill("solid", fgColor="ECFDF5")
+    sheet["A2"].alignment = Alignment(horizontal="center", vertical="center")
+    sheet.row_dimensions[1].height = 30
+    sheet.row_dimensions[2].height = 22
+
+    for col_index in range(1, len(FI_EXPORT_DATA_HEADERS) + 1):
+        cell = sheet.cell(FI_EXPORT_DATA_HEADER_ROW, col_index)
+        cell.fill = header_fill
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.border = border
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    sheet.row_dimensions[FI_EXPORT_DATA_HEADER_ROW].height = 34
+
+    for row_index in range(FI_EXPORT_DATA_HEADER_ROW + 1, sheet.max_row + 1):
+        row_fill = stripe_fill if row_index % 2 == 0 else PatternFill(fill_type=None)
+        for col_index in range(1, len(FI_EXPORT_DATA_HEADERS) + 1):
+            cell = sheet.cell(row_index, col_index)
+            if row_fill.fill_type:
+                cell.fill = row_fill
+            cell.border = border
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+            if isinstance(cell.value, datetime):
+                cell.number_format = "dd/mm/yyyy hh:mm"
+        for col_index in [1, 6, 7, 8, 9, 10, 11, 12, 17, 19]:
+            sheet.cell(row_index, col_index).alignment = Alignment(
+                horizontal="center",
+                vertical="center",
+                wrap_text=True,
+            )
+        _apply_fi_export_tone(sheet.cell(row_index, 8), str(sheet.cell(row_index, 8).value or ""))
+        _apply_fi_export_tone(sheet.cell(row_index, 9), str(sheet.cell(row_index, 9).value or ""))
+        _apply_fi_export_tone(sheet.cell(row_index, 10), str(sheet.cell(row_index, 10).value or ""))
+        _apply_fi_export_tone(sheet.cell(row_index, 12), str(sheet.cell(row_index, 12).value or ""))
+        _apply_source_tone(sheet.cell(row_index, 17), str(sheet.cell(row_index, 17).value or ""))
+        sheet.row_dimensions[row_index].height = 42
+
+    widths = [
+        6,
+        20,
+        42,
+        24,
+        22,
+        12,
+        14,
+        18,
+        16,
+        18,
+        14,
+        18,
+        28,
+        52,
+        36,
+        34,
+        16,
+        28,
+        20,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        26,
+    ]
+    for col_index, width in enumerate(widths, start=1):
+        sheet.column_dimensions[get_column_letter(col_index)].width = width
+
+
+def _thin_border() -> Border:
+    side = Side(style="thin", color="D9E2EC")
+    return Border(left=side, right=side, top=side, bottom=side)
+
+
+def _apply_fi_export_tone(cell, value: str) -> None:
+    tone = _fi_export_tone(value)
+    if tone is None:
+        return
+    fill_color, font_color = tone
+    cell.fill = PatternFill("solid", fgColor=fill_color)
+    cell.font = Font(bold=True, color=font_color)
+
+
+def _apply_source_tone(cell, value: str) -> None:
+    if value == "Excel lịch sử":
+        cell.fill = PatternFill("solid", fgColor="F1F5F9")
+        cell.font = Font(bold=True, color="475569")
+
+
+def _fi_export_tone(value: str) -> tuple[str, str] | None:
+    if value in {
+        "Đồng ý",
+        "Đã phê duyệt",
+        "Hoàn tất",
+        "Đã vào KHMT",
+        "Đã hoàn thành",
+    } or value.startswith("KHMT "):
+        return "DCFCE7", "166534"
+    if value in {"Không đồng ý", "Từ chối", "Đã hủy"}:
+        return "FEE2E2", "991B1B"
+    if value in {"Xem xét sau", "Cần bổ sung", "Chưa hoàn thành"}:
+        return "FEF3C7", "92400E"
+    if value in {"Chờ xét duyệt", "Đã xem xét", "Chưa duyệt"}:
+        return "DBEAFE", "1E3A8A"
+    if value == "Chưa vào KHMT":
+        return "F1F5F9", "475569"
+    return None
 
 
 def delete_sk_ctkt(db: Session, record_id: str, actor: str, role: str) -> None:

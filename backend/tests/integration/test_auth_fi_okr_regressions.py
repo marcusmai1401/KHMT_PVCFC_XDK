@@ -602,10 +602,16 @@ def test_admin_exports_fi_reports_with_history_filters(client, admin_headers):
     def exported_codes(query: str) -> list[str]:
         response = client.get(f"/api/v1/fi/reports/export{query}", headers=admin_headers)
         assert response.status_code == 200, response.text
-        workbook = load_workbook(BytesIO(response.content), read_only=True)
+        workbook = load_workbook(BytesIO(response.content))
         assert set(workbook.sheetnames) == {"Tong hop", "Du lieu FI"}
+        summary = workbook["Tong hop"]
+        assert summary["A1"].value == "BÁO CÁO FI/SK-CTKT"
+        assert "A1:H1" in {str(range_ref) for range_ref in summary.merged_cells.ranges}
         sheet = workbook["Du lieu FI"]
-        headers = [cell.value for cell in sheet[1]]
+        assert sheet["A1"].value == "DANH SÁCH FI/SK-CTKT"
+        assert sheet.freeze_panes == "A5"
+        assert sheet.auto_filter.ref.startswith("A4:Z")
+        headers = [cell.value for cell in sheet[4]]
         assert headers[:6] == [
             "STT",
             "Mã SK",
@@ -614,7 +620,9 @@ def test_admin_exports_fi_reports_with_history_filters(client, admin_headers):
             "Tài khoản tác giả",
             "Đội/tổ",
         ]
-        return [row[1] for row in sheet.iter_rows(min_row=2, values_only=True)]
+        first_data_row = next(sheet.iter_rows(min_row=5, max_row=5))
+        assert first_data_row[8].fill.fill_type == "solid"
+        return [row[1] for row in sheet.iter_rows(min_row=5, values_only=True)]
 
     assert exported_codes("?registration_months=5") == ["FI/05/2026-TBCH-01"]
     assert exported_codes("?decisions=rejected") == ["FI/05/2026-TBCH-01"]

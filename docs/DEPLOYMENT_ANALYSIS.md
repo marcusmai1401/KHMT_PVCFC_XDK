@@ -92,7 +92,6 @@ KHMT Hàng tháng/
 │   │   │   ├── okr/                  # 22 modules (dashboard, extraction, validation...)
 │   │   │   ├── fi/                   # SK-CTKT workflow
 │   │   │   ├── llm/                  # AI integration (client, extractor, chatbot...)
-│   │   │   ├── integration/          # BM01 import
 │   │   │   ├── bootstrap.py          # Schema creation + seed data
 │   │   │   ├── cache.py              # Redis caching
 │   │   │   ├── et_service.py         # ET business logic

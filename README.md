@@ -160,7 +160,6 @@ KHMT Hàng tháng/
 │   └── docker-compose.yml          ← Cấu hình PostgreSQL + Redis
 │
 ├── OKR tháng 04-2026 - X.ĐK.xlsx  ← File nguồn 37 KR mapping
-├── BM 01 Dang ky - Danh gia SK _Rev1.xlsx ← File lịch sử SK-CTKT
 ├── TONG_HOP_SAI_SOT_KHMT_OKR_2026.md     ← Tổng hợp lỗi đã sửa trong OKR
 └── README.md                       ← Tài liệu này
 ```
@@ -264,12 +263,6 @@ Chạy bằng script:
 ./deploy_github_actions.sh --watch
 ```
 
-Nếu cần import lại BM01 legacy trong lúc deploy:
-
-```bash
-./deploy_github_actions.sh --import-bm01 --watch
-```
-
 Script này chỉ kích hoạt GitHub Actions, không lưu password VPS trong máy. Cần cài GitHub CLI và đăng nhập trước bằng `gh auth login`.
 
 Hoặc chạy trên giao diện GitHub:
@@ -281,7 +274,6 @@ Hoặc chạy trên giao diện GitHub:
 
 Các tùy chọn thủ công:
 
-- `import_bm01`: mặc định tắt, chỉ bật khi muốn import lại dữ liệu BM01 legacy.
 - `reset_user_passwords`: mặc định tắt, chỉ bật khi thật sự muốn reset password các user seed.
 
 ### GitHub Secrets production
@@ -336,5 +328,4 @@ Chi tiết thêm: `docs/GITHUB_ACTIONS_DEPLOY.md`.
 | File | Mô tả |
 |------|-------|
 | `OKR tháng 04-2026 - X.ĐK.xlsx` | Bảng mapping 37 KR chuẩn của Xưởng Điều khiển, dùng làm nguồn seed dữ liệu |
-| `BM 01 Dang ky - Danh gia SK _Rev1.xlsx` | File lịch sử đăng ký và đánh giá SK-CTKT, dùng import dữ liệu cũ vào hệ thống |
 | `template_xlsx/*.xlsx` | Các file mẫu cho từng đội/tổ điền báo cáo hàng tháng |

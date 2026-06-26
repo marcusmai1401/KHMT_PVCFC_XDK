@@ -38,7 +38,6 @@ services:
       OKR_STORAGE_DIR: /app/storage
       OKR_ALLOWED_ORIGINS: http://xdk-pvcfc.com,https://xdk-pvcfc.com,http://www.xdk-pvcfc.com,https://www.xdk-pvcfc.com,http://103.200.20.225
       OKR_SOURCE_OKR_WORKBOOK: /app/KHMT_T1_T2_T3_T4/OKR tháng 04-2026 - X.ĐK.xlsx
-      OKR_SOURCE_BM01_WORKBOOK: /app/FI xlsx/BM 01 Dang ky - Danh gia SK _Rev1.xlsx
     volumes:
       - ./storage:/app/storage
     depends_on:

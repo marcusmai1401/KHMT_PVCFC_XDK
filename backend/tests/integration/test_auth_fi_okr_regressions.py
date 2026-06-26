@@ -423,7 +423,7 @@ def test_legacy_sk_is_history_and_can_be_reviewed_from_history(client, admin_hea
                 is_public=False,
                 is_counted_for_okr=False,
                 is_historical_import=True,
-                bm01_source_file="FI xlsx/BM 01 Dang ky - Danh gia SK _Rev1.xlsx",
+                bm01_source_file="legacy-fi-import",
                 bm01_source_sheet="TBCH",
                 bm01_source_row=99,
                 bm01_raw_conclusion="",

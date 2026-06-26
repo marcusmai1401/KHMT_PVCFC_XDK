@@ -229,8 +229,6 @@ export const api = {
     request<any>(`/fi/sk-ctkt/${id}/assign-khmt`, {
       method: "DELETE",
     }),
-  bm01Preview: () => request<any>("/fi/import/bm01/preview", { method: "POST" }),
-  bm01Commit: () => request<any>("/fi/import/bm01/commit", { method: "POST" }),
   uploadSkImage: (skId: string, file: File) => {
     const body = new FormData();
     body.append("file", file);

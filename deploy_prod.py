@@ -19,9 +19,6 @@ DEFAULT_HOST = "103.200.20.225"
 DEFAULT_PORT = 22
 DEFAULT_USER = "root"
 DEFAULT_REMOTE_DIR = "/opt/okr-system"
-BM01_ROOT_FILE = "BM 01 Dang ky - Danh gia SK.xlsx"
-BM01_APP_FILE = "FI xlsx/BM 01 Dang ky - Danh gia SK _Rev1.xlsx"
-BM01_SHEETS = ("TBCH", "TBĐ", "TBHTĐK", "TC- ĐK")
 
 EXCLUDE_DIRS = {
     ".git",
@@ -41,7 +38,6 @@ EXCLUDE_DIRS = {
 EXCLUDE_FILES = {
     ".env",
     ".env.production",
-    BM01_ROOT_FILE,
 }
 EXCLUDE_GLOBS = (
     "*.db",
@@ -68,7 +64,6 @@ def should_exclude(path: Path, root: Path) -> bool:
 
 
 def build_archive(root: Path, archive_path: Path) -> None:
-    mapped_bm01 = root / BM01_ROOT_FILE
     with tarfile.open(archive_path, "w:gz") as archive:
         for current_dir, dir_names, file_names in os.walk(root):
             current = Path(current_dir)
@@ -79,14 +74,10 @@ def build_archive(root: Path, archive_path: Path) -> None:
             ]
             for file_name in sorted(file_names):
                 path = current / file_name
-                rel = path.relative_to(root).as_posix()
-                if mapped_bm01.exists() and rel == BM01_APP_FILE:
-                    continue
                 if should_exclude(path, root):
                     continue
+                rel = path.relative_to(root).as_posix()
                 archive.add(path, arcname=rel)
-        if mapped_bm01.exists():
-            archive.add(mapped_bm01, arcname=BM01_APP_FILE)
 
 
 def connect(host: str, port: int, user: str, password: str, *, accept_new_host_key: bool = False) -> paramiko.SSHClient:
@@ -131,24 +122,11 @@ def run(ssh: paramiko.SSHClient, command: str) -> None:
 def remote_deploy_command(
     remote_dir: str,
     remote_archive: str,
-    skip_import_bm01: bool,
     seed_users: bool,
     reset_user_passwords: bool,
     seed_et_data: bool,
 ) -> str:
     compose = "docker compose --env-file .env.production -f docker-compose.prod.yml"
-    import_commands = []
-    if not skip_import_bm01:
-        workbook = "/app/" + BM01_APP_FILE
-        source_label = "/app/" + BM01_APP_FILE
-        for sheet in BM01_SHEETS:
-            import_commands.append(
-                f"{compose} exec -T backend python scripts/import_bm01_legacy_sheet.py "
-                f"{shlex.quote(workbook)} --sheet {shlex.quote(sheet)} --year 2026 "
-                f"--source-label {shlex.quote(source_label)} --imported-by deploy-import"
-            )
-    import_block = "\n".join(import_commands) if import_commands else "true"
-
     if seed_users:
         reset_flag = " --reset-passwords" if reset_user_passwords else ""
         seed_block = f"echo \"Seeding 56 user accounts for Xưởng Điều khiển\"\n{compose} exec -T backend python scripts/seed_users_xuong_dk.py{reset_flag}"
@@ -198,8 +176,6 @@ echo "Seeding user accounts"
 {seed_block}
 echo "Seeding ET competency frameworks and personnel"
 {et_seed_block}
-echo "Importing BM01 legacy rows"
-{import_block}
 echo "Checking services"
 {compose} ps
 curl -fsS http://127.0.0.1/health
@@ -220,7 +196,6 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=int(os.getenv("VPS_PORT", DEFAULT_PORT)))
     parser.add_argument("--user", default=os.getenv("VPS_USER", DEFAULT_USER))
     parser.add_argument("--remote-dir", default=os.getenv("VPS_REMOTE_DIR", DEFAULT_REMOTE_DIR))
-    parser.add_argument("--skip-import-bm01", action="store_true")
     parser.add_argument(
         "--skip-user-seed",
         action="store_true",
@@ -265,7 +240,6 @@ def main() -> int:
                 remote_deploy_command(
                     args.remote_dir,
                     remote_archive,
-                    args.skip_import_bm01,
                     seed_users=not args.skip_user_seed,
                     reset_user_passwords=args.reset_user_passwords,
                     seed_et_data=not args.skip_et_seed,

@@ -20,7 +20,6 @@ RUN pip install --upgrade pip \
 
 COPY template_xlsx /app/template_xlsx
 COPY KHMT_T1_T2_T3_T4 /app/KHMT_T1_T2_T3_T4
-COPY ["FI xlsx", "/app/FI xlsx"]
 
 RUN mkdir -p /app/storage/uploads /app/storage/exports /app/storage/templates /app/storage/backups
 

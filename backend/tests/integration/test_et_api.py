@@ -1,7 +1,6 @@
-from pathlib import Path
 from io import BytesIO
 
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from sqlalchemy import func, select
 
 from app.models.et_domain import CompetencyFramework, CompetencyItem
@@ -9,6 +8,7 @@ from app.services.pvcfc_knl_seed import seed_pvcfc_knl_frameworks
 
 
 PVCFC_KNL_CODES = {"KNL_\u0110K_10", "KNL_\u0110K_12", "KNL_\u0110K_13", "KNL_\u0110K_14", "KNL_\u0110K_15"}
+IMPORT_FRAMEWORK_CODES = ["KNL_\u0110K_10", "KNL_\u0110K_12", "KNL_\u0110K_13", "KNL_\u0110K_14", "KNL_\u0110K_15"]
 
 
 def _login(client, user_id: str, password: str) -> dict[str, str]:
@@ -17,14 +17,42 @@ def _login(client, user_id: str, password: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
+def _framework_workbook() -> BytesIO:
+    workbook = Workbook()
+    catalog = workbook.active
+    catalog.title = "Ma trận năng lực"
+    catalog.append(["Phân nhóm", "Tên năng lực", "STT", "Mã NLCM", "Chi tiết"])
+    catalog.append([])
+    catalog.append([])
+    catalog.append(["Cơ bản", "HSE cương vị", 1, "ĐK_NLCM_001", "Kiến thức an toàn cương vị"])
+
+    for code in IMPORT_FRAMEWORK_CODES:
+        sheet = workbook.create_sheet(code)
+        sheet["A1"] = "KHUNG NĂNG LỰC CHUYÊN MÔN"
+        sheet["A2"] = f"Khung import test {code}"
+        sheet.append([])
+        sheet.append([])
+        sheet.append(["Phân nhóm", "Tên năng lực", "STT", "Mã NLCM", "Chi tiết", 1, 2, 3, 4, 5, 6, 7, 8])
+        sheet.append(["Cơ bản", "HSE cương vị", 1, "ĐK_NLCM_001", "Kiến thức an toàn cương vị", 1, 1, 1, 1, 1, 1, 1, 1])
+
+    payload = BytesIO()
+    workbook.save(payload)
+    payload.seek(0)
+    return payload
+
+
 def _import_frameworks(client, headers):
-    workbook = Path(__file__).resolve().parents[3] / "Khung năng lực chuyên môn_X.ĐK_Rev14.xlsx"
-    with workbook.open("rb") as file:
-        response = client.post(
-            "/api/v1/et/frameworks/import",
-            headers=headers,
-            files={"file": ("knl.xlsx", file, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
-        )
+    response = client.post(
+        "/api/v1/et/frameworks/import",
+        headers=headers,
+        files={
+            "file": (
+                "knl.xlsx",
+                _framework_workbook(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
     assert response.status_code == 200, response.text
     assert len(response.json()["created"]) == 5
     return response.json()["created"]

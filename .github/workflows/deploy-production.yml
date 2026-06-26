@@ -9,11 +9,6 @@ on:
       - main
   workflow_dispatch:
     inputs:
-      import_bm01:
-        description: "Import BM01 legacy rows during deploy"
-        required: false
-        type: boolean
-        default: false
       reset_user_passwords:
         description: "Reset seeded user passwords during deploy"
         required: false
@@ -127,7 +122,6 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
           VPS_REMOTE_DIR: ${{ secrets.VPS_REMOTE_DIR }}
-          IMPORT_BM01: ${{ github.event.inputs.import_bm01 || 'false' }}
           RESET_USER_PASSWORDS: ${{ github.event.inputs.reset_user_passwords || 'false' }}
         run: |
           set -euo pipefail
@@ -138,9 +132,6 @@ jobs:
           export VPS_REMOTE_DIR="${VPS_REMOTE_DIR:-/opt/okr-system}"
 
           deploy_args=()
-          if [ "${IMPORT_BM01}" != "true" ]; then
-            deploy_args+=(--skip-import-bm01)
-          fi
           if [ "${RESET_USER_PASSWORDS}" == "true" ]; then
             deploy_args+=(--reset-user-passwords)
           fi

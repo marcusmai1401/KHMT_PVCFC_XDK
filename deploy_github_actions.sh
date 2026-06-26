@@ -3,7 +3,6 @@ set -euo pipefail
 
 WORKFLOW_FILE="deploy-production.yml"
 BRANCH="main"
-IMPORT_BM01="false"
 RESET_USER_PASSWORDS="false"
 WATCH="false"
 
@@ -16,14 +15,12 @@ Usage:
 
 Options:
   --branch <name>              Branch/ref to deploy. Default: main
-  --import-bm01                Re-import BM01 legacy data during deploy
   --reset-user-passwords       Reset seeded/demo user passwords during deploy
   --watch                      Wait and stream the GitHub Actions run result
   -h, --help                   Show this help
 
 Examples:
   ./deploy_github_actions.sh --watch
-  ./deploy_github_actions.sh --import-bm01 --watch
 
 Notes:
   - This script does not store the VPS password.
@@ -41,10 +38,6 @@ while [[ $# -gt 0 ]]; do
       fi
       BRANCH="$2"
       shift 2
-      ;;
-    --import-bm01)
-      IMPORT_BM01="true"
-      shift
       ;;
     --reset-user-passwords)
       RESET_USER_PASSWORDS="true"
@@ -91,12 +84,10 @@ fi
 echo "Triggering GitHub Actions production deploy..."
 echo "  workflow: $WORKFLOW_FILE"
 echo "  ref:      $BRANCH"
-echo "  BM01:     $IMPORT_BM01"
 echo "  reset pw: $RESET_USER_PASSWORDS"
 
 gh workflow run "$WORKFLOW_FILE" \
   --ref "$BRANCH" \
-  -f import_bm01="$IMPORT_BM01" \
   -f reset_user_passwords="$RESET_USER_PASSWORDS"
 
 echo "Deploy request submitted. Fetching latest run..."

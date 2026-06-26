@@ -56,7 +56,6 @@ Trong tab `Actions`, chọn `CI and Production Deploy` -> `Run workflow`.
 
 Các option manual:
 
-- `import_bm01`: mặc định tắt. Chỉ bật khi muốn import lại BM01 legacy rows.
 - `reset_user_passwords`: mặc định tắt. Chỉ bật khi thật sự muốn reset password seed user.
 
 ## Bảo mật cần làm

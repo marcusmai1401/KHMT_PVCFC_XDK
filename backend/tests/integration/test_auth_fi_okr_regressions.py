@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from io import BytesIO
 import json
 
@@ -498,6 +499,141 @@ def test_legacy_sk_is_history_and_can_be_reviewed_from_history(client, admin_hea
     assert deleted.status_code == 200, deleted.text
     assert deleted.json() == {"deleted": True}
     assert client.get("/api/v1/fi/sk-ctkt/sk-legacy", headers=admin_headers).status_code == 404
+
+
+def test_admin_exports_fi_reports_with_history_filters(client, admin_headers):
+    def record(
+        record_id: str,
+        *,
+        team: str,
+        status: str,
+        month: int,
+        title: str,
+        consider_for_khmt: bool = False,
+        completed_at: datetime | None = None,
+        completion_plan: str = "Dự kiến hoàn thành 30/06/2026",
+        sequence: int = 1,
+    ) -> SKCTKTModel:
+        return SKCTKTModel(
+            id=record_id,
+            sk_code=f"FI/{month:02d}/2026-{team}-{sequence:02d}",
+            title=title,
+            author_name=f"Tác giả {team}",
+            author_user_id=f"user-{team}",
+            team=team,
+            content_description=f"Nội dung {title}",
+            completion_plan=completion_plan,
+            status=status,
+            status_history=[
+                {
+                    "from_status": None,
+                    "to_status": status,
+                    "changed_by": "admin",
+                    "changed_at": datetime(2026, month, 1, tzinfo=timezone.utc).isoformat(),
+                    "reason": "web_registration",
+                    "comments": {"registration_month": month, "registration_year": 2026},
+                }
+            ],
+            fi_coordinator_comments="Nhận xét FI",
+            decision_note="Ghi chú quyết định",
+            consider_for_khmt=consider_for_khmt,
+            khmt_month=month if consider_for_khmt else None,
+            khmt_year=2026 if consider_for_khmt else None,
+            is_public=status in {"Approved", "Completed"},
+            is_counted_for_okr=consider_for_khmt,
+            is_historical_import=False,
+            created_at=datetime(2026, month, 2, tzinfo=timezone.utc),
+            submitted_at=datetime(2026, month, 3, tzinfo=timezone.utc),
+            approved_at=(
+                datetime(2026, month, 4, tzinfo=timezone.utc) if status == "Approved" else None
+            ),
+            completed_at=completed_at,
+        )
+
+    with create_session() as db:
+        db.add_all(
+            [
+                record(
+                    "sk-export-approved",
+                    team="TBĐL",
+                    status="Approved",
+                    month=6,
+                    title="Approved export",
+                    consider_for_khmt=True,
+                    completed_at=datetime(2026, 6, 10, tzinfo=timezone.utc),
+                ),
+                record(
+                    "sk-export-rejected",
+                    team="TBCH",
+                    status="Rejected",
+                    month=5,
+                    title="Rejected export",
+                ),
+                record(
+                    "sk-export-deferred",
+                    team="TCĐK",
+                    status="Deferred",
+                    month=6,
+                    title="Deferred export",
+                ),
+                record(
+                    "sk-export-pending",
+                    team="TBCH",
+                    status="Submitted",
+                    month=6,
+                    title="Pending export",
+                ),
+                record(
+                    "sk-export-draft",
+                    team="TBCH",
+                    status="Draft",
+                    month=6,
+                    title="Draft export",
+                    sequence=2,
+                ),
+            ]
+        )
+        db.commit()
+
+    team_headers = _login(client, "TBCH", "tbch-pass")
+    forbidden = client.get("/api/v1/fi/reports/export", headers=team_headers)
+    assert forbidden.status_code == 403
+
+    def exported_codes(query: str) -> list[str]:
+        response = client.get(f"/api/v1/fi/reports/export{query}", headers=admin_headers)
+        assert response.status_code == 200, response.text
+        workbook = load_workbook(BytesIO(response.content), read_only=True)
+        assert set(workbook.sheetnames) == {"Tong hop", "Du lieu FI"}
+        sheet = workbook["Du lieu FI"]
+        headers = [cell.value for cell in sheet[1]]
+        assert headers[:6] == [
+            "STT",
+            "Mã SK",
+            "Tên SK-CTKT",
+            "Tác giả",
+            "Tài khoản tác giả",
+            "Đội/tổ",
+        ]
+        return [row[1] for row in sheet.iter_rows(min_row=2, values_only=True)]
+
+    assert exported_codes("?registration_months=5") == ["FI/05/2026-TBCH-01"]
+    assert exported_codes("?decisions=rejected") == ["FI/05/2026-TBCH-01"]
+    assert set(exported_codes("?khmt=out")) == {
+        "FI/05/2026-TBCH-01",
+        "FI/06/2026-TBCH-01",
+        "FI/06/2026-TCĐK-01",
+    }
+    assert set(exported_codes("?completion=pending")) == {
+        "FI/05/2026-TBCH-01",
+        "FI/06/2026-TBCH-01",
+        "FI/06/2026-TCĐK-01",
+    }
+    assert exported_codes(
+        "?teams=TBĐL&registration_months=6&decisions=approved&khmt=in&completion=done"
+    ) == ["FI/06/2026-TBĐL-01"]
+
+    invalid = client.get("/api/v1/fi/reports/export?registration_months=13", headers=admin_headers)
+    assert invalid.status_code == 400
 
 
 def test_okr_duplicate_requires_confirmation_and_export_is_valid_xlsx(client, admin_headers):

@@ -1,11 +1,15 @@
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import Role
 from app.models.domain import SKCTKTModel, SKCodeSequenceModel, SKImageModel
 from app.services.fi.completion import (
@@ -485,6 +489,28 @@ PENDING_STATUSES = {
     SKStatus.REVIEWED.value,
 }
 FI_REPORTABLE_STATUSES = {status for status in FI_DASHBOARD_STATUSES if status != SKStatus.DRAFT.value}
+FI_EXPORT_DECISIONS = {"approved", "rejected", "deferred", "pending"}
+FI_EXPORT_KHMT_FILTERS = {"in", "out"}
+FI_EXPORT_COMPLETION_FILTERS = {"done", "pending"}
+FI_STATUS_LABELS = {
+    SKStatus.DRAFT.value: "Bản nháp",
+    SKStatus.SUBMITTED.value: "Chờ xét duyệt",
+    SKStatus.NEED_MORE_INFO.value: "Cần bổ sung",
+    SKStatus.REVIEWED.value: "Đã xem xét",
+    SKStatus.APPROVED.value: "Đã phê duyệt",
+    SKStatus.REJECTED.value: "Từ chối",
+    SKStatus.DEFERRED.value: "Xem xét sau",
+    SKStatus.CANCELLED.value: "Đã hủy",
+    SKStatus.COMPLETED.value: "Hoàn tất",
+}
+FI_DECISION_LABELS = {
+    "approved": "Đồng ý",
+    "rejected": "Không đồng ý",
+    "deferred": "Xem xét sau",
+    "pending": "Chưa duyệt",
+}
+FI_KHMT_LABELS = {"in": "Đã vào KHMT", "out": "Chưa vào KHMT"}
+FI_COMPLETION_LABELS = {"done": "Đã hoàn thành", "pending": "Chưa hoàn thành"}
 
 
 def is_fi_reportable(record: SKCTKTModel) -> bool:
@@ -607,6 +633,350 @@ def count_for_okr(db: Session, month: int, year: int) -> dict[str, int]:
         if record.team in counts:
             counts[record.team] += 1
     return counts
+
+
+def build_fi_report_export_filters(
+    *,
+    teams: str | None = None,
+    registration_months: str | None = None,
+    decisions: str | None = None,
+    khmt: str | None = None,
+    completion: str | None = None,
+) -> dict[str, set[Any]]:
+    return {
+        "teams": _parse_csv_values(teams),
+        "registration_months": _parse_month_values(registration_months),
+        "decisions": _parse_allowed_values(decisions, FI_EXPORT_DECISIONS, "decisions"),
+        "khmt": _parse_allowed_values(khmt, FI_EXPORT_KHMT_FILTERS, "khmt"),
+        "completion": _parse_allowed_values(completion, FI_EXPORT_COMPLETION_FILTERS, "completion"),
+    }
+
+
+def export_fi_reports_to_excel(db: Session, filters: dict[str, set[Any]]) -> Path:
+    records = _filtered_fi_export_records(db, filters)
+    workbook = Workbook()
+    summary_sheet = workbook.active
+    summary_sheet.title = "Tong hop"
+    data_sheet = workbook.create_sheet("Du lieu FI")
+    generated_at = _utc_now()
+
+    _write_fi_export_summary(summary_sheet, records, filters, generated_at)
+    _write_fi_export_rows(data_sheet, records)
+    _style_fi_export_workbook(workbook)
+
+    export_dir = settings.storage_dir / "exports"
+    export_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"fi-reports-export-{generated_at.strftime('%Y%m%d-%H%M%S')}.xlsx"
+    path = export_dir / filename
+    workbook.save(path)
+    return path
+
+
+def _parse_csv_values(value: str | None) -> set[str]:
+    if not value:
+        return set()
+    return {item.strip() for item in value.split(",") if item.strip()}
+
+
+def _parse_month_values(value: str | None) -> set[int]:
+    months: set[int] = set()
+    for item in _parse_csv_values(value):
+        try:
+            month = int(item)
+        except ValueError as exc:
+            raise ValueError("registration_months chỉ nhận giá trị tháng 1-12") from exc
+        if month < 1 or month > 12:
+            raise ValueError("registration_months chỉ nhận giá trị tháng 1-12")
+        months.add(month)
+    return months
+
+
+def _parse_allowed_values(value: str | None, allowed: set[str], field: str) -> set[str]:
+    values = _parse_csv_values(value)
+    invalid = sorted(values - allowed)
+    if invalid:
+        raise ValueError(f"{field} không hợp lệ: {', '.join(invalid)}")
+    return values
+
+
+def _filtered_fi_export_records(db: Session, filters: dict[str, set[Any]]) -> list[SKCTKTModel]:
+    records = db.execute(
+        select(SKCTKTModel).where(SKCTKTModel.status != SKStatus.DRAFT.value)
+    ).scalars().all()
+    filtered = [record for record in records if _fi_export_record_matches(record, filters)]
+    return sorted(filtered, key=_fi_export_sort_key)
+
+
+def _fi_export_record_matches(record: SKCTKTModel, filters: dict[str, set[Any]]) -> bool:
+    registration_month, _ = _fi_registration_period(record)
+    teams = filters.get("teams") or set()
+    months = filters.get("registration_months") or set()
+    decisions = filters.get("decisions") or set()
+    khmt = filters.get("khmt") or set()
+    completion = filters.get("completion") or set()
+    if teams and record.team not in teams:
+        return False
+    if months and registration_month not in months:
+        return False
+    if decisions and _fi_decision_filter(record) not in decisions:
+        return False
+    if khmt and _fi_khmt_filter(record) not in khmt:
+        return False
+    return not completion or _fi_completion_filter(record) in completion
+
+
+def _fi_export_sort_key(record: SKCTKTModel) -> tuple[int, int, int, float]:
+    registration_month, registration_year = _fi_registration_period(record)
+    source_row = record.bm01_source_row or 0
+    created_at = _datetime_for_sort(record.created_at)
+    return (
+        -(registration_year or 0),
+        -(registration_month or 0),
+        source_row,
+        -created_at.timestamp() if created_at else 0,
+    )
+
+
+def _fi_registration_period(record: SKCTKTModel) -> tuple[int | None, int]:
+    history = record.status_history if isinstance(record.status_history, list) else []
+    first = history[0] if history and isinstance(history[0], dict) else {}
+    comments = first.get("comments") if isinstance(first.get("comments"), dict) else {}
+    month = _int_or_none(comments.get("registration_month"))
+    year = _int_or_none(comments.get("registration_year"))
+    if month is not None and 1 <= month <= 12:
+        return month, year or _fallback_registration_year(record)
+    created_at = _datetime_for_sort(record.created_at)
+    if created_at is not None:
+        return created_at.month, created_at.year
+    return None, year or _utc_now().year
+
+
+def _fallback_registration_year(record: SKCTKTModel) -> int:
+    created_at = _datetime_for_sort(record.created_at)
+    if created_at is not None:
+        return created_at.year
+    if record.khmt_year:
+        return int(record.khmt_year)
+    return _utc_now().year
+
+
+def _int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _datetime_for_sort(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _excel_datetime(value: datetime | None) -> datetime | str:
+    normalized = _datetime_for_sort(value)
+    return normalized.replace(tzinfo=None) if normalized else ""
+
+
+def _fi_decision_filter(record: SKCTKTModel) -> str:
+    if record.status in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}:
+        return "approved"
+    if record.status == SKStatus.REJECTED.value:
+        return "rejected"
+    if record.status == SKStatus.DEFERRED.value:
+        return "deferred"
+    return "pending"
+
+
+def _fi_khmt_filter(record: SKCTKTModel) -> str:
+    return "in" if record.consider_for_khmt else "out"
+
+
+def _fi_completion_filter(record: SKCTKTModel) -> str:
+    if record.status == SKStatus.COMPLETED.value:
+        return "done"
+    if record.completed_at is not None:
+        return "done"
+    return "done" if completion_plan_indicates_done(record.completion_plan) else "pending"
+
+
+def _fi_registration_label(record: SKCTKTModel) -> str:
+    month, year = _fi_registration_period(record)
+    return f"T{month}/{year}" if month else "Chưa rõ"
+
+
+def _fi_khmt_label(record: SKCTKTModel) -> str:
+    if record.consider_for_khmt:
+        return f"KHMT T{record.khmt_month}/{record.khmt_year}" if record.khmt_month and record.khmt_year else "Đã vào KHMT"
+    return "Chưa vào KHMT"
+
+
+def _fi_source_reference(record: SKCTKTModel) -> str:
+    if record.bm01_source_sheet:
+        return f"{record.bm01_source_sheet}!{record.bm01_source_row or ''}"
+    if record.bm01_source_row:
+        return str(record.bm01_source_row)
+    return ""
+
+
+def _fi_review_note(record: SKCTKTModel) -> str:
+    return record.fi_coordinator_comments or record.bm01_raw_conclusion or ""
+
+
+def _write_fi_export_summary(
+    sheet,
+    records: list[SKCTKTModel],
+    filters: dict[str, set[Any]],
+    generated_at: datetime,
+) -> None:
+    sheet.append(["XUẤT DỮ LIỆU FI/SK-CTKT"])
+    sheet.append(["Thời điểm xuất", _excel_datetime(generated_at)])
+    sheet.append(["Tổng số", len(records)])
+    sheet.append([])
+    sheet.append(["Bộ lọc", "Giá trị"])
+    sheet.append(["Đội/tổ", _filter_value_text(filters.get("teams"), {})])
+    sheet.append(["Tháng đăng ký", _filter_value_text(filters.get("registration_months"), {}, prefix="T")])
+    sheet.append(["Kết luận LĐX", _filter_value_text(filters.get("decisions"), FI_DECISION_LABELS)])
+    sheet.append(["KHMT", _filter_value_text(filters.get("khmt"), FI_KHMT_LABELS)])
+    sheet.append(["Hoàn thành", _filter_value_text(filters.get("completion"), FI_COMPLETION_LABELS)])
+    sheet.append([])
+    _append_counter_block(sheet, "Theo đội/tổ", "Đội/tổ", Counter(record.team for record in records))
+    _append_counter_block(
+        sheet,
+        "Theo tháng đăng ký",
+        "Tháng",
+        Counter(_fi_registration_label(record) for record in records),
+    )
+    _append_counter_block(
+        sheet,
+        "Theo kết luận LĐX",
+        "Kết luận",
+        Counter(FI_DECISION_LABELS[_fi_decision_filter(record)] for record in records),
+    )
+    _append_counter_block(
+        sheet,
+        "Theo KHMT",
+        "KHMT",
+        Counter(FI_KHMT_LABELS[_fi_khmt_filter(record)] for record in records),
+    )
+    _append_counter_block(
+        sheet,
+        "Theo hoàn thành",
+        "Hoàn thành",
+        Counter(FI_COMPLETION_LABELS[_fi_completion_filter(record)] for record in records),
+    )
+
+
+def _filter_value_text(values: set[Any] | None, labels: dict[str, str], *, prefix: str = "") -> str:
+    if not values:
+        return "Tất cả"
+    rendered = []
+    for value in sorted(values):
+        key = str(value)
+        rendered.append(labels.get(key, f"{prefix}{key}"))
+    return ", ".join(rendered)
+
+
+def _append_counter_block(sheet, title: str, label: str, counts: Counter) -> None:
+    sheet.append([])
+    sheet.append([title])
+    sheet.append([label, "Số lượng"])
+    for key, count in sorted(counts.items(), key=lambda item: str(item[0])):
+        sheet.append([key, count])
+
+
+def _write_fi_export_rows(sheet, records: list[SKCTKTModel]) -> None:
+    headers = [
+        "STT",
+        "Mã SK",
+        "Tên SK-CTKT",
+        "Tác giả",
+        "Tài khoản tác giả",
+        "Đội/tổ",
+        "Tháng đăng ký",
+        "Trạng thái",
+        "Kết luận LĐX",
+        "KHMT",
+        "Tháng KHMT",
+        "Hoàn thành",
+        "Kế hoạch hoàn thành",
+        "Nội dung",
+        "Nhận xét FI/BM01",
+        "Ghi chú quyết định",
+        "Nguồn",
+        "File nguồn",
+        "Sheet/dòng nguồn",
+        "Ngày tạo",
+        "Ngày gửi duyệt",
+        "Ngày xét duyệt",
+        "Ngày phê duyệt",
+        "Ngày hoàn thành",
+        "Cập nhật cuối",
+        "ID",
+    ]
+    sheet.append(headers)
+    for index, record in enumerate(records, start=1):
+        sheet.append(
+            [
+                index,
+                record.sk_code,
+                record.title,
+                record.author_name,
+                record.author_user_id,
+                record.team,
+                _fi_registration_label(record),
+                FI_STATUS_LABELS.get(record.status, record.status),
+                FI_DECISION_LABELS[_fi_decision_filter(record)],
+                _fi_khmt_label(record),
+                f"T{record.khmt_month}/{record.khmt_year}" if record.khmt_month and record.khmt_year else "",
+                FI_COMPLETION_LABELS[_fi_completion_filter(record)],
+                record.completion_plan,
+                record.content_description,
+                _fi_review_note(record),
+                record.decision_note or "",
+                "Excel lịch sử" if record.is_historical_import else "Hệ thống",
+                record.bm01_source_file or "",
+                _fi_source_reference(record),
+                _excel_datetime(record.created_at),
+                _excel_datetime(record.submitted_at),
+                _excel_datetime(record.reviewed_at),
+                _excel_datetime(record.approved_at),
+                _excel_datetime(record.completed_at),
+                _excel_datetime(record.updated_at),
+                record.id,
+            ]
+        )
+
+
+def _style_fi_export_workbook(workbook: Workbook) -> None:
+    header_fill = PatternFill("solid", fgColor="EAF2FF")
+    title_fill = PatternFill("solid", fgColor="1F3A8A")
+    title_font = Font(bold=True, color="FFFFFF")
+    header_font = Font(bold=True, color="0F172A")
+    for sheet in workbook.worksheets:
+        for row in sheet.iter_rows():
+            for cell in row:
+                cell.alignment = Alignment(vertical="top", wrap_text=True)
+                if isinstance(cell.value, datetime):
+                    cell.number_format = "dd/mm/yyyy hh:mm"
+        if sheet.max_row >= 1:
+            for cell in sheet[1]:
+                cell.font = title_font if sheet.title == "Tong hop" else header_font
+                cell.fill = title_fill if sheet.title == "Tong hop" else header_fill
+        if sheet.title == "Tong hop":
+            for row_index in range(5, sheet.max_row + 1):
+                first_cell = sheet.cell(row_index, 1)
+                if first_cell.value and not sheet.cell(row_index, 2).value:
+                    first_cell.font = header_font
+                    first_cell.fill = header_fill
+        else:
+            sheet.freeze_panes = "A2"
+            sheet.auto_filter.ref = sheet.dimensions
+        for column_cells in sheet.columns:
+            width = max(len(str(cell.value or "")) for cell in column_cells) + 2
+            sheet.column_dimensions[column_cells[0].column_letter].width = min(max(width, 10), 48)
 
 
 def delete_sk_ctkt(db: Session, record_id: str, actor: str, role: str) -> None:

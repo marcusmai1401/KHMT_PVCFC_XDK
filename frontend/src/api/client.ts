@@ -9,6 +9,13 @@ export function setToken(value: string) {
 }
 
 type QueryParams = Record<string, string | number | boolean | undefined | null>;
+type FiReportExportFilters = {
+  teams?: string[];
+  registration_months?: number[];
+  decisions?: string[];
+  khmt?: string[];
+  completion?: string[];
+};
 
 function toQuery(params: QueryParams = {}) {
   const query = new URLSearchParams();
@@ -213,6 +220,16 @@ export const api = {
   publicSk: (filters: QueryParams = {}) => request<any[]>(`/fi/sk-ctkt/public${toQuery(filters)}`),
   fiDashboard: () => request<any>("/fi/dashboard"),
   fiReports: (filters: QueryParams = {}) => request<any[]>(`/fi/reports${toQuery(filters)}`),
+  exportFiReports: (filters: FiReportExportFilters = {}) =>
+    requestBlob(
+      `/fi/reports/export${toQuery({
+        teams: filters.teams?.join(","),
+        registration_months: filters.registration_months?.join(","),
+        decisions: filters.decisions?.join(","),
+        khmt: filters.khmt?.join(","),
+        completion: filters.completion?.join(","),
+      })}`
+    ),
   notifications: () => request<any[]>("/notifications"),
   markNotificationRead: (id: string) => request<any>(`/notifications/${id}/read`, { method: "PUT" }),
   transitionSk: (id: string, action: string, payload: any = {}) =>

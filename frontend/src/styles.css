@@ -4788,6 +4788,13 @@ th {
   color: #2c398e;
 }
 
+.fi-history-reload:disabled {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
 /* === FI History — Filter toolbar === */
 .fi-history-toolbar {
   align-items: center;

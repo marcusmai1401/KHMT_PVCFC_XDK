@@ -238,4 +238,29 @@ describe("api client auth contract", () => {
     await api.publicSk({ historical: true, team: "TCĐK" });
     expect(fetchMock).toHaveBeenLastCalledWith("/api/v1/fi/sk-ctkt/public?historical=true&team=TC%C4%90K", expect.any(Object));
   });
+
+  it("exports FI reports as an authenticated blob request with active filters", async () => {
+    const workbook = new Blob(["xlsx"], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    });
+    setToken("signed-token");
+    fetchMock.mockResolvedValue(okBlob(workbook));
+
+    const result = await api.exportFiReports({
+      teams: ["TBCH", "TBĐL"],
+      registration_months: [6, 5],
+      decisions: ["approved"],
+      khmt: ["in"],
+      completion: ["done"]
+    });
+
+    expect(result).toBe(workbook);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/fi/reports/export?teams=TBCH%2CTB%C4%90L&registration_months=6%2C5&decisions=approved&khmt=in&completion=done",
+      expect.any(Object)
+    );
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect((init.headers as Headers).get("Authorization")).toBe("Bearer signed-token");
+    expect((init.headers as Headers).get("Content-Type")).toBeNull();
+  });
 });

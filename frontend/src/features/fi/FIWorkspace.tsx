@@ -12,6 +12,7 @@ import {
   ClipboardList,
   Clock3,
   Flag,
+  FileDown,
   History,
   Image as ImageIcon,
   ImagePlus,
@@ -240,6 +241,17 @@ function formatDateForPlan(isoDate: string): string {
   const [year, month, day] = isoDate.split("-");
   if (!year || !month || !day) return isoDate;
   return `${day}/${month}/${year}`;
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function formatCompletionPlan(done: boolean, isoDate: string): string {
@@ -1119,6 +1131,7 @@ export function FIWorkspace({
   const [historyDecisions, setHistoryDecisions] = useState<HistoryDecisionFilter[]>([]);
   const [historyKhmt, setHistoryKhmt] = useState<HistoryKhmtFilter[]>([]);
   const [historyCompletion, setHistoryCompletion] = useState<HistoryCompletionFilter[]>([]);
+  const [exportingHistoryExcel, setExportingHistoryExcel] = useState(false);
   const [activeTab, setActiveTab] = useState<FITab>(defaultTab);
   const [reviewFilter, setReviewFilter] = useState<ReviewQueueFilter>("pending");
   const [form, setForm] = useState(() => {
@@ -1830,6 +1843,27 @@ export function FIWorkspace({
       )
     ).sort((a, b) => displayTeam(a).localeCompare(displayTeam(b), "vi")),
   ];
+
+  const exportHistoryExcel = () => {
+    if (role !== ADMIN_ROLE || exportingHistoryExcel || filteredHistoryItems.length === 0) return;
+    setExportingHistoryExcel(true);
+    setError("");
+    setNotice("");
+    api.exportFiReports({
+      teams: historyTeams,
+      registration_months: historyMonths,
+      decisions: historyDecisions,
+      khmt: historyKhmt,
+      completion: historyCompletion,
+    })
+      .then((blob) => {
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+        saveBlob(blob, `fi-reports-${stamp}.xlsx`);
+        setNotice(`Đã xuất ${filteredHistoryItems.length} SK-CTKT ra Excel.`);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setExportingHistoryExcel(false));
+  };
 
   const renderMetricPair = (
     primary: number | undefined,
@@ -3154,6 +3188,18 @@ export function FIWorkspace({
                   </>
                 )}
               </span>
+              {role === ADMIN_ROLE && (
+                <button
+                  aria-label="Xuất Excel theo bộ lọc hiện tại"
+                  className="fi-history-reload"
+                  disabled={exportingHistoryExcel || filteredHistoryItems.length === 0}
+                  onClick={exportHistoryExcel}
+                  title={filteredHistoryItems.length === 0 ? "Không có dữ liệu để xuất" : "Xuất Excel theo bộ lọc hiện tại"}
+                  type="button"
+                >
+                  <FileDown size={17} />
+                </button>
+              )}
               <button
                 className="fi-history-reload"
                 onClick={reload}

@@ -16,11 +16,13 @@ from app.services.fi.service import (
     AUTHOR_CONTENT_EDITABLE_STATUSES,
     AUTHOR_ROLES as FI_AUTHOR_ROLES,
     assign_khmt,
+    build_fi_report_export_filters,
     can_view_sk,
     clear_khmt,
     count_for_okr,
     create_sk_ctkt,
     delete_sk_ctkt,
+    export_fi_reports_to_excel,
     fi_dashboard,
     is_author_or_submitter,
     require_visible,
@@ -474,6 +476,34 @@ def dashboard(
     db: Session = Depends(get_db),
 ):
     return fi_dashboard(db, principal)
+
+
+@router.get("/reports/export")
+def export_reports(
+    teams: str | None = None,
+    registration_months: str | None = None,
+    decisions: str | None = None,
+    khmt: str | None = None,
+    completion: str | None = None,
+    _: dict = Depends(require_role(Role.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    try:
+        filters = build_fi_report_export_filters(
+            teams=teams,
+            registration_months=registration_months,
+            decisions=decisions,
+            khmt=khmt,
+            completion=completion,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    path = export_fi_reports_to_excel(db, filters)
+    return FileResponse(
+        path,
+        filename=Path(path).name,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 @router.get("/reports")

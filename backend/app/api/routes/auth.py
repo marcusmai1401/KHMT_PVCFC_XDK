@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import (
     Role,
     create_access_token,
@@ -61,10 +62,21 @@ def _find_login_user(db: Session, user_id: str) -> User | None:
     return db.get(User, lowered)
 
 
+def _verify_password_allowing_copy_whitespace(password: str, password_hash: str) -> bool:
+    if verify_password(password, password_hash):
+        return True
+    stripped = password.strip()
+    return stripped != password and verify_password(stripped, password_hash)
+
+
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     user_id = payload.user_id.strip()
-    if user_id.lower() == SANDBOX_LOGIN_ID and payload.password == SANDBOX_PASSWORD:
+    if (
+        settings.environment != "production"
+        and user_id.lower() == SANDBOX_LOGIN_ID
+        and payload.password.strip() == SANDBOX_PASSWORD
+    ):
         ensure_sandbox_data()
         identity = sandbox_identity(SANDBOX_LOGIN_ID)
         if identity is None:
@@ -78,7 +90,11 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
         )
 
     user = _find_login_user(db, user_id)
-    if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
+    if (
+        user is None
+        or not user.is_active
+        or not _verify_password_allowing_copy_whitespace(payload.password, user.password_hash)
+    ):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sai tài khoản hoặc mật khẩu")
     audit(db, user.id, "Account", user.id, "login", {"sandbox": False})
     db.commit()
@@ -108,7 +124,7 @@ def change_password(
     user = db.get(User, principal["user_id"])
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy tài khoản")
-    if not verify_password(payload.old_password, user.password_hash):
+    if not _verify_password_allowing_copy_whitespace(payload.old_password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Mật khẩu hiện tại không đúng")
     if payload.old_password == payload.new_password:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Mật khẩu mới phải khác mật khẩu cũ")

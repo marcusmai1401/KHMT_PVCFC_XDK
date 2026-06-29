@@ -15,18 +15,28 @@ branch_labels = None
 depends_on = None
 
 
+def _column_names(table_name: str) -> set[str]:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    return {column["name"] for column in inspector.get_columns(table_name)}
+
+
 def upgrade() -> None:
-    op.add_column("users", sa.Column("full_name", sa.String(), nullable=True))
-    op.add_column("users", sa.Column("team", sa.String(), nullable=True))
-    op.add_column(
-        "users",
-        sa.Column(
-            "must_change_password",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.text("false"),
-        ),
-    )
+    columns = _column_names("users")
+    if "full_name" not in columns:
+        op.add_column("users", sa.Column("full_name", sa.String(), nullable=True))
+    if "team" not in columns:
+        op.add_column("users", sa.Column("team", sa.String(), nullable=True))
+    if "must_change_password" not in columns:
+        op.add_column(
+            "users",
+            sa.Column(
+                "must_change_password",
+                sa.Boolean(),
+                nullable=False,
+                server_default=sa.text("false"),
+            ),
+        )
 
 
 def downgrade() -> None:

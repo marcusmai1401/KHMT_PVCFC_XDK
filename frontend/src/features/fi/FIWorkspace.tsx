@@ -1282,6 +1282,10 @@ function PersonFilterCombobox({
           <div className="fi-person-filter-list" role="listbox" aria-multiselectable="true">
             {visibleOptions.map((option) => {
               const checked = selected.includes(option.key);
+              const optionMeta = [
+                option.accountId ? option.accountId : "",
+                displayTeam(option.team),
+              ].filter(Boolean).join(" · ");
               return (
                 <button
                   key={option.key}
@@ -1295,8 +1299,7 @@ function PersonFilterCombobox({
                   <span className="fi-person-filter-name">
                     <strong>{option.label}</strong>
                     <small>
-                      {option.accountId ? <em>{option.accountId}</em> : "Không có mã tài khoản"}
-                      {displayTeam(option.team) ? ` · ${displayTeam(option.team)}` : ""}
+                      {optionMeta || "Theo tên trong lịch sử"}
                     </small>
                   </span>
                   <span className="fi-person-filter-count">{option.count}</span>

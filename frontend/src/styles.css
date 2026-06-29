@@ -5115,7 +5115,8 @@ th {
 
 .fi-person-filter-list {
   display: grid;
-  gap: 2px;
+  gap: 3px;
+  grid-auto-rows: minmax(46px, auto);
   max-height: 310px;
   overflow-y: auto;
 }
@@ -5130,8 +5131,8 @@ th {
   gap: 8px;
   grid-template-columns: 18px minmax(0, 1fr) auto;
   justify-items: start;
-  min-height: 0;
-  padding: 7px 8px;
+  min-height: 46px;
+  padding: 6px 8px;
   text-align: left;
   width: 100%;
 }
@@ -5146,6 +5147,7 @@ th {
   background: #ffffff;
   border: 1.5px solid #cbd5e1;
   border-radius: 4px;
+  flex: 0 0 auto;
   height: 16px;
   width: 16px;
 }
@@ -5170,20 +5172,34 @@ th {
 
 .fi-person-filter-name {
   display: grid;
-  gap: 2px;
+  gap: 3px;
+  line-height: 1.2;
   min-width: 0;
+  width: 100%;
 }
 
 .fi-person-filter-name strong {
   color: #0f172a;
+  display: block;
   font-size: 13px;
+  line-height: 1.2;
+  overflow: hidden;
   overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
 }
 
 .fi-person-filter-name small {
   color: #64748b;
+  display: block;
   font-size: 11.5px;
   font-weight: 500;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
 }
 
 .fi-person-filter-name em {
@@ -5193,13 +5209,17 @@ th {
 }
 
 .fi-person-filter-count {
+  align-self: center;
   background: #f1f5f9;
   border-radius: 999px;
   color: #64748b;
+  display: inline-flex;
   font-size: 11px;
   font-weight: 700;
+  justify-content: center;
+  line-height: 18px;
   min-width: 22px;
-  padding: 1px 7px;
+  padding: 0 7px;
   text-align: center;
 }
 

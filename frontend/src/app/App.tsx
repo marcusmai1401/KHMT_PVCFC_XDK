@@ -611,8 +611,11 @@ export function App() {
                 <div className="auth-input">
                   <LogIn size={16} className="auth-input-icon" />
                   <input
+                    autoCapitalize="none"
                     autoComplete="username"
+                    autoCorrect="off"
                     placeholder="ví dụ: baomt"
+                    spellCheck={false}
                     value={userId}
                     onChange={(event) => setUserId(event.target.value)}
                   />

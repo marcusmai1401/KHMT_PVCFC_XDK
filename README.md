@@ -276,6 +276,8 @@ Các tùy chọn thủ công:
 
 - `reset_user_passwords`: mặc định tắt, chỉ bật khi thật sự muốn reset password các user seed.
 
+Deploy vẫn chạy thêm bước password hygiene an toàn: chỉ reset user chưa login/chưa đổi mật khẩu mặc định, bỏ qua Admin và user đã có log đổi mật khẩu.
+
 ### GitHub Secrets production
 
 Deploy dùng GitHub Environment `production` và các secret sau:

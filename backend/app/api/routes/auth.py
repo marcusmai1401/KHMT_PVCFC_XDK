@@ -51,9 +51,20 @@ def _token_response_from_user(user: User, *, sandbox: bool = False) -> TokenResp
     )
 
 
+def _find_login_user(db: Session, user_id: str) -> User | None:
+    user = db.get(User, user_id)
+    if user is not None:
+        return user
+    lowered = user_id.lower()
+    if lowered == user_id:
+        return None
+    return db.get(User, lowered)
+
+
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
-    if payload.user_id.strip() == SANDBOX_LOGIN_ID and payload.password == SANDBOX_PASSWORD:
+    user_id = payload.user_id.strip()
+    if user_id.lower() == SANDBOX_LOGIN_ID and payload.password == SANDBOX_PASSWORD:
         ensure_sandbox_data()
         identity = sandbox_identity(SANDBOX_LOGIN_ID)
         if identity is None:
@@ -66,7 +77,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
             team=None,
         )
 
-    user = db.get(User, payload.user_id)
+    user = _find_login_user(db, user_id)
     if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sai tài khoản hoặc mật khẩu")
     audit(db, user.id, "Account", user.id, "login", {"sandbox": False})

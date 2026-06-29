@@ -132,6 +132,10 @@ def remote_deploy_command(
         seed_block = f"echo \"Seeding 56 user accounts for Xưởng Điều khiển\"\n{compose} exec -T backend python scripts/seed_users_xuong_dk.py{reset_flag}"
     else:
         seed_block = "true"
+    password_hygiene_block = (
+        f"echo \"Resetting safe default password candidates\"\n"
+        f"{compose} exec -T backend python scripts/reset_default_password_candidates.py --apply"
+    )
     if seed_et_data:
         et_seed_block = "\n".join(
             [
@@ -174,6 +178,8 @@ echo "Running migrations"
 {compose} exec -T backend alembic upgrade head
 echo "Seeding user accounts"
 {seed_block}
+echo "Checking default-password hygiene"
+{password_hygiene_block}
 echo "Seeding ET competency frameworks and personnel"
 {et_seed_block}
 echo "Checking services"

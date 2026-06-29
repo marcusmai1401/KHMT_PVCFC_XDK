@@ -48,6 +48,7 @@ Workflow dùng lại `deploy_prod.py` trong GitHub Actions:
 - Rebuild Docker containers.
 - Chạy Alembic migration.
 - Seed user accounts nhưng mặc định không reset password.
+- Chạy bước password hygiene an toàn: chỉ reset user chưa login/chưa đổi mật khẩu mặc định, bỏ qua Admin và user đã có log đổi mật khẩu.
 - Kiểm tra `/health`.
 
 ## Chạy workflow thủ công

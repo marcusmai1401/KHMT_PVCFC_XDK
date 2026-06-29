@@ -2,6 +2,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+import unicodedata
 
 from fastapi import HTTPException
 from openpyxl import Workbook
@@ -662,6 +663,8 @@ def build_fi_report_export_filters(
     decisions: str | None = None,
     khmt: str | None = None,
     completion: str | None = None,
+    authors: str | None = None,
+    submitters: str | None = None,
 ) -> dict[str, set[Any]]:
     return {
         "teams": _parse_csv_values(teams),
@@ -669,6 +672,8 @@ def build_fi_report_export_filters(
         "decisions": _parse_allowed_values(decisions, FI_EXPORT_DECISIONS, "decisions"),
         "khmt": _parse_allowed_values(khmt, FI_EXPORT_KHMT_FILTERS, "khmt"),
         "completion": _parse_allowed_values(completion, FI_EXPORT_COMPLETION_FILTERS, "completion"),
+        "authors": _parse_csv_values(authors),
+        "submitters": _parse_csv_values(submitters),
     }
 
 
@@ -734,6 +739,8 @@ def _fi_export_record_matches(record: SKCTKTModel, filters: dict[str, set[Any]])
     decisions = filters.get("decisions") or set()
     khmt = filters.get("khmt") or set()
     completion = filters.get("completion") or set()
+    authors = filters.get("authors") or set()
+    submitters = filters.get("submitters") or set()
     if teams and record.team not in teams:
         return False
     if months and registration_month not in months:
@@ -742,7 +749,34 @@ def _fi_export_record_matches(record: SKCTKTModel, filters: dict[str, set[Any]])
         return False
     if khmt and _fi_khmt_filter(record) not in khmt:
         return False
-    return not completion or _fi_completion_filter(record) in completion
+    if completion and _fi_completion_filter(record) not in completion:
+        return False
+    if authors and not _fi_person_filter_matches(record.author_user_id, record.author_name, authors):
+        return False
+    submitter_id = submitter_user_id(record)
+    if submitters and not _fi_person_filter_matches(submitter_id, None, submitters):
+        return False
+    return True
+
+
+def _normalize_person_filter_value(value: str | None) -> str:
+    text = str(value or "").strip().lower().replace("đ", "d")
+    return "".join(
+        char for char in unicodedata.normalize("NFD", text)
+        if unicodedata.category(char) != "Mn"
+    )
+
+
+def _fi_person_filter_matches(user_id: str | None, display_name: str | None, selected_keys: set[Any]) -> bool:
+    keys: set[str] = set()
+    if user_id and user_id != "historical-import":
+        keys.add(f"id:{user_id}")
+    if user_id == "historical-import":
+        keys.add("name:he thong")
+    name_key = _normalize_person_filter_value(display_name)
+    if name_key:
+        keys.add(f"name:{name_key}")
+    return bool(keys & {str(key) for key in selected_keys})
 
 
 def _fi_export_sort_key(record: SKCTKTModel) -> tuple[int, int, int, float]:

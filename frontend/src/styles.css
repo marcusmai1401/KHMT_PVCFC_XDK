@@ -1293,7 +1293,7 @@ h2 {
      behind it (vh keeps the static fallback for older browsers). */
   max-height: calc(100dvh - 56px);
   overflow: hidden;
-  width: min(920px, 100%);
+  width: min(1180px, calc(100vw - 56px));
 }
 
 .fi-edit-modal-head {
@@ -1407,7 +1407,7 @@ h2 {
 
 .fi-edit-content-field textarea {
   line-height: 1.45;
-  min-height: 220px;
+  min-height: 340px;
   resize: vertical;
 }
 
@@ -1447,6 +1447,65 @@ h2 {
   min-height: 38px;
 }
 
+.fi-edit-images-panel {
+  background: #ffffff;
+  border: 1px solid #dbe4ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.fi-edit-images-head {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.fi-edit-images-head > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.fi-edit-images-head strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.fi-edit-images-head span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.fi-edit-image-add {
+  flex: 0 0 auto;
+}
+
+.fi-edit-image-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.fi-edit-image-card {
+  max-width: 178px;
+}
+
+.fi-edit-image-empty {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  color: #64748b;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  padding: 12px;
+}
+
 .fi-edit-modal-actions {
   background: #f8fafc;
   border-top: 1px solid #e6edf5;
@@ -1465,6 +1524,7 @@ h2 {
   .fi-edit-modal {
     max-height: calc(100vh - 24px);
     max-height: calc(100dvh - 24px);
+    width: min(100%, calc(100vw - 24px));
   }
 
   .fi-edit-modal-close {
@@ -1491,6 +1551,16 @@ h2 {
 
   .fi-edit-plan-panel {
     gap: 10px;
+  }
+
+  .fi-edit-images-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .fi-edit-image-add {
+    justify-content: center;
+    width: 100%;
   }
 
   .fi-edit-modal-actions {
@@ -4945,6 +5015,207 @@ th {
   box-shadow: 0 0 0 3px rgba(44, 57, 142, 0.15);
 }
 
+.fi-person-filter {
+  display: inline-flex;
+  position: relative;
+}
+
+.fi-person-filter.open .fi-filter-chip {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(44, 57, 142, 0.15);
+}
+
+.fi-person-filter-popover {
+  animation: fi-filter-popover-in 0.16s ease-out both;
+  background: #ffffff;
+  border: 1px solid #e1e8ef;
+  border-radius: 12px;
+  box-shadow:
+    0 12px 28px -10px rgba(15, 23, 42, 0.22),
+    0 6px 14px -6px rgba(15, 23, 42, 0.12);
+  display: grid;
+  gap: 8px;
+  left: 0;
+  margin-top: 6px;
+  min-width: 310px;
+  padding: 8px;
+  position: absolute;
+  top: 100%;
+  z-index: 55;
+}
+
+.fi-person-filter-search {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #dbe4ee;
+  border-radius: 8px;
+  display: flex;
+  gap: 7px;
+  padding: 0 8px;
+}
+
+.fi-person-filter-search svg {
+  color: #64748b;
+  flex: 0 0 auto;
+}
+
+.fi-person-filter-search input {
+  background: transparent;
+  border: 0;
+  color: #0f172a;
+  font-size: 13px;
+  min-height: 34px;
+  min-width: 0;
+  outline: none;
+  padding: 0;
+  width: 100%;
+}
+
+.fi-person-filter-clear {
+  background: transparent;
+  border: 0;
+  color: #94a3b8;
+  height: 24px;
+  justify-content: center;
+  min-height: 24px;
+  min-width: 24px;
+  padding: 0;
+  width: 24px;
+}
+
+.fi-person-filter-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 2px;
+}
+
+.fi-person-filter-head span {
+  color: #607087;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.fi-person-filter-head small {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.fi-person-filter-head button {
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  min-height: 0;
+  padding: 2px 6px;
+}
+
+.fi-person-filter-list {
+  display: grid;
+  gap: 2px;
+  max-height: 310px;
+  overflow-y: auto;
+}
+
+.fi-person-filter-list > button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: #1f2937;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  justify-items: start;
+  min-height: 0;
+  padding: 7px 8px;
+  text-align: left;
+  width: 100%;
+}
+
+.fi-person-filter-list > button:hover,
+.fi-person-filter-list > button.selected {
+  background: #eef6ff;
+  color: #2c398e;
+}
+
+.fi-person-filter-mark {
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 4px;
+  height: 16px;
+  width: 16px;
+}
+
+.fi-person-filter-list > button.selected .fi-person-filter-mark {
+  background: #2c398e;
+  border-color: #2c398e;
+  position: relative;
+}
+
+.fi-person-filter-list > button.selected .fi-person-filter-mark::after {
+  border-bottom: 2px solid #ffffff;
+  border-left: 2px solid #ffffff;
+  content: "";
+  height: 4px;
+  left: 3px;
+  position: absolute;
+  top: 4px;
+  transform: rotate(-45deg);
+  width: 8px;
+}
+
+.fi-person-filter-name {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fi-person-filter-name strong {
+  color: #0f172a;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.fi-person-filter-name small {
+  color: #64748b;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.fi-person-filter-name em {
+  color: #475569;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-style: normal;
+}
+
+.fi-person-filter-count {
+  background: #f1f5f9;
+  border-radius: 999px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 22px;
+  padding: 1px 7px;
+  text-align: center;
+}
+
+.fi-person-filter-list > button.selected .fi-person-filter-count {
+  background: #dbeafe;
+  color: #2c398e;
+}
+
+.fi-person-filter-empty {
+  color: #94a3b8;
+  font-size: 12px;
+  margin: 0;
+  padding: 10px 8px;
+  text-align: center;
+}
+
 /* Popover */
 .fi-filter-popover {
   animation: fi-filter-popover-in 0.16s ease-out both;
@@ -6418,7 +6689,7 @@ th {
   justify-items: center;
   padding: 24px;
   position: fixed;
-  z-index: 100;
+  z-index: 150;
 }
 
 .image-viewer {
@@ -14478,6 +14749,18 @@ pre {
   .fi-history-toolbar-tail {
     justify-content: stretch;
     width: 100%;
+  }
+
+  .fi-person-filter,
+  .fi-person-filter > .fi-filter-chip {
+    width: 100%;
+  }
+
+  .fi-person-filter-popover {
+    left: 0;
+    min-width: 0;
+    right: 0;
+    width: min(100%, calc(100vw - 32px));
   }
 
   .fi-history-summary {

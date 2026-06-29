@@ -26,6 +26,7 @@ from app.services.fi.service import (
     fi_dashboard,
     is_author_or_submitter,
     require_visible,
+    submitter_user_id,
     transition_sk_ctkt,
     update_sk_ctkt,
 )
@@ -87,6 +88,30 @@ def _principal_author_name(principal: dict) -> str:
     return display_name or principal["user_id"]
 
 
+def _user_display_name(user: User | None, user_id: str | None) -> str | None:
+    if not user_id:
+        return None
+    if user_id == "historical-import":
+        return "Hệ thống"
+    if user is None:
+        return user_id
+    return user.full_name or user.display_name or user.id
+
+
+def _sk_to_dict(record: SKCTKTModel, db: Session, *, include_images: bool = False) -> dict:
+    data = model_to_dict(record)
+    submitted_by = submitter_user_id(record)
+    submitter = db.get(User, submitted_by) if submitted_by else None
+    data["submitted_by"] = submitted_by
+    data["submitted_by_name"] = _user_display_name(submitter, submitted_by)
+    if include_images:
+        data["supporting_images"] = [
+            sk_image_to_dict(image)
+            for image in db.execute(select(SKImageModel).where(SKImageModel.sk_ctkt_id == record.id)).scalars()
+        ]
+    return data
+
+
 def _author_user_or_400(db: Session, user_id: str) -> User:
     user = db.get(User, user_id)
     if user is None or not user.is_active or user.role not in FI_AUTHOR_ROLES:
@@ -121,7 +146,7 @@ def create(
     _apply_selected_author(data, principal, db)
     if not data.get("author_name") or not data.get("team"):
         raise HTTPException(status_code=400, detail="Thiếu tác giả hoặc đội/tổ")
-    result = model_to_dict(create_sk_ctkt(db, data, principal["user_id"], submit_immediately=True))
+    result = _sk_to_dict(create_sk_ctkt(db, data, principal["user_id"], submit_immediately=True), db)
     cache_delete_prefix("fi:public_sk")
     cache_delete_prefix("okr:dashboard")
     return result
@@ -161,7 +186,7 @@ def list_sk(
             haystack = f"{record.title} {record.author_name} {record.content_description}".lower()
             if q.lower() not in haystack:
                 continue
-        filtered.append(model_to_dict(record))
+        filtered.append(_sk_to_dict(record, db))
     return filtered
 
 
@@ -177,7 +202,7 @@ def public_sk(
     db: Session = Depends(get_db),
 ):
     namespace = "sandbox" if principal.get("sandbox") else "prod"
-    cache_key = f"fi:public_sk:v5:{namespace}:{team or ''}:{author or ''}:{khmt_month or ''}:{khmt_year or ''}:{q or ''}:{historical if historical is not None else ''}"
+    cache_key = f"fi:public_sk:v6:{namespace}:{team or ''}:{author or ''}:{khmt_month or ''}:{khmt_year or ''}:{q or ''}:{historical if historical is not None else ''}"
     cached = cache_get(cache_key)
     if cached is not None:
         return cached
@@ -201,7 +226,7 @@ def public_sk(
                 continue
         filtered.append(record)
     filtered.sort(key=lambda record: record.created_at, reverse=True)
-    data = [model_to_dict(record) for record in filtered]
+    data = [_sk_to_dict(record, db) for record in filtered]
     cache_set(cache_key, data, 5 * 60)
     return data
 
@@ -214,12 +239,7 @@ def get_sk(
 ):
     record = _record_or_404(db, record_id)
     require_visible(record, principal)
-    data = model_to_dict(record)
-    data["supporting_images"] = [
-        sk_image_to_dict(image)
-        for image in db.execute(select(SKImageModel).where(SKImageModel.sk_ctkt_id == record_id)).scalars()
-    ]
-    return data
+    return _sk_to_dict(record, db, include_images=True)
 
 
 @router.put("/sk-ctkt/{record_id}")
@@ -230,7 +250,10 @@ def update(
     db: Session = Depends(get_db),
 ):
     try:
-        result = model_to_dict(update_sk_ctkt(db, record_id, payload.model_dump(exclude_none=True), principal["user_id"], principal["role"]))
+        result = _sk_to_dict(
+            update_sk_ctkt(db, record_id, payload.model_dump(exclude_none=True), principal["user_id"], principal["role"]),
+            db,
+        )
         cache_delete_prefix("fi:public_sk")
         return result
     except PermissionError as exc:
@@ -258,7 +281,7 @@ def delete(
 
 def _transition(record_id: str, action: str, payload: TransitionRequest, principal: dict, db: Session):
     try:
-        result = model_to_dict(
+        result = _sk_to_dict(
             transition_sk_ctkt(
                 db,
                 record_id,
@@ -267,7 +290,8 @@ def _transition(record_id: str, action: str, payload: TransitionRequest, princip
                 principal["role"],
                 note=payload.note,
                 comments=payload.comments,
-            )
+            ),
+            db,
         )
         cache_delete_prefix("fi:public_sk")
         cache_delete_prefix("okr:dashboard")
@@ -343,7 +367,7 @@ def assign(
     db: Session = Depends(get_db),
 ):
     try:
-        result = model_to_dict(
+        result = _sk_to_dict(
             assign_khmt(
                 db,
                 record_id,
@@ -352,7 +376,8 @@ def assign(
                 principal["user_id"],
                 principal["role"],
                 principal_team=principal.get("team"),
-            )
+            ),
+            db,
         )
         cache_delete_prefix("fi:public_sk")
         cache_delete_prefix("okr:dashboard")
@@ -372,14 +397,15 @@ def clear_assignment(
     db: Session = Depends(get_db),
 ):
     try:
-        result = model_to_dict(
+        result = _sk_to_dict(
             clear_khmt(
                 db,
                 record_id,
                 principal["user_id"],
                 principal["role"],
                 principal_team=principal.get("team"),
-            )
+            ),
+            db,
         )
         cache_delete_prefix("fi:public_sk")
         cache_delete_prefix("okr:dashboard")
@@ -485,6 +511,8 @@ def export_reports(
     decisions: str | None = None,
     khmt: str | None = None,
     completion: str | None = None,
+    authors: str | None = None,
+    submitters: str | None = None,
     _: dict = Depends(require_role(Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
@@ -495,6 +523,8 @@ def export_reports(
             decisions=decisions,
             khmt=khmt,
             completion=completion,
+            authors=authors,
+            submitters=submitters,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

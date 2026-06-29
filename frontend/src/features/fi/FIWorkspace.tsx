@@ -97,6 +97,16 @@ type ReviewDecision = "approve" | "defer" | "reject";
 type HistoryDecisionFilter = "approved" | "rejected" | "deferred" | "pending";
 type HistoryKhmtFilter = "in" | "out";
 type HistoryCompletionFilter = "done" | "pending";
+type EmployeeOption = { id: string; display_name: string; full_name: string; team: string | null; role: string };
+type PersonFilterOption = {
+  key: string;
+  label: string;
+  accountId: string | null;
+  team: string | null;
+  count: number;
+  nameKey: string;
+  searchText: string;
+};
 
 const reviewDecisionOptions: Array<{ value: ReviewDecision; label: string; helper: string }> = [
   { value: "approve", label: "Đồng ý", helper: "Ghi nhận SK đạt yêu cầu xét duyệt." },
@@ -204,6 +214,15 @@ function normalizeAuthorQuery(value: string | null | undefined) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/đ/g, "d");
+}
+
+const SYSTEM_ACTOR_ID = "historical-import";
+
+function personFilterKey(userId: string | null | undefined, displayName: string | null | undefined) {
+  const cleanId = String(userId || "").trim();
+  if (cleanId && cleanId !== SYSTEM_ACTOR_ID) return `id:${cleanId}`;
+  const nameKey = normalizeAuthorQuery(displayName || (cleanId === SYSTEM_ACTOR_ID ? "Hệ thống" : "")).trim();
+  return nameKey ? `name:${nameKey}` : "";
 }
 
 function parseCompletionPlan(value: string | null | undefined, completedAt?: string | null): { date: string; done: boolean } | null {
@@ -365,6 +384,70 @@ export function recordSubmitterId(item: any): string | null {
   if (!first || typeof first !== "object") return null;
   const comments = typeof first.comments === "object" && first.comments !== null ? first.comments : {};
   return String(comments.submitted_by || comments.created_by || first.changed_by || "") || null;
+}
+
+function buildPersonFilterOptions(
+  rows: any[],
+  employees: EmployeeOption[],
+  mode: "author" | "submitter",
+  labelById: Map<string, string>,
+): PersonFilterOption[] {
+  const options = new Map<string, PersonFilterOption>();
+  const upsert = (userId: string | null | undefined, displayName: string | null | undefined, team: string | null | undefined, countDelta: number) => {
+    const label = (displayName || (userId ? labelById.get(userId) : "") || userId || "Hệ thống").trim();
+    const key = personFilterKey(userId, label);
+    if (!key) return;
+    const accountId = userId && userId !== SYSTEM_ACTOR_ID ? userId : null;
+    const nameKey = normalizeAuthorQuery(label).trim();
+    const searchText = normalizeAuthorQuery(`${label} ${accountId || ""} ${displayTeam(team)}`).trim();
+    const existing = options.get(key);
+    if (existing) {
+      existing.count += countDelta;
+      if (!existing.team && team) existing.team = team;
+      existing.searchText = `${existing.searchText} ${searchText}`.trim();
+      return;
+    }
+    options.set(key, {
+      key,
+      label,
+      accountId,
+      team: team || null,
+      count: countDelta,
+      nameKey,
+      searchText,
+    });
+  };
+
+  rows.forEach((item) => {
+    if (mode === "author") {
+      const authorId = item?.author_user_id === SYSTEM_ACTOR_ID ? null : item?.author_user_id;
+      upsert(authorId, item?.author_name, item?.team, 1);
+      return;
+    }
+    const submitterId = recordSubmitterId(item);
+    upsert(submitterId, item?.submitted_by_name || labelById.get(submitterId || "") || submitterId, null, 1);
+  });
+
+  employees.forEach((employee) => {
+    upsert(employee.id, employee.full_name || employee.display_name, employee.team, 0);
+  });
+
+  return Array.from(options.values()).sort(
+    (a, b) =>
+      b.count - a.count ||
+      String(a.label || "").localeCompare(String(b.label || ""), "vi") ||
+      String(a.accountId || "").localeCompare(String(b.accountId || "")),
+  );
+}
+
+function expandPersonFilterKeys(selected: string[], optionByKey: Map<string, PersonFilterOption>) {
+  const keys = new Set<string>();
+  selected.forEach((key) => {
+    keys.add(key);
+    const option = optionByKey.get(key);
+    if (option?.nameKey) keys.add(`name:${option.nameKey}`);
+  });
+  return Array.from(keys);
 }
 
 function khmtAssignmentYear(item: any) {
@@ -1092,6 +1175,146 @@ function FilterChip<T extends string | number>({
   );
 }
 
+function PersonFilterCombobox({
+  label,
+  icon,
+  options,
+  selected,
+  onChange,
+}: {
+  label: string;
+  icon?: React.ReactNode;
+  options: PersonFilterOption[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    const id = window.setTimeout(() => inputRef.current?.focus(), 30);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+      window.clearTimeout(id);
+    };
+  }, [open]);
+
+  const selectedOptions = selected
+    .map((key) => options.find((option) => option.key === key))
+    .filter((option): option is PersonFilterOption => Boolean(option));
+  const selectedText = selectedOptions.length === 0
+    ? "Tất cả"
+    : selectedOptions.length === 1
+      ? selectedOptions[0].label
+      : `${selectedOptions.length} người`;
+  const tokens = normalizeAuthorQuery(query).trim().split(/\s+/).filter(Boolean);
+  const visibleOptions = options
+    .filter((option) => tokens.length === 0 || tokens.every((token) => option.searchText.includes(token)))
+    .slice(0, 80);
+  const toggleOption = (key: string) => {
+    if (selected.includes(key)) onChange(selected.filter((entry) => entry !== key));
+    else onChange([...selected, key]);
+  };
+
+  return (
+    <div ref={containerRef} className={`fi-person-filter ${open ? "open" : ""}`}>
+      <button
+        type="button"
+        className={`fi-filter-chip ${selected.length > 0 ? "active" : ""}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {icon && <span className="fi-filter-chip-icon" aria-hidden="true">{icon}</span>}
+        <span className="fi-filter-chip-label">{label}</span>
+        <span className="fi-filter-chip-divider" aria-hidden="true">·</span>
+        <span className="fi-filter-chip-value" title={selectedText}>{selectedText}</span>
+        <ChevronDown size={14} className={`fi-filter-chip-caret ${open ? "open" : ""}`} aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="fi-person-filter-popover" role="dialog" aria-label={`Lọc theo ${label.toLowerCase()}`}>
+          <div className="fi-person-filter-search">
+            <UserRound size={14} aria-hidden="true" />
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Gõ tên hoặc mã tài khoản..."
+              autoComplete="off"
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && visibleOptions.length > 0) {
+                  event.preventDefault();
+                  toggleOption(visibleOptions[0].key);
+                }
+              }}
+            />
+            {query && (
+              <button
+                type="button"
+                className="fi-person-filter-clear"
+                title="Xóa từ khóa"
+                onClick={() => setQuery("")}
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+          <div className="fi-person-filter-head">
+            <span>{label}</span>
+            {selected.length > 0 ? (
+              <button type="button" onClick={() => onChange([])}>Bỏ chọn</button>
+            ) : (
+              <small>Chọn để lọc</small>
+            )}
+          </div>
+          <div className="fi-person-filter-list" role="listbox" aria-multiselectable="true">
+            {visibleOptions.map((option) => {
+              const checked = selected.includes(option.key);
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  role="option"
+                  aria-selected={checked}
+                  className={checked ? "selected" : ""}
+                  onClick={() => toggleOption(option.key)}
+                >
+                  <span className="fi-person-filter-mark" aria-hidden="true" />
+                  <span className="fi-person-filter-name">
+                    <strong>{option.label}</strong>
+                    <small>
+                      {option.accountId ? <em>{option.accountId}</em> : "Không có mã tài khoản"}
+                      {displayTeam(option.team) ? ` · ${displayTeam(option.team)}` : ""}
+                    </small>
+                  </span>
+                  <span className="fi-person-filter-count">{option.count}</span>
+                </button>
+              );
+            })}
+            {visibleOptions.length === 0 && (
+              <p className="fi-person-filter-empty">
+                Không tìm thấy ai khớp “{query.trim()}”.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function FIWorkspace({
   role,
   currentUserId,
@@ -1131,6 +1354,8 @@ export function FIWorkspace({
   const [historyDecisions, setHistoryDecisions] = useState<HistoryDecisionFilter[]>([]);
   const [historyKhmt, setHistoryKhmt] = useState<HistoryKhmtFilter[]>([]);
   const [historyCompletion, setHistoryCompletion] = useState<HistoryCompletionFilter[]>([]);
+  const [historyAuthors, setHistoryAuthors] = useState<string[]>([]);
+  const [historySubmitters, setHistorySubmitters] = useState<string[]>([]);
   const [exportingHistoryExcel, setExportingHistoryExcel] = useState(false);
   const [activeTab, setActiveTab] = useState<FITab>(defaultTab);
   const [reviewFilter, setReviewFilter] = useState<ReviewQueueFilter>("pending");
@@ -1165,6 +1390,7 @@ export function FIWorkspace({
   const [pendingKhmtMonths, setPendingKhmtMonths] = useState<Record<string, string>>({});
   const draftFileInputRef = useRef<HTMLInputElement>(null);
   const detailFileInputRef = useRef<HTMLInputElement>(null);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [creating, setCreating] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
@@ -1174,7 +1400,7 @@ export function FIWorkspace({
   // chọn người khác khi "đăng ký giúp". authorQuery là từ khoá đang gõ; tên đã chốt
   // nằm ở form.author_name.
   const [authorOptions, setAuthorOptions] = useState<
-    Array<{ id: string; display_name: string; full_name: string; team: string | null; role: string }>
+    EmployeeOption[]
   >([]);
   const [authorPickerOpen, setAuthorPickerOpen] = useState(false);
   const [authorQuery, setAuthorQuery] = useState("");
@@ -1434,6 +1660,8 @@ export function FIWorkspace({
     setHistoryDecisions([]);
     setHistoryKhmt([]);
     setHistoryCompletion([]);
+    setHistoryAuthors([]);
+    setHistorySubmitters([]);
     setSelectedItem(null);
   };
 
@@ -1457,12 +1685,24 @@ export function FIWorkspace({
     setSelectedItem(null);
   };
 
+  const changeHistoryAuthors = (next: string[]) => {
+    setHistoryAuthors(next);
+    setSelectedItem(null);
+  };
+
+  const changeHistorySubmitters = (next: string[]) => {
+    setHistorySubmitters(next);
+    setSelectedItem(null);
+  };
+
   const resetHistoryFilters = () => {
     setHistoryTeams([]);
     setHistoryMonths([]);
     setHistoryDecisions([]);
     setHistoryKhmt([]);
     setHistoryCompletion([]);
+    setHistoryAuthors([]);
+    setHistorySubmitters([]);
     setSelectedItem(null);
   };
 
@@ -1513,6 +1753,23 @@ export function FIWorkspace({
     });
     setError("");
     setNotice("");
+    api.getSk(item.id)
+      .then((full) => {
+        setEditTarget((current: any) => current?.id === item.id ? full : current);
+        setEditForm((current) => {
+          const nextRaw = full.completion_plan || "";
+          const nextParsed = parseCompletionPlan(nextRaw, full.completed_at);
+          return {
+            ...current,
+            title: full.title || "",
+            content_description: full.content_description || "",
+            completion_done: nextParsed?.done ?? Boolean(full.completed_at),
+            completion_plan_date: nextParsed?.date ?? current.completion_plan_date,
+            completion_plan_raw: nextRaw,
+          };
+        });
+      })
+      .catch(() => {});
   };
 
   const openReviewDecision = (item: any) => {
@@ -1654,6 +1911,13 @@ export function FIWorkspace({
     e.target.value = "";
   };
 
+  const refreshSkAfterImageChange = async (skId: string) => {
+    const full = await api.getSk(skId);
+    setSelectedItem((current: any) => current?.id === skId ? full : current);
+    setEditTarget((current: any) => current?.id === skId ? full : current);
+    return full;
+  };
+
   const uploadImagesForItem = async (skId: string, files: File[]) => {
     if (files.length === 0 || uploadingImages) return;
     setUploadingImages(true);
@@ -1663,7 +1927,7 @@ export function FIWorkspace({
       const results = await Promise.allSettled(files.map((file) => api.uploadSkImage(skId, file)));
       const failedCount = results.filter((result) => result.status === "rejected").length;
       reload();
-      reloadDetail(skId);
+      await refreshSkAfterImageChange(skId).catch(() => {});
       if (failedCount > 0) {
         const firstError = results.find((result) => result.status === "rejected") as PromiseRejectedResult | undefined;
         setError(`Có ${failedCount}/${files.length} ảnh chưa tải lên được${firstError?.reason?.message ? `: ${firstError.reason.message}` : "."}`);
@@ -1683,10 +1947,19 @@ export function FIWorkspace({
     uploadImagesForItem(skId, files);
   };
 
+  const handleEditImageSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    const skId = editTarget?.id;
+    e.target.value = "";
+    if (!skId || files.length === 0) return;
+    uploadImagesForItem(skId, files);
+  };
+
   const handleDeleteImage = (skId: string, imageId: string) => {
     api.deleteSkImage(skId, imageId)
       .then(() => {
-        if (selectedItem?.id === skId) reloadDetail(skId);
+        reload();
+        refreshSkAfterImageChange(skId).catch(() => {});
       })
       .catch((err) => setError(err.message));
   };
@@ -1718,13 +1991,20 @@ export function FIWorkspace({
     authorOptions.forEach((row) => {
       map.set(row.id, row.full_name || row.display_name || row.id);
     });
+    allHistoryItems.forEach((item) => {
+      const submittedBy = recordSubmitterId(item);
+      if (submittedBy && item.submitted_by_name) map.set(submittedBy, item.submitted_by_name);
+      if (item.author_user_id && item.author_name) map.set(item.author_user_id, item.author_name);
+    });
     map.set(currentUserId, accountAuthorName);
+    map.set(SYSTEM_ACTOR_ID, "Hệ thống");
     return map;
-  }, [accountAuthorName, authorOptions, currentUserId]);
+  }, [accountAuthorName, allHistoryItems, authorOptions, currentUserId]);
   const displayUser = (userId: string | null) => {
     if (!userId) return "Hệ thống";
     return userLabelById.get(userId) || actorLabel(userId);
   };
+  const displaySubmitter = (item: any) => item?.submitted_by_name || displayUser(recordSubmitterId(item));
   // Hàng đợi xét duyệt: tất cả SK đã ngưng nháp + chưa hủy + không phải dữ liệu legacy.
   // FI_Coordinator không thấy SK của chính mình trong queue (tránh tự duyệt).
   const reviewQueueAll = items.filter((item) => {
@@ -1748,6 +2028,8 @@ export function FIWorkspace({
   const selectedHistory = Array.isArray(selectedItem?.status_history) ? selectedItem.status_history : [];
   const canUploadForSelected = selectedItem ? canUploadImages(role, currentUserId, selectedItem, editMode) : false;
   const selectedActions = selectedItem ? visibleActionsForSk(role, currentUserId, selectedItem, editMode) : [];
+  const editImages = Array.isArray(editTarget?.supporting_images) ? editTarget.supporting_images : [];
+  const canManageEditImages = editTarget ? canUploadImages(role, currentUserId, editTarget, editMode) : false;
   const selectedHistoryTeamSet = new Set(historyTeams);
   const historyItems = allHistoryItems.filter((item) =>
     historyTeams.length === 0 || selectedHistoryTeamSet.has(item.team)
@@ -1766,6 +2048,39 @@ export function FIWorkspace({
   const selectedHistoryDecisionSet = new Set(historyDecisions);
   const selectedHistoryKhmtSet = new Set(historyKhmt);
   const selectedHistoryCompletionSet = new Set(historyCompletion);
+  const historyAuthorOptions = useMemo(
+    () => buildPersonFilterOptions(historyItems, authorOptions, "author", userLabelById),
+    [authorOptions, historyItems, userLabelById],
+  );
+  const historySubmitterOptions = useMemo(
+    () => buildPersonFilterOptions(historyItems, authorOptions, "submitter", userLabelById),
+    [authorOptions, historyItems, userLabelById],
+  );
+  const historyAuthorOptionByKey = useMemo(
+    () => new Map(historyAuthorOptions.map((option) => [option.key, option])),
+    [historyAuthorOptions],
+  );
+  const historySubmitterOptionByKey = useMemo(
+    () => new Map(historySubmitterOptions.map((option) => [option.key, option])),
+    [historySubmitterOptions],
+  );
+  const historyItemMatchesPerson = (
+    item: any,
+    selectedKeys: string[],
+    optionByKey: Map<string, PersonFilterOption>,
+    mode: "author" | "submitter",
+  ) => {
+    if (selectedKeys.length === 0) return true;
+    const itemId = mode === "author" ? item?.author_user_id : recordSubmitterId(item);
+    const itemName = mode === "author" ? item?.author_name : item?.submitted_by_name || displayUser(itemId);
+    const itemKey = personFilterKey(itemId === SYSTEM_ACTOR_ID ? null : itemId, itemName);
+    const itemNameKey = normalizeAuthorQuery(itemName).trim();
+    return selectedKeys.some((key) => {
+      if (key === itemKey) return true;
+      const selectedOption = optionByKey.get(key);
+      return Boolean(selectedOption?.nameKey && selectedOption.nameKey === itemNameKey);
+    });
+  };
   const historyDecisionCounts = historyItems.reduce<Record<HistoryDecisionFilter, number>>(
     (acc, item) => {
       const key = decisionFilterForItem(item);
@@ -1789,12 +2104,20 @@ export function FIWorkspace({
     { done: 0, pending: 0 },
   );
   const historyActiveFilterCount =
-    historyTeams.length + historyMonths.length + historyDecisions.length + historyKhmt.length + historyCompletion.length;
+    historyTeams.length +
+    historyMonths.length +
+    historyDecisions.length +
+    historyKhmt.length +
+    historyCompletion.length +
+    historyAuthors.length +
+    historySubmitters.length;
   const filteredHistoryItems = historyItems
     .filter((item) => historyMonths.length === 0 || selectedHistoryMonthSet.has(registrationMonthValue(item) ?? -1))
     .filter((item) => historyDecisions.length === 0 || selectedHistoryDecisionSet.has(decisionFilterForItem(item)))
     .filter((item) => historyKhmt.length === 0 || selectedHistoryKhmtSet.has(khmtFilterForItem(item)))
     .filter((item) => historyCompletion.length === 0 || selectedHistoryCompletionSet.has(completionFilterForItem(item)))
+    .filter((item) => historyItemMatchesPerson(item, historyAuthors, historyAuthorOptionByKey, "author"))
+    .filter((item) => historyItemMatchesPerson(item, historySubmitters, historySubmitterOptionByKey, "submitter"))
     .sort((a, b) =>
       (registrationMonthValue(b) ?? 0) - (registrationMonthValue(a) ?? 0) ||
       (a.bm01_source_row ?? 0) - (b.bm01_source_row ?? 0)
@@ -1855,6 +2178,8 @@ export function FIWorkspace({
       decisions: historyDecisions,
       khmt: historyKhmt,
       completion: historyCompletion,
+      authors: expandPersonFilterKeys(historyAuthors, historyAuthorOptionByKey),
+      submitters: expandPersonFilterKeys(historySubmitters, historySubmitterOptionByKey),
     })
       .then((blob) => {
         const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
@@ -2023,12 +2348,12 @@ export function FIWorkspace({
             <button className="workflow-main" onClick={() => openItem(item.id)} type="button">
               <strong>{item.sk_code}</strong>
               <span>{item.title}</span>
-              <small>{item.author_name} · {displayTeam(item.team)}</small>
+              <small>Tác giả: {item.author_name} · {displayTeam(item.team)}</small>
               {mode === "mine" && submitterId && submitterId !== item.author_user_id && (
-                <small>Người gửi: {displayUser(submitterId)}</small>
+                <small>Người đăng ký: {displayUser(submitterId)}</small>
               )}
               {mode === "sent" && (
-                <small>Đứng tên: {item.author_name} · {displayTeam(item.team)}</small>
+                <small>Người đăng ký: {displaySubmitter(item)}</small>
               )}
               <small>
                 {displayStatus(item.status)}
@@ -2086,6 +2411,14 @@ export function FIWorkspace({
         multiple
         style={{ display: "none" }}
         onChange={handleDetailImageSelection}
+      />
+      <input
+        ref={editFileInputRef}
+        type="file"
+        accept="image/*,.heic,.heif,.jfif,.bmp,.tif,.tiff,.avif"
+        multiple
+        style={{ display: "none" }}
+        onChange={handleEditImageSelection}
       />
 
       {/* Hàng tab được "portal" lên topbar để nằm chung hàng với tiêu đề
@@ -2174,7 +2507,8 @@ export function FIWorkspace({
                 <p className="fi-edit-modal-meta">
                   <strong>{editTarget.sk_code || "Chưa có mã"}</strong>
                   <span>{displayTeam(editTarget.team)}</span>
-                  <span>{editTarget.author_name}</span>
+                  <span>Tác giả: {editTarget.author_name}</span>
+                  <span>Người đăng ký: {displaySubmitter(editTarget)}</span>
                 </p>
               </div>
               <button
@@ -2247,6 +2581,57 @@ export function FIWorkspace({
                     định dạng tháng/năm chuẩn.
                   </small>
                 )}
+              <div className="fi-edit-images-panel">
+                <div className="fi-edit-images-head">
+                  <div>
+                    <strong>Ảnh bằng chứng</strong>
+                    <span>{editImages.length > 0 ? `${editImages.length} ảnh hiện có` : "Chưa có ảnh bằng chứng"}</span>
+                  </div>
+                  {canManageEditImages && (
+                    <button
+                      type="button"
+                      className="fi-edit-image-add"
+                      disabled={uploadingImages}
+                      onClick={() => editFileInputRef.current?.click()}
+                    >
+                      <ImagePlus size={16} />
+                      {uploadingImages ? "Đang tải..." : "Thêm ảnh"}
+                    </button>
+                  )}
+                </div>
+                {editImages.length > 0 ? (
+                  <div className="fi-edit-image-grid">
+                    {editImages.map((img: any, index: number) => (
+                      <div className="image-card fi-edit-image-card" key={img.id}>
+                        <AuthenticatedSkImage
+                          skId={editTarget.id}
+                          image={img}
+                          onOpen={() => {
+                            setSelectedItem(editTarget);
+                            setImagePreviewIndex(index);
+                          }}
+                        />
+                        <small title={img.file_name}>{img.file_name}</small>
+                        {canManageEditImages && (
+                          <button
+                            className="image-card-delete"
+                            title="Xóa ảnh"
+                            onClick={() => handleDeleteImage(editTarget.id, img.id)}
+                            type="button"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="fi-edit-image-empty">
+                    <ImageIcon size={18} />
+                    <span>Có thể bổ sung ảnh minh chứng hoặc thay ảnh cũ bằng cách xóa rồi thêm ảnh mới.</span>
+                  </div>
+                )}
+              </div>
               {error && <p className="error">{error}</p>}
             </div>
             <div className="fi-edit-modal-actions">
@@ -2627,7 +3012,7 @@ export function FIWorkspace({
                     <strong className="fi-review-title">{item.title}</strong>
                     <span className="fi-review-meta">
                       <UserRound size={14} />
-                      {item.author_name} · {displayTeam(item.team)}
+                      Tác giả: {item.author_name} · Người đăng ký: {displaySubmitter(item)} · {displayTeam(item.team)}
                     </span>
                     <span className="fi-review-state-line">
                       <span className={`fi-status-pill ${statusTone(item.status)}`}>
@@ -2751,6 +3136,11 @@ export function FIWorkspace({
               <UserRound size={17} />
               <span>Tác giả</span>
               <strong>{selectedItem.author_name}</strong>
+            </div>
+            <div className="fi-meta-item">
+              <Users2 size={17} />
+              <span>Người đăng ký</span>
+              <strong>{displaySubmitter(selectedItem)}</strong>
             </div>
             <div className="fi-meta-item">
               <CalendarDays size={17} />
@@ -3131,6 +3521,20 @@ export function FIWorkspace({
               onChange={changeHistoryMonths}
               emptyLabel="Tất cả"
             />
+            <PersonFilterCombobox
+              label="Tác giả"
+              icon={<UserRound size={14} />}
+              options={historyAuthorOptions}
+              selected={historyAuthors}
+              onChange={changeHistoryAuthors}
+            />
+            <PersonFilterCombobox
+              label="Người đăng ký"
+              icon={<Users2 size={14} />}
+              options={historySubmitterOptions}
+              selected={historySubmitters}
+              onChange={changeHistorySubmitters}
+            />
             <FilterChip<HistoryDecisionFilter>
               label="Kết luận LĐX"
               icon={<ClipboardCheck size={14} />}
@@ -3344,7 +3748,8 @@ export function FIWorkspace({
                         <strong>{item.title}</strong>
                       </div>
                       <div className="legacy-row-subtitle">
-                        <span>{item.author_name}</span>
+                        <span>Tác giả: {item.author_name}</span>
+                        <span>Người đăng ký: {displaySubmitter(item)}</span>
                       </div>
                       <div className="legacy-row-meta">
                         <small>Kế hoạch: {item.completion_plan || "Chưa ghi"}</small>
@@ -3404,6 +3809,10 @@ export function FIWorkspace({
                         <div>
                           <span>Tác giả</span>
                           <strong>{detail.author_name}</strong>
+                        </div>
+                        <div>
+                          <span>Người đăng ký</span>
+                          <strong>{displaySubmitter(detail)}</strong>
                         </div>
                         <div>
                           <span>Kế hoạch hoàn thành</span>

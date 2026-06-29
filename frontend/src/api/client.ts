@@ -15,6 +15,8 @@ type FiReportExportFilters = {
   decisions?: string[];
   khmt?: string[];
   completion?: string[];
+  authors?: string[];
+  submitters?: string[];
 };
 
 function toQuery(params: QueryParams = {}) {
@@ -228,6 +230,8 @@ export const api = {
         decisions: filters.decisions?.join(","),
         khmt: filters.khmt?.join(","),
         completion: filters.completion?.join(","),
+        authors: filters.authors?.join(","),
+        submitters: filters.submitters?.join(","),
       })}`
     ),
   notifications: () => request<any[]>("/notifications"),

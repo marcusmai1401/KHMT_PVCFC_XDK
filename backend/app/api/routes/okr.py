@@ -205,7 +205,7 @@ def client_debug_log(payload: dict[str, Any], principal: dict = Depends(require_
 
 
 @router.post("/reports/upload")
-async def upload_report(
+def upload_report(
     file: UploadFile = File(...),
     team: str | None = Form(default=None),
     month: int | None = Form(default=None),
@@ -221,7 +221,7 @@ async def upload_report(
         "application/octet-stream",
     }:
         raise HTTPException(status_code=400, detail={"error_code": "INVALID_CONTENT_TYPE", "message": "Only Excel workbook uploads are supported"})
-    data = await file.read()
+    data = file.file.read()
     if len(data) > settings.max_excel_upload_mb * 1024 * 1024:
         raise HTTPException(status_code=400, detail={"error_code": "FILE_TOO_LARGE", "message": "Excel file is too large"})
     upload_dir = settings.storage_dir / "uploads"
@@ -534,7 +534,7 @@ def export_dashboard(_: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LE
 
 
 @router.post("/historical-snapshots/import")
-async def import_snapshot(
+def import_snapshot(
     file: UploadFile = File(...),
     principal: dict = Depends(require_role(Role.ADMIN)),
     db: Session = Depends(get_db),
@@ -546,7 +546,7 @@ async def import_snapshot(
         "application/octet-stream",
     }:
         raise HTTPException(status_code=400, detail={"error_code": "INVALID_CONTENT_TYPE", "message": "Only Excel workbook uploads are supported"})
-    data = await file.read()
+    data = file.file.read()
     if len(data) > settings.max_excel_upload_mb * 1024 * 1024:
         raise HTTPException(status_code=400, detail={"error_code": "FILE_TOO_LARGE", "message": "Excel file is too large"})
     try:

@@ -73,7 +73,7 @@ def _verify_password_allowing_copy_whitespace(password: str, password_hash: str)
 def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     user_id = payload.user_id.strip()
     if (
-        settings.environment != "production"
+        settings.environment == "development"
         and user_id.lower() == SANDBOX_LOGIN_ID
         and payload.password.strip() == SANDBOX_PASSWORD
     ):

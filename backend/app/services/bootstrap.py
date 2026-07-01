@@ -161,11 +161,13 @@ def _ensure_user_extra_columns() -> None:
         return
     existing = {column["name"] for column in inspector.get_columns("users")}
     dialect = engine.dialect.name
-    bool_default = "0" if dialect == "sqlite" else "false"
+    bool_false = "0" if dialect == "sqlite" else "false"
+    bool_true = "1" if dialect == "sqlite" else "true"
     statements = {
         "full_name": "ALTER TABLE users ADD COLUMN full_name VARCHAR",
         "team": "ALTER TABLE users ADD COLUMN team VARCHAR",
-        "must_change_password": f"ALTER TABLE users ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT {bool_default}",
+        "must_change_password": f"ALTER TABLE users ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT {bool_false}",
+        "is_active": f"ALTER TABLE users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT {bool_true}",
     }
     with engine.begin() as connection:
         for column_name, statement in statements.items():

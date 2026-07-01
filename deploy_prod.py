@@ -153,6 +153,11 @@ if [ ! -f .env.production ]; then
   echo ".env.production is missing on {remote_dir}" >&2
   exit 2
 fi
+if ! grep -qE '^OKR_ENVIRONMENT=production\\s*$' .env.production; then
+  echo "OKR_ENVIRONMENT=production is missing from .env.production on {remote_dir} -- refusing to deploy." >&2
+  echo "Without it, dev-only shortcuts (e.g. the sandbox default-password login) default to enabled. Add the line and re-run." >&2
+  exit 3
+fi
 stamp=$(date +%Y%m%d%H%M%S)
 POSTGRES_USER_VALUE=$(grep -E '^POSTGRES_USER=' .env.production | tail -n 1 | cut -d= -f2- || true)
 POSTGRES_DB_VALUE=$(grep -E '^POSTGRES_DB=' .env.production | tail -n 1 | cut -d= -f2- || true)

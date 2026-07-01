@@ -52,6 +52,20 @@ jobs:
   backend:
     name: Backend CI
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: okr_automation_test
+          POSTGRES_USER: okr
+          POSTGRES_PASSWORD: okr
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U okr -d okr_automation_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -68,8 +82,10 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
-      - name: Run tests
+      - name: Run tests against Postgres
         working-directory: backend
+        env:
+          OKR_DATABASE_URL: postgresql+psycopg://okr:okr@localhost:5432/okr_automation_test
         run: python -m pytest -q
 
   deploy:

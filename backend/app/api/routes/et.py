@@ -48,10 +48,10 @@ def _safe_filename(filename: str | None) -> str:
     return "".join(ch for ch in name if ch.isalnum() or ch in {" ", ".", "_", "-"}) or "upload.xlsx"
 
 
-async def _save_upload(file: UploadFile) -> Path:
+def _save_upload(file: UploadFile) -> Path:
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Only .xlsx files are supported")
-    data = await file.read()
+    data = file.file.read()
     if len(data) > settings.max_excel_upload_mb * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Excel file is too large")
     upload_dir = settings.storage_dir / "uploads"
@@ -257,12 +257,12 @@ def delete_framework_item(
 
 
 @router.post("/frameworks/import")
-async def import_frameworks(
+def import_frameworks(
     file: UploadFile = File(...),
     principal: dict[str, str] = Depends(require_role(Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
-    path = await _save_upload(file)
+    path = _save_upload(file)
     try:
         frameworks = et_excel_service.import_frameworks_from_excel(db, path, principal["user_id"])
         _commit_or_rollback(db)
@@ -317,12 +317,12 @@ def create_personnel(
 
 
 @router.post("/personnel/import")
-async def import_personnel(
+def import_personnel(
     file: UploadFile = File(...),
     principal: dict[str, str] = Depends(require_role(Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
-    path = await _save_upload(file)
+    path = _save_upload(file)
     try:
         rows = et_excel_service.import_personnel_from_excel(db, path, principal["user_id"])
         _commit_or_rollback(db)

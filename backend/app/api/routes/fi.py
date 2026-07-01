@@ -419,14 +419,14 @@ def clear_assignment(
 
 
 @router.post("/sk-ctkt/{record_id}/images")
-async def upload_image(record_id: str, file: UploadFile = File(...), principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.ADMIN)), db: Session = Depends(get_db)):
+def upload_image(record_id: str, file: UploadFile = File(...), principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.ADMIN)), db: Session = Depends(get_db)):
     record = _record_or_404(db, record_id)
     if principal["role"] in {Role.TEAM_ACCOUNT.value, Role.STAFF.value, Role.FI_COORDINATOR.value}:
         if not is_author_or_submitter(record, principal["user_id"]) or record.status not in AUTHOR_CONTENT_EDITABLE_STATUSES:
             raise HTTPException(status_code=403, detail="Only owner can upload images for editable entries")
     safe_name = _safe_filename(file.filename)
     content_type = _validate_image_upload(safe_name, file.content_type)
-    data = await file.read()
+    data = file.file.read()
     if len(data) > settings.max_image_upload_mb * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Image file is too large")
     image_dir = settings.storage_dir / "uploads" / "images"

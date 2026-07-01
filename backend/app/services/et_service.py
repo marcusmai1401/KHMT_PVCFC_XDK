@@ -886,6 +886,9 @@ def mark_plan_item_complete(db: Session, plan_id: str, item_id: str, actual_leve
 
 def get_dashboard_summary(db: Session, filters: dict[str, Any] | None = None) -> dict[str, Any]:
     personnel_rows = _filtered_active_personnel(db, filters or {})
+    personnel_ids = [person.id for person in personnel_rows]
+    latest_by_personnel = _latest_submitted_assessments_by_personnel(db, personnel_ids)
+    draft_personnel_ids = _draft_personnel_ids(db, personnel_ids)
     rows = []
     total_active = len(personnel_rows)
     result_counts = Counter()
@@ -893,8 +896,8 @@ def get_dashboard_summary(db: Session, filters: dict[str, Any] | None = None) ->
     top_item_names: dict[str, str] = {}
     top_personnel = []
     for person in personnel_rows:
-        latest = _latest_submitted_assessment(db, person.id)
-        draft_exists = _draft_exists(db, person.id)
+        latest = latest_by_personnel.get(person.id)
+        draft_exists = person.id in draft_personnel_ids
         row = {
             "personnel_id": person.id,
             "employee_code": person.employee_code,
@@ -949,6 +952,9 @@ def get_dashboard_summary(db: Session, filters: dict[str, Any] | None = None) ->
 
 def get_heatmap_data(db: Session, filters: dict[str, Any] | None = None) -> dict[str, Any]:
     personnel_rows = _filtered_active_personnel(db, filters or {})
+    personnel_ids = [person.id for person in personnel_rows]
+    latest_by_personnel = _latest_submitted_assessments_by_personnel(db, personnel_ids)
+    draft_personnel_ids = _draft_personnel_ids(db, personnel_ids)
     active_frameworks = db.execute(
         select(CompetencyFramework)
         .options(selectinload(CompetencyFramework.items))
@@ -965,8 +971,8 @@ def get_heatmap_data(db: Session, filters: dict[str, Any] | None = None) -> dict
     for code, item in sorted(item_by_code.items(), key=lambda pair: (pair[1].category, pair[1].stt, pair[0])):
         cells = []
         for person in personnel_rows:
-            latest = _latest_submitted_assessment(db, person.id)
-            draft_exists = _draft_exists(db, person.id)
+            latest = latest_by_personnel.get(person.id)
+            draft_exists = person.id in draft_personnel_ids
             if code not in framework_codes.get(person.position_code, set()):
                 cells.append(_heatmap_cell(person, "not_applicable", "N/A"))
                 continue
@@ -1041,6 +1047,56 @@ def _draft_exists(db: Session, personnel_id: str) -> bool:
                 CompetencyAssessment.status == "draft",
             )
         ).first()
+    )
+
+
+def _latest_submitted_assessments_by_personnel(
+    db: Session, personnel_ids: list[str]
+) -> dict[str, CompetencyAssessment]:
+    """Bulk equivalent of calling _latest_submitted_assessment per personnel_id.
+
+    Avoids one query per person (was O(N), and O(N*M) when called inside the
+    heatmap's per-competency-item loop) by fetching all submitted assessments
+    for the requested personnel in a single query, ordered the same way
+    (is_latest desc, assessed_at desc) so the first row seen per personnel_id
+    is the same "latest" row the per-person query would have returned.
+    """
+    if not personnel_ids:
+        return {}
+    assessments = db.execute(
+        select(CompetencyAssessment)
+        .options(
+            selectinload(CompetencyAssessment.personnel),
+            selectinload(CompetencyAssessment.framework),
+            selectinload(CompetencyAssessment.items).selectinload(AssessmentItem.competency_item),
+        )
+        .where(
+            CompetencyAssessment.personnel_id.in_(personnel_ids),
+            CompetencyAssessment.status == "submitted",
+        )
+        .order_by(
+            CompetencyAssessment.personnel_id,
+            CompetencyAssessment.is_latest.desc(),
+            CompetencyAssessment.assessed_at.desc(),
+        )
+    ).scalars().all()
+    latest_by_personnel: dict[str, CompetencyAssessment] = {}
+    for assessment in assessments:
+        latest_by_personnel.setdefault(assessment.personnel_id, assessment)
+    return latest_by_personnel
+
+
+def _draft_personnel_ids(db: Session, personnel_ids: list[str]) -> set[str]:
+    """Bulk equivalent of calling _draft_exists per personnel_id."""
+    if not personnel_ids:
+        return set()
+    return set(
+        db.execute(
+            select(CompetencyAssessment.personnel_id).where(
+                CompetencyAssessment.personnel_id.in_(personnel_ids),
+                CompetencyAssessment.status == "draft",
+            )
+        ).scalars()
     )
 
 

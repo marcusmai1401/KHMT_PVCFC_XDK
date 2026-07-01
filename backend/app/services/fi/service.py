@@ -533,6 +533,19 @@ FI_EXPORT_DATA_HEADERS = [
 ]
 FI_EXPORT_DATA_HEADER_ROW = 4
 
+# --- FI export visual theme (PVCFC brand: navy #2C398E + green #169045) ---
+FI_NAVY = "2C398E"
+FI_GREEN = "169045"
+FI_NAVY_TINT = "EAEDFA"
+FI_GREEN_TINT = "E6F3EC"
+FI_INK = "0F172A"
+FI_INK_SOFT = "475569"
+FI_STRIPE = "F5F8FC"
+FI_SURFACE = "FFFFFF"
+FI_GRID = "D5DDEC"
+FI_ON_DARK = "FFFFFF"
+FI_BASE_FONT = "Calibri"
+
 
 def is_fi_reportable(record: SKCTKTModel) -> bool:
     """FI dashboards/reports only count records that have been sent to FI."""
@@ -884,18 +897,20 @@ def _write_fi_export_summary(
     sheet.merge_cells("A1:H1")
     sheet["A1"] = "BÁO CÁO FI/SK-CTKT"
     sheet.merge_cells("A2:H2")
-    sheet["A2"] = "Dữ liệu xuất từ tab Lịch sử FI theo bộ lọc hiện tại trên website"
+    sheet["A2"] = "Tổng hợp sáng kiến FI/SK-CTKT theo bộ lọc đang áp dụng (không bao gồm bản nháp)"
     sheet["A4"] = "Thời điểm xuất"
     sheet["B4"] = _excel_datetime(generated_at)
-    sheet["A5"] = "Phạm vi"
-    sheet["B5"] = "Không bao gồm bản nháp"
+    sheet["A5"] = "Phạm vi dữ liệu"
+    sheet["B5"] = "Toàn bộ sáng kiến đã gửi FI"
     sheet["A6"] = "Số dòng dữ liệu"
     sheet["B6"] = len(records)
 
-    _write_summary_card(sheet, "D4", "Tổng SK", len(records), "SK-CTKT")
-    _write_summary_card(sheet, "E4", "Đồng ý", approved_count, "Đạt xét duyệt")
-    _write_summary_card(sheet, "F4", "Đã vào KHMT", khmt_count, "Được ghi nhận")
-    _write_summary_card(sheet, "G4", "Hoàn thành", done_count, "Đã xong")
+    navy = (FI_NAVY, FI_NAVY_TINT)
+    green = (FI_GREEN, FI_GREEN_TINT)
+    _write_summary_card(sheet, "D", "Tổng SK", len(records), "sáng kiến", navy)
+    _write_summary_card(sheet, "E", "Đồng ý", approved_count, "đạt xét duyệt", green)
+    _write_summary_card(sheet, "F", "Đã vào KHMT", khmt_count, "được ghi nhận", navy)
+    _write_summary_card(sheet, "G", "Hoàn thành", done_count, "đã hoàn thành", green)
 
     filter_rows = [
         ("Đội/tổ", _filter_value_text(filters.get("teams"), {})),
@@ -968,29 +983,83 @@ def _filter_value_text(values: set[Any] | None, labels: dict[str, str], *, prefi
     return ", ".join(rendered)
 
 
-def _write_summary_card(sheet, cell_ref: str, title: str, value: int, helper: str) -> None:
-    cell = sheet[cell_ref]
-    cell.value = f"{title}\n{value}\n{helper}"
+def _write_summary_card(
+    sheet,
+    column: str,
+    title: str,
+    value: int,
+    helper: str,
+    accent: tuple[str, str],
+) -> None:
+    """A KPI tile spanning rows 4-6 of one column: label / big number / helper."""
+    accent_color, tint = accent
+    border = _thin_border()
+
+    label = sheet[f"{column}4"]
+    label.value = title
+    label.fill = PatternFill("solid", fgColor=accent_color)
+    label.font = Font(name=FI_BASE_FONT, bold=True, size=10, color=FI_ON_DARK)
+    label.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    number = sheet[f"{column}5"]
+    number.value = value
+    number.fill = PatternFill("solid", fgColor=tint)
+    number.font = Font(name=FI_BASE_FONT, bold=True, size=22, color=accent_color)
+    number.alignment = Alignment(horizontal="center", vertical="center")
+    number.number_format = "#,##0"
+
+    note = sheet[f"{column}6"]
+    note.value = helper
+    note.fill = PatternFill("solid", fgColor=tint)
+    note.font = Font(name=FI_BASE_FONT, italic=True, size=9, color=FI_INK_SOFT)
+    note.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    for row in (4, 5, 6):
+        sheet[f"{column}{row}"].border = border
 
 
 def _write_counter_table(sheet, start_row: int, start_col: int, title: str, label: str, counts: Counter) -> int:
-    sheet.merge_cells(
-        start_row=start_row,
-        start_column=start_col,
-        end_row=start_row,
-        end_column=start_col + 1,
-    )
+    """A small breakdown table (title banner / header / striped rows). Styled inline."""
+    border = _thin_border()
+    end_col = start_col + 1
+
+    sheet.merge_cells(start_row=start_row, start_column=start_col, end_row=start_row, end_column=end_col)
+    for col in (start_col, end_col):
+        cell = sheet.cell(start_row, col)
+        cell.fill = PatternFill("solid", fgColor=FI_NAVY)
+        cell.font = Font(name=FI_BASE_FONT, bold=True, size=11, color=FI_ON_DARK)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = border
     sheet.cell(start_row, start_col).value = title
-    sheet.cell(start_row + 1, start_col).value = label
-    sheet.cell(start_row + 1, start_col + 1).value = "Số lượng"
-    row_index = start_row + 2
-    if not counts:
-        sheet.cell(row_index, start_col).value = "Không có dữ liệu"
-        sheet.cell(row_index, start_col + 1).value = 0
-        return row_index
-    for key, count in sorted(counts.items(), key=lambda item: str(item[0])):
-        sheet.cell(row_index, start_col).value = key
-        sheet.cell(row_index, start_col + 1).value = count
+
+    header_row = start_row + 1
+    label_cell = sheet.cell(header_row, start_col)
+    count_cell = sheet.cell(header_row, end_col)
+    label_cell.value = label
+    count_cell.value = "Số lượng"
+    for cell in (label_cell, count_cell):
+        cell.fill = PatternFill("solid", fgColor=FI_NAVY_TINT)
+        cell.font = Font(name=FI_BASE_FONT, bold=True, color=FI_INK)
+        cell.border = border
+    label_cell.alignment = Alignment(horizontal="left", vertical="center")
+    count_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    items = sorted(counts.items(), key=lambda item: str(item[0])) if counts else [("Không có dữ liệu", 0)]
+    row_index = header_row + 1
+    for offset, (key, count) in enumerate(items):
+        stripe = FI_STRIPE if offset % 2 else FI_SURFACE
+        key_cell = sheet.cell(row_index, start_col)
+        value_cell = sheet.cell(row_index, end_col)
+        key_cell.value = key
+        value_cell.value = count
+        for cell in (key_cell, value_cell):
+            cell.fill = PatternFill("solid", fgColor=stripe)
+            cell.border = border
+        key_cell.font = Font(name=FI_BASE_FONT, color=FI_INK)
+        key_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+        value_cell.font = Font(name=FI_BASE_FONT, bold=True, color=FI_INK)
+        value_cell.alignment = Alignment(horizontal="center", vertical="center")
+        value_cell.number_format = "#,##0"
         row_index += 1
     return row_index - 1
 
@@ -1000,7 +1069,7 @@ def _write_fi_export_rows(sheet, records: list[SKCTKTModel], generated_at: datet
     sheet["A1"] = "DANH SÁCH FI/SK-CTKT"
     sheet.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(FI_EXPORT_DATA_HEADERS))
     generated_label = _excel_datetime(generated_at).strftime("%d/%m/%Y %H:%M")
-    sheet["A2"] = f"Xuất lúc {generated_label} | {len(records)} SK-CTKT"
+    sheet["A2"] = f"Xuất lúc {generated_label}  •  Tổng {len(records)} sáng kiến  •  Không bao gồm bản nháp"
     for col_index, header in enumerate(FI_EXPORT_DATA_HEADERS, start=1):
         sheet.cell(FI_EXPORT_DATA_HEADER_ROW, col_index).value = header
     for index, record in enumerate(records, start=1):
@@ -1034,110 +1103,82 @@ def _style_fi_export_workbook(workbook: Workbook) -> None:
 
 def _style_fi_summary_sheet(sheet) -> None:
     sheet.sheet_view.showGridLines = False
-    sheet.freeze_panes = "A9"
-    sheet.sheet_properties.tabColor = "1F3A8A"
+    sheet.sheet_properties.tabColor = FI_NAVY
     sheet.page_setup.orientation = "landscape"
     sheet.page_setup.fitToWidth = 1
     sheet.page_setup.fitToHeight = 0
     sheet.sheet_properties.pageSetUpPr.fitToPage = True
-    sheet.page_margins.left = 0.25
-    sheet.page_margins.right = 0.25
+    sheet.print_options.horizontalCentered = True
+    sheet.page_margins.left = 0.3
+    sheet.page_margins.right = 0.3
     sheet.page_margins.top = 0.5
     sheet.page_margins.bottom = 0.5
-
-    title_fill = PatternFill("solid", fgColor="1F3A8A")
-    subtitle_fill = PatternFill("solid", fgColor="EAF2FF")
-    section_fill = PatternFill("solid", fgColor="DBEAFE")
-    header_fill = PatternFill("solid", fgColor="EFF6FF")
     border = _thin_border()
 
-    sheet["A1"].font = Font(bold=True, size=18, color="FFFFFF")
-    sheet["A1"].fill = title_fill
-    sheet["A1"].alignment = Alignment(horizontal="center", vertical="center")
-    sheet["A2"].font = Font(italic=True, color="334155")
-    sheet["A2"].fill = subtitle_fill
-    sheet["A2"].alignment = Alignment(horizontal="center", vertical="center")
-    sheet.row_dimensions[1].height = 30
-    sheet.row_dimensions[2].height = 22
+    # Title banner + subtitle.
+    title = sheet["A1"]
+    title.font = Font(name=FI_BASE_FONT, bold=True, size=18, color=FI_ON_DARK)
+    title.fill = PatternFill("solid", fgColor=FI_NAVY)
+    title.alignment = Alignment(horizontal="center", vertical="center")
+    subtitle = sheet["A2"]
+    subtitle.font = Font(name=FI_BASE_FONT, italic=True, size=10, color=FI_INK_SOFT)
+    subtitle.fill = PatternFill("solid", fgColor=FI_NAVY_TINT)
+    subtitle.alignment = Alignment(horizontal="center", vertical="center")
+    sheet.row_dimensions[1].height = 32
+    sheet.row_dimensions[2].height = 20
 
+    # Export metadata block (A4:B6). KPI tiles (D4:G6) are styled where written.
     for row in range(4, 7):
-        sheet.cell(row, 1).font = Font(bold=True, color="334155")
-        sheet.cell(row, 1).fill = header_fill
-        sheet.cell(row, 2).fill = PatternFill("solid", fgColor="FFFFFF")
-        for col in range(1, 3):
-            sheet.cell(row, col).border = border
-            sheet.cell(row, col).alignment = Alignment(vertical="center", wrap_text=True)
+        label = sheet.cell(row, 1)
+        value = sheet.cell(row, 2)
+        label.fill = PatternFill("solid", fgColor=FI_NAVY_TINT)
+        label.font = Font(name=FI_BASE_FONT, bold=True, color=FI_INK)
+        label.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+        label.border = border
+        value.fill = PatternFill("solid", fgColor=FI_SURFACE)
+        value.font = Font(name=FI_BASE_FONT, color=FI_INK)
+        value.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+        value.border = border
     sheet["B4"].number_format = "dd/mm/yyyy hh:mm"
-    sheet["B6"].font = Font(bold=True, size=14, color="0F172A")
+    sheet["B6"].font = Font(name=FI_BASE_FONT, bold=True, size=13, color=FI_NAVY)
+    sheet.row_dimensions[4].height = 22
+    sheet.row_dimensions[5].height = 34
+    sheet.row_dimensions[6].height = 20
 
-    for col in range(4, 8):
-        cell = sheet.cell(4, col)
-        cell.fill = PatternFill("solid", fgColor="F8FAFC")
-        cell.font = Font(bold=True, color="0F172A")
-        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        cell.border = border
-        sheet.column_dimensions[get_column_letter(col)].width = 17
-    sheet.row_dimensions[4].height = 64
-
-    sheet["A9"].font = Font(bold=True, color="FFFFFF")
-    sheet["A9"].fill = title_fill
-    sheet["A10"].font = Font(bold=True, color="0F172A")
-    sheet["B10"].font = Font(bold=True, color="0F172A")
-    sheet["A10"].fill = header_fill
-    sheet["B10"].fill = header_fill
+    # Filter recap block: banner (A9:B9), header (A10:B10), values (A11:B15).
+    banner = sheet["A9"]
+    banner.font = Font(name=FI_BASE_FONT, bold=True, color=FI_ON_DARK)
+    banner.fill = PatternFill("solid", fgColor=FI_NAVY)
+    banner.alignment = Alignment(horizontal="left", vertical="center")
+    sheet.cell(9, 2).fill = PatternFill("solid", fgColor=FI_NAVY)
+    sheet.row_dimensions[9].height = 20
+    for col in (1, 2):
+        head = sheet.cell(10, col)
+        head.font = Font(name=FI_BASE_FONT, bold=True, color=FI_INK)
+        head.fill = PatternFill("solid", fgColor=FI_NAVY_TINT)
+        head.alignment = Alignment(horizontal="left", vertical="center")
+    for offset, row in enumerate(range(11, 16)):
+        stripe = FI_STRIPE if offset % 2 else FI_SURFACE
+        for col in (1, 2):
+            cell = sheet.cell(row, col)
+            cell.fill = PatternFill("solid", fgColor=stripe)
+            cell.font = Font(name=FI_BASE_FONT, color=FI_INK)
+            cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
     for row in range(9, 16):
-        for col in range(1, 3):
+        for col in (1, 2):
             sheet.cell(row, col).border = border
-            sheet.cell(row, col).alignment = Alignment(vertical="top", wrap_text=True)
 
-    for row in range(1, sheet.max_row + 1):
-        for cell in sheet[row]:
-            if isinstance(cell.value, datetime):
-                cell.number_format = "dd/mm/yyyy hh:mm"
-            if cell.value and cell.row >= 18 and cell.column <= 8:
-                cell.border = border
-                cell.alignment = Alignment(vertical="top", wrap_text=True)
-                if cell.row > 18 and cell.value == "Số lượng":
-                    cell.alignment = Alignment(horizontal="center", vertical="center")
-        row_values = [sheet.cell(row, col).value for col in range(1, 9)]
-        if any(row_values) and not any(row_values[1:]):
-            first_cell = sheet.cell(row, 1)
-            first_cell.fill = section_fill
-            first_cell.font = Font(bold=True, color="1E3A8A")
-        if any(row_values) and any(value == "Số lượng" for value in row_values):
-            for col in range(1, 9):
-                cell = sheet.cell(row, col)
-                if cell.value:
-                    cell.fill = header_fill
-                    cell.font = Font(bold=True, color="0F172A")
-        for start_col in [1, 4, 7]:
-            title_cell = sheet.cell(row, start_col)
-            count_header = sheet.cell(row, start_col + 1)
-            if isinstance(title_cell.value, str) and title_cell.value.startswith("Theo "):
-                for col in [start_col, start_col + 1]:
-                    cell = sheet.cell(row, col)
-                    cell.fill = section_fill
-                    cell.font = Font(bold=True, color="1E3A8A")
-                    cell.border = border
-                    cell.alignment = Alignment(vertical="center", wrap_text=True)
-            if count_header.value == "Số lượng":
-                for col in [start_col, start_col + 1]:
-                    cell = sheet.cell(row, col)
-                    cell.fill = header_fill
-                    cell.font = Font(bold=True, color="0F172A")
-                    cell.border = border
-                    cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-    widths = {"A": 22, "B": 36, "C": 4, "D": 22, "E": 14, "F": 18, "G": 24, "H": 14}
+    widths = {"A": 24, "B": 32, "C": 3, "D": 17, "E": 17, "F": 17, "G": 22, "H": 14}
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
 
 
 def _style_fi_data_sheet(sheet) -> None:
     sheet.sheet_view.showGridLines = False
-    sheet.sheet_properties.tabColor = "059669"
+    sheet.sheet_properties.tabColor = FI_GREEN
     sheet.freeze_panes = f"A{FI_EXPORT_DATA_HEADER_ROW + 1}"
-    sheet.auto_filter.ref = f"A{FI_EXPORT_DATA_HEADER_ROW}:{get_column_letter(len(FI_EXPORT_DATA_HEADERS))}{sheet.max_row}"
+    last_col = get_column_letter(len(FI_EXPORT_DATA_HEADERS))
+    sheet.auto_filter.ref = f"A{FI_EXPORT_DATA_HEADER_ROW}:{last_col}{sheet.max_row}"
     sheet.page_setup.orientation = "landscape"
     sheet.page_setup.fitToWidth = 1
     sheet.page_setup.fitToHeight = 0
@@ -1147,74 +1188,79 @@ def _style_fi_data_sheet(sheet) -> None:
     sheet.page_margins.top = 0.4
     sheet.page_margins.bottom = 0.4
 
-    title_fill = PatternFill("solid", fgColor="0F766E")
-    header_fill = PatternFill("solid", fgColor="1F3A8A")
-    stripe_fill = PatternFill("solid", fgColor="F8FAFC")
+    stripe_fill = PatternFill("solid", fgColor=FI_STRIPE)
     border = _thin_border()
+    grid_side = Side(style="thin", color=FI_GRID)
+    header_border = Border(
+        left=grid_side,
+        right=grid_side,
+        top=grid_side,
+        bottom=Side(style="medium", color=FI_GREEN),
+    )
 
-    sheet["A1"].font = Font(bold=True, size=18, color="FFFFFF")
-    sheet["A1"].fill = title_fill
-    sheet["A1"].alignment = Alignment(horizontal="center", vertical="center")
-    sheet["A2"].font = Font(italic=True, color="334155")
-    sheet["A2"].fill = PatternFill("solid", fgColor="ECFDF5")
-    sheet["A2"].alignment = Alignment(horizontal="center", vertical="center")
-    sheet.row_dimensions[1].height = 30
-    sheet.row_dimensions[2].height = 22
+    title = sheet["A1"]
+    title.font = Font(name=FI_BASE_FONT, bold=True, size=18, color=FI_ON_DARK)
+    title.fill = PatternFill("solid", fgColor=FI_NAVY)
+    title.alignment = Alignment(horizontal="center", vertical="center")
+    subtitle = sheet["A2"]
+    subtitle.font = Font(name=FI_BASE_FONT, italic=True, size=10, color=FI_INK_SOFT)
+    subtitle.fill = PatternFill("solid", fgColor=FI_NAVY_TINT)
+    subtitle.alignment = Alignment(horizontal="center", vertical="center")
+    sheet.row_dimensions[1].height = 32
+    sheet.row_dimensions[2].height = 20
 
     for col_index in range(1, len(FI_EXPORT_DATA_HEADERS) + 1):
         cell = sheet.cell(FI_EXPORT_DATA_HEADER_ROW, col_index)
-        cell.fill = header_fill
-        cell.font = Font(bold=True, color="FFFFFF")
-        cell.border = border
+        cell.fill = PatternFill("solid", fgColor=FI_NAVY)
+        cell.font = Font(name=FI_BASE_FONT, bold=True, color=FI_ON_DARK)
+        cell.border = header_border
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    sheet.row_dimensions[FI_EXPORT_DATA_HEADER_ROW].height = 34
+    sheet.row_dimensions[FI_EXPORT_DATA_HEADER_ROW].height = 36
 
+    centered_cols = {1, 6, 7, 8, 9, 10, 11, 12}
+    tone_cols = (8, 9, 10, 12)
     for row_index in range(FI_EXPORT_DATA_HEADER_ROW + 1, sheet.max_row + 1):
-        row_fill = stripe_fill if row_index % 2 == 0 else PatternFill(fill_type=None)
+        striped = row_index % 2 == 0
         for col_index in range(1, len(FI_EXPORT_DATA_HEADERS) + 1):
             cell = sheet.cell(row_index, col_index)
-            if row_fill.fill_type:
-                cell.fill = row_fill
+            if striped:
+                cell.fill = stripe_fill
             cell.border = border
-            cell.alignment = Alignment(vertical="top", wrap_text=True)
-            if isinstance(cell.value, datetime):
-                cell.number_format = "dd/mm/yyyy hh:mm"
-        for col_index in [1, 6, 7, 8, 9, 10, 11, 12]:
-            sheet.cell(row_index, col_index).alignment = Alignment(
-                horizontal="center",
-                vertical="center",
-                wrap_text=True,
-            )
-        _apply_fi_export_tone(sheet.cell(row_index, 8), str(sheet.cell(row_index, 8).value or ""))
-        _apply_fi_export_tone(sheet.cell(row_index, 9), str(sheet.cell(row_index, 9).value or ""))
-        _apply_fi_export_tone(sheet.cell(row_index, 10), str(sheet.cell(row_index, 10).value or ""))
-        _apply_fi_export_tone(sheet.cell(row_index, 12), str(sheet.cell(row_index, 12).value or ""))
-        sheet.row_dimensions[row_index].height = 42
+            cell.font = Font(name=FI_BASE_FONT, color=FI_INK)
+            if col_index in centered_cols:
+                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            else:
+                cell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+        for col_index in tone_cols:
+            cell = sheet.cell(row_index, col_index)
+            _apply_fi_export_tone(cell, str(cell.value or ""))
+        # No explicit row height: let Excel auto-fit wrapped content so long
+        # descriptions are never clipped.
 
     widths = [
-        6,
-        20,
-        42,
-        24,
-        22,
-        12,
-        14,
-        18,
-        16,
-        18,
-        14,
-        18,
-        28,
-        52,
-        36,
-        34,
+        6,    # STT
+        20,   # Mã SK
+        40,   # Tên SK-CTKT
+        20,   # Tác giả
+        18,   # Tài khoản tác giả
+        10,   # Đội/tổ
+        12,   # Tháng đăng ký
+        15,   # Trạng thái
+        14,   # Kết luận LĐX
+        16,   # KHMT
+        12,   # Tháng KHMT
+        15,   # Hoàn thành
+        24,   # Kế hoạch hoàn thành
+        50,   # Nội dung
+        34,   # Nhận xét FI/BM01
+        30,   # Ghi chú quyết định
     ]
     for col_index, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(col_index)].width = width
 
 
 def _thin_border() -> Border:
-    side = Side(style="thin", color="D9E2EC")
+    side = Side(style="thin", color=FI_GRID)
     return Border(left=side, right=side, top=side, bottom=side)
 
 
@@ -1224,7 +1270,7 @@ def _apply_fi_export_tone(cell, value: str) -> None:
         return
     fill_color, font_color = tone
     cell.fill = PatternFill("solid", fgColor=fill_color)
-    cell.font = Font(bold=True, color=font_color)
+    cell.font = Font(name=FI_BASE_FONT, bold=True, color=font_color)
 
 
 def _fi_export_tone(value: str) -> tuple[str, str] | None:

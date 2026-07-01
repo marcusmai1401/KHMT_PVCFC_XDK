@@ -228,24 +228,6 @@ describe("api client auth contract", () => {
     expect(fetchMock).toHaveBeenLastCalledWith("/api/v1/fi/sk-ctkt/sk1", expect.any(Object));
   });
 
-  it("uses admin sandbox account endpoints", async () => {
-    setToken("signed-token");
-    fetchMock.mockResolvedValue(okJson([{ id: "test" }]));
-
-    await api.adminSandboxUsers();
-    expect(fetchMock).toHaveBeenCalledWith("/api/v1/admin/sandbox-users", expect.any(Object));
-
-    fetchMock.mockResolvedValue(okJson({ temporary_password: "TestPass123" }));
-    await api.adminResetSandboxUserPassword("test", " TestPass123 ");
-    expect(fetchMock).toHaveBeenLastCalledWith(
-      "/api/v1/admin/sandbox-users/test/reset-password",
-      expect.any(Object)
-    );
-    const init = fetchMock.mock.calls[1][1] as RequestInit;
-    expect(init.method).toBe("POST");
-    expect(JSON.parse(init.body as string)).toEqual({ new_password: "TestPass123" });
-  });
-
   it("passes FI list filters through query params", async () => {
     setToken("signed-token");
     fetchMock.mockResolvedValue(okJson([]));

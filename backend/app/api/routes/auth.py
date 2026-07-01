@@ -2,7 +2,6 @@ from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.security import (
     Role,
     create_access_token,
@@ -18,8 +17,6 @@ from app.services.repositories import audit
 from app.services.sandbox import (
     SANDBOX_LOGIN_ID,
     SANDBOX_PASSWORD,
-    authenticate_sandbox_direct_login,
-    ensure_sandbox_data,
     list_sandbox_identities,
     reset_sandbox_data,
     sandbox_identity,
@@ -74,11 +71,10 @@ def _verify_password_allowing_copy_whitespace(password: str, password_hash: str)
 def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     user_id = payload.user_id.strip()
     if (
-        settings.environment == "development"
-        and user_id.lower() == SANDBOX_LOGIN_ID
+        user_id.lower() == SANDBOX_LOGIN_ID
         and payload.password.strip() == SANDBOX_PASSWORD
     ):
-        ensure_sandbox_data()
+        reset_sandbox_data()
         identity = sandbox_identity(SANDBOX_LOGIN_ID)
         if identity is None:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Sandbox is not configured")
@@ -99,28 +95,6 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
         audit(db, user.id, "Account", user.id, "login", {"sandbox": False})
         db.commit()
         return _token_response_from_user(user)
-
-    sandbox_user = authenticate_sandbox_direct_login(user_id, payload.password)
-    if sandbox_user is not None:
-        try:
-            role = Role(str(sandbox_user["role"]))
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Sandbox role is invalid",
-            ) from exc
-        return TokenResponse(
-            access_token=create_access_token(
-                str(sandbox_user["id"]),
-                role,
-                team=sandbox_user.get("team"),
-                sandbox=True,
-            ),
-            must_change_password=False,
-            display_name=sandbox_user.get("display_name"),
-            role=role.value,
-            team=sandbox_user.get("team"),
-        )
 
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sai tài khoản hoặc mật khẩu")
 

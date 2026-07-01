@@ -247,28 +247,36 @@ export function App() {
   }, []);
 
   const logout = () => {
-    setToken("");
-    setRole("");
-    setCurrentUserId("");
-    setCurrentDisplayName(null);
-    setCurrentTeam(null);
-    setMustChangePassword(false);
-    setVoluntaryChange(false);
-    setSandbox(false);
-    setHasRealSession(false);
-    setNotifications([]);
-    setSandboxIdentities([]);
-    if (typeof window !== "undefined") {
-      const stillRemember = window.localStorage.getItem(REMEMBER_FLAG_KEY) === "true";
-      setUserId(stillRemember ? (window.localStorage.getItem(REMEMBERED_USER_KEY) ?? "") : "");
-      clearStoredSessionTokens();
-      window.sessionStorage.removeItem(REAL_TOKEN_KEY);
-    } else {
-      setUserId("");
+    const clearSession = () => {
+      setToken("");
+      setRole("");
+      setCurrentUserId("");
+      setCurrentDisplayName(null);
+      setCurrentTeam(null);
+      setMustChangePassword(false);
+      setVoluntaryChange(false);
+      setSandbox(false);
+      setHasRealSession(false);
+      setNotifications([]);
+      setSandboxIdentities([]);
+      if (typeof window !== "undefined") {
+        const stillRemember = window.localStorage.getItem(REMEMBER_FLAG_KEY) === "true";
+        setUserId(stillRemember ? (window.localStorage.getItem(REMEMBERED_USER_KEY) ?? "") : "");
+        clearStoredSessionTokens();
+        window.sessionStorage.removeItem(REAL_TOKEN_KEY);
+      } else {
+        setUserId("");
+      }
+      setPassword("");
+      setError("");
+      setNotice("");
+    };
+
+    if (sandbox) {
+      api.sandboxReset().catch(() => {}).finally(clearSession);
+      return;
     }
-    setPassword("");
-    setError("");
-    setNotice("");
+    clearSession();
   };
 
   const login = (event?: React.FormEvent) => {

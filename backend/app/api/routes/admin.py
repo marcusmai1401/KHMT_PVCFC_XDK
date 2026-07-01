@@ -1,5 +1,4 @@
 from datetime import datetime
-from secrets import token_hex
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -27,15 +26,10 @@ from app.schemas.common import (
 )
 from app.services.cache import cache_delete_prefix, cache_get, cache_set
 from app.services.repositories import audit, make_id, model_to_dict
-from app.services.sandbox import list_sandbox_accounts, reset_sandbox_account_password
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 DEFAULT_RESET_PASSWORD = "PVCFC@123"
-
-
-def _temporary_sandbox_password() -> str:
-    return f"Test{token_hex(4)}9"
 
 
 def _validate_password_policy(password: str) -> None:
@@ -71,13 +65,6 @@ def list_users(
     db: Session = Depends(get_db),
 ):
     return [model_to_dict(user) | {"password_hash": None} for user in db.execute(select(User)).scalars()]
-
-
-@router.get("/sandbox-users")
-def list_sandbox_users(
-    _: dict = Depends(require_role(Role.ADMIN)),
-):
-    return list_sandbox_accounts()
 
 
 @router.post("/users")
@@ -153,27 +140,6 @@ def reset_user_password(
     )
     db.commit()
     return model_to_dict(user) | {"password_hash": None, "temporary_password": temp_password}
-
-
-@router.post("/sandbox-users/{user_id}/reset-password")
-def reset_sandbox_user_password(
-    user_id: str,
-    payload: PasswordResetRequest,
-    principal: dict = Depends(require_role(Role.ADMIN)),
-):
-    """Admin reset mật khẩu cho tài khoản kiểm thử sandbox.
-
-    Sau khi reset, tài khoản có thể đăng nhập trực tiếp vào sandbox từ màn
-    hình login production, nhưng token vẫn là token sandbox và không ghi vào
-    database production.
-    """
-    temp_password = (payload.new_password or "").strip() or _temporary_sandbox_password()
-    _validate_password_policy(temp_password)
-    try:
-        user = reset_sandbox_account_password(user_id, temp_password, principal["user_id"])
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return user | {"temporary_password": temp_password}
 
 
 @router.get("/kr-mapping")

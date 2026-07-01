@@ -77,29 +77,6 @@ function actionLabel(value: string | null | undefined) {
   return value ? labels[value] ?? value : "Chưa có";
 }
 
-function accountKey(user: any) {
-  return `${user.account_scope === "sandbox" ? "sandbox" : "production"}:${user.id}`;
-}
-
-function isSandboxAccount(user: any) {
-  return user.account_scope === "sandbox";
-}
-
-function accountScopeLabel(user: any) {
-  return isSandboxAccount(user) ? "Kiểm thử" : "Production";
-}
-
-function accountPasswordPending(user: any) {
-  return isSandboxAccount(user) ? !user.direct_login_enabled : Boolean(user.must_change_password);
-}
-
-function accountPasswordLabel(user: any) {
-  if (isSandboxAccount(user)) {
-    return user.direct_login_enabled ? "Đã bật login kiểm thử" : "Chưa bật login";
-  }
-  return user.must_change_password ? "Chưa đổi" : "Đã đổi/không bắt buộc";
-}
-
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "Chưa ghi";
   const normalized = String(value).includes("T") ? String(value) : String(value).replace(" ", "T");
@@ -168,7 +145,7 @@ export function AdminPanel() {
   const [accountLoginFilter, setAccountLoginFilter] = useState("all");
   const [accountActivityFilter, setAccountActivityFilter] = useState("all");
   const [resetBusyId, setResetBusyId] = useState<string | null>(null);
-  const [resetResult, setResetResult] = useState<{ userId: string; password: string; scope: string } | null>(null);
+  const [resetResult, setResetResult] = useState<{ userId: string; password: string } | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const reload = () => {
@@ -177,21 +154,12 @@ export function AdminPanel() {
       api.fiReports(),
       api.fiDashboard(),
       api.adminUsers(),
-      api.adminSandboxUsers().catch(() => []),
       api.auditLog({ entity_type: "Account" }),
     ])
-      .then(([rows, dashboardData, userRows, sandboxUserRows, logs]) => {
+      .then(([rows, dashboardData, userRows, logs]) => {
         setFiRows([...rows].sort(compareFiRows));
         setDashboard(dashboardData);
-        const productionRows = userRows.map((user) => ({ ...user, account_scope: "production" }));
-        const sandboxRows = sandboxUserRows.map((user) => ({ ...user, account_scope: "sandbox" }));
-        setUsers(
-          [...productionRows, ...sandboxRows].sort(
-            (a, b) =>
-              String(a.account_scope).localeCompare(String(b.account_scope), "vi") ||
-              String(a.id).localeCompare(String(b.id), "vi"),
-          ),
-        );
+        setUsers([...userRows].sort((a, b) => String(a.id).localeCompare(String(b.id), "vi")));
         setAuditRows(logs);
         setError("");
       })
@@ -205,24 +173,19 @@ export function AdminPanel() {
 
   const handleResetPassword = (user: any) => {
     const label = user.display_name || user.full_name || user.id;
-    const sandboxAccount = isSandboxAccount(user);
-    const key = accountKey(user);
     const confirmed = window.confirm(
-      sandboxAccount
-        ? `Reset mật khẩu kiểm thử cho "${label}" (${user.id})?\n\n` +
-            "Tài khoản này chỉ đăng nhập vào môi trường kiểm thử. Dữ liệu production không bị ghi trực tiếp."
-        : `Reset mật khẩu cho "${label}" (${user.id})?\n\n` +
-            "Hệ thống sẽ đặt lại mật khẩu mặc định và buộc người dùng đổi mật khẩu " +
-            "ngay khi đăng nhập lần kế tiếp.",
+      `Reset mật khẩu cho "${label}" (${user.id})?\n\n` +
+        "Hệ thống sẽ đặt lại mật khẩu mặc định và buộc người dùng đổi mật khẩu " +
+        "ngay khi đăng nhập lần kế tiếp.",
     );
     if (!confirmed) return;
-    setResetBusyId(key);
+    setResetBusyId(user.id);
     setError("");
     setResetResult(null);
-    const request = sandboxAccount ? api.adminResetSandboxUserPassword : api.adminResetUserPassword;
-    request(user.id)
+    api
+      .adminResetUserPassword(user.id)
       .then((res) => {
-        setResetResult({ userId: user.id, password: res.temporary_password, scope: user.account_scope ?? "production" });
+        setResetResult({ userId: user.id, password: res.temporary_password });
         reload();
       })
       .catch((err) => setError(err.message))
@@ -264,9 +227,6 @@ export function AdminPanel() {
   const accountActivityRows = useMemo(() => {
     return users
       .map((user) => {
-        if (isSandboxAccount(user)) {
-          return { user, relatedLogs: [], loginLog: null, passwordLog: null, latestLog: null };
-        }
         const relatedLogs = auditRows.filter((row) => row.actor === user.id || (row.entity_type === "Account" && row.entity_id === user.id));
         const loginLog = latestByTime(relatedLogs.filter((row) => row.action === "login"));
         const passwordLog = latestByTime(relatedLogs.filter((row) => row.action === "change_password"));
@@ -298,8 +258,8 @@ export function AdminPanel() {
       if (accountTeamFilter !== "all" && userTeam !== accountTeamFilter) return false;
       if (accountStatusFilter === "active" && !user.is_active) return false;
       if (accountStatusFilter === "locked" && user.is_active) return false;
-      if (accountPasswordFilter === "changed" && accountPasswordPending(user)) return false;
-      if (accountPasswordFilter === "pending" && !accountPasswordPending(user)) return false;
+      if (accountPasswordFilter === "changed" && user.must_change_password) return false;
+      if (accountPasswordFilter === "pending" && !user.must_change_password) return false;
       if (accountLoginFilter === "has_login" && !loginLog) return false;
       if (accountLoginFilter === "no_login" && loginLog) return false;
       if (accountActivityFilter === "no_activity" && latestLog) return false;
@@ -311,8 +271,6 @@ export function AdminPanel() {
         user.full_name,
         user.role,
         user.team,
-        accountScopeLabel(user),
-        user.direct_login_enabled ? "login kiểm thử" : "",
         loginLog?.created_at,
         latestLog?.action,
         actionLabel(latestLog?.action),
@@ -336,11 +294,9 @@ export function AdminPanel() {
   const pendingCount = Number(totals.pending ?? fiRows.filter((row) => ["Submitted", "NeedMoreInfo", "Reviewed"].includes(row.status)).length);
   const khmtCount = Number(totals.khmt_considered ?? fiRows.filter(isKhmtConsidered).length);
   const activeUsers = users.filter((user) => user.is_active).length;
-  const changedPasswordCount = users.filter((user) => !accountPasswordPending(user)).length;
+  const changedPasswordCount = users.filter((user) => !user.must_change_password).length;
   const loggedInCount = accountActivityRows.filter((row) => Boolean(row.loginLog)).length;
-  const readyAccountCount = accountActivityRows.filter((row) =>
-    isSandboxAccount(row.user) ? row.user.direct_login_enabled : Boolean(row.loginLog) && !row.user.must_change_password
-  ).length;
+  const readyAccountCount = accountActivityRows.filter((row) => Boolean(row.loginLog) && !row.user.must_change_password).length;
 
   const renderFiTab = () => (
     <>
@@ -560,9 +516,9 @@ export function AdminPanel() {
         </div>
         <div className="admin-fi-kpi current">
           <KeyRound size={18} />
-          <span>Pass sẵn sàng</span>
+          <span>Đã đổi pass</span>
           <strong>{changedPasswordCount}</strong>
-          <small>{users.length - changedPasswordCount} còn cần reset/đổi</small>
+          <small>{users.length - changedPasswordCount} còn bắt buộc đổi</small>
         </div>
         <div className="admin-fi-kpi">
           <Clock3 size={18} />
@@ -583,19 +539,11 @@ export function AdminPanel() {
           <ShieldCheck size={18} />
           <div className="admin-reset-banner-body">
             <strong>Đã reset mật khẩu cho “{resetResult.userId}”.</strong>
-            {resetResult.scope === "sandbox" ? (
-              <span>
-                Mật khẩu kiểm thử:{" "}
-                <code className="admin-reset-password">{resetResult.password}</code> — tài khoản này
-                chỉ đăng nhập vào môi trường kiểm thử.
-              </span>
-            ) : (
-              <span>
-                Mật khẩu tạm:{" "}
-                <code className="admin-reset-password">{resetResult.password}</code> — gửi cho người
-                dùng qua kênh an toàn. Họ sẽ bị buộc đổi mật khẩu khi đăng nhập lần kế tiếp.
-              </span>
-            )}
+            <span>
+              Mật khẩu tạm:{" "}
+              <code className="admin-reset-password">{resetResult.password}</code> — gửi cho người
+              dùng qua kênh an toàn. Họ sẽ bị buộc đổi mật khẩu khi đăng nhập lần kế tiếp.
+            </span>
           </div>
           <div className="admin-reset-banner-actions">
             <button
@@ -657,8 +605,8 @@ export function AdminPanel() {
           Đổi pass
           <select value={accountPasswordFilter} onChange={(event) => setAccountPasswordFilter(event.target.value)}>
             <option value="all">Tất cả</option>
-            <option value="changed">Sẵn sàng</option>
-            <option value="pending">Cần reset/đổi</option>
+            <option value="changed">Đã đổi/không bắt buộc</option>
+            <option value="pending">Chưa đổi</option>
           </select>
         </label>
         <label className="admin-filter-field">
@@ -686,7 +634,6 @@ export function AdminPanel() {
           <thead>
             <tr>
               <th>Tài khoản</th>
-              <th>Dữ liệu</th>
               <th>Người dùng</th>
               <th>Vai trò</th>
               <th>Đội/tổ</th>
@@ -700,13 +647,8 @@ export function AdminPanel() {
           </thead>
           <tbody>
             {accountRows.map(({ user, loginLog, passwordLog, latestLog }) => (
-              <tr key={accountKey(user)}>
+              <tr key={user.id}>
                 <td><strong>{user.id}</strong></td>
-                <td>
-                  <span className={`admin-source-pill ${isSandboxAccount(user) ? "sandbox" : "current"}`}>
-                    {accountScopeLabel(user)}
-                  </span>
-                </td>
                 <td>
                   <span className="admin-person">
                     <UserRound size={14} />
@@ -724,18 +666,12 @@ export function AdminPanel() {
                   </span>
                 </td>
                 <td>
-                  <span className={`admin-status-pill ${accountPasswordPending(user) ? "warning" : "success"}`}>
-                    {accountPasswordLabel(user)}
+                  <span className={`admin-status-pill ${user.must_change_password ? "warning" : "success"}`}>
+                    {user.must_change_password ? "Chưa đổi" : "Đã đổi/không bắt buộc"}
                   </span>
                   {passwordLog && <small className="admin-cell-note">{formatDateTime(passwordLog.created_at)}</small>}
                 </td>
-                <td>
-                  {loginLog
-                    ? formatDateTime(loginLog.created_at)
-                    : isSandboxAccount(user) && user.direct_login_enabled
-                      ? "Đã bật login kiểm thử"
-                      : "Chưa có log"}
-                </td>
+                <td>{loginLog ? formatDateTime(loginLog.created_at) : "Chưa có log"}</td>
                 <td>
                   {latestLog ? (
                     <>
@@ -752,18 +688,18 @@ export function AdminPanel() {
                     type="button"
                     className="admin-detail-button admin-reset-button"
                     onClick={() => handleResetPassword(user)}
-                    disabled={resetBusyId === accountKey(user)}
-                    title={isSandboxAccount(user) ? "Đặt lại mật khẩu kiểm thử" : "Đặt lại mật khẩu mặc định và buộc đổi khi đăng nhập"}
+                    disabled={resetBusyId === user.id}
+                    title="Đặt lại mật khẩu mặc định và buộc đổi khi đăng nhập"
                   >
                     <RotateCcw size={14} />
-                    {resetBusyId === accountKey(user) ? "Đang reset..." : "Reset mật khẩu"}
+                    {resetBusyId === user.id ? "Đang reset..." : "Reset mật khẩu"}
                   </button>
                 </td>
               </tr>
             ))}
             {accountRows.length === 0 && (
               <tr>
-                <td colSpan={11}>Không có tài khoản phù hợp với bộ lọc hiện tại.</td>
+                <td colSpan={10}>Không có tài khoản phù hợp với bộ lọc hiện tại.</td>
               </tr>
             )}
           </tbody>

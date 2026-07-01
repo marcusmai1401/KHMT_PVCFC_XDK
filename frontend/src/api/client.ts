@@ -131,14 +131,8 @@ export const api = {
   krMapping: () => request<any[]>("/okr/kr-mapping"),
   headcount: () => request<any>("/admin/headcount"),
   adminUsers: () => request<any[]>("/admin/users"),
-  adminSandboxUsers: () => request<any[]>("/admin/sandbox-users"),
   adminResetUserPassword: (userId: string, newPassword?: string | null) =>
     request<any>(`/admin/users/${encodeURIComponent(userId)}/reset-password`, {
-      method: "POST",
-      body: JSON.stringify({ new_password: newPassword?.trim() ? newPassword.trim() : null }),
-    }),
-  adminResetSandboxUserPassword: (userId: string, newPassword?: string | null) =>
-    request<any>(`/admin/sandbox-users/${encodeURIComponent(userId)}/reset-password`, {
       method: "POST",
       body: JSON.stringify({ new_password: newPassword?.trim() ? newPassword.trim() : null }),
     }),

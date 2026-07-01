@@ -306,6 +306,33 @@ def test_fi_team_create_is_submitted_immediately(client, admin_headers):
     assert client.get(f"/api/v1/fi/sk-ctkt/{record_id}", headers=leader_headers).status_code == 200
 
 
+def test_all_fi_history_users_can_export_excel(client, admin_headers):
+    team_headers = _login(client, "TBCH", "tbch-pass")
+    fi_headers = _login(client, "fi", "fi-pass")
+    leader_headers = _login(client, "leader", "leader-pass")
+    staff_headers = _create_user(client, admin_headers, "staff-export", role="Staff", team="TBCH")
+    created = client.post(
+        "/api/v1/fi/sk-ctkt",
+        headers=team_headers,
+        json={
+            "author_name": "Đội TBCH",
+            "team": "TBCH",
+            "title": "Xuất Excel mọi user",
+            "content_description": "Nội dung để kiểm tra quyền tải lịch sử FI",
+            "completion_plan": "T6/2026",
+        },
+    )
+    assert created.status_code == 200, created.text
+
+    for headers in (admin_headers, team_headers, fi_headers, leader_headers, staff_headers):
+        response = client.get("/api/v1/fi/reports/export?teams=TBCH", headers=headers)
+        assert response.status_code == 200, response.text
+        workbook = load_workbook(BytesIO(response.content), read_only=True)
+        assert {"Tong hop", "Du lieu FI"}.issubset(workbook.sheetnames)
+        data_rows = workbook["Du lieu FI"].iter_rows(values_only=True)
+        assert any("Xuất Excel mọi user" in row for row in data_rows)
+
+
 def test_fi_reject_requires_note_and_delete_is_admin_only(client, admin_headers):
     team_headers = _login(client, "TBĐL", "tbdl-pass")
     fi_headers = _login(client, "fi", "fi-pass")
@@ -501,7 +528,7 @@ def test_legacy_sk_is_history_and_can_be_reviewed_from_history(client, admin_hea
     assert client.get("/api/v1/fi/sk-ctkt/sk-legacy", headers=admin_headers).status_code == 404
 
 
-def test_admin_exports_fi_reports_with_history_filters(client, admin_headers):
+def test_fi_history_export_uses_history_filters(client, admin_headers):
     def record(
         record_id: str,
         *,
@@ -594,10 +621,6 @@ def test_admin_exports_fi_reports_with_history_filters(client, admin_headers):
             ]
         )
         db.commit()
-
-    team_headers = _login(client, "TBCH", "tbch-pass")
-    forbidden = client.get("/api/v1/fi/reports/export", headers=team_headers)
-    assert forbidden.status_code == 403
 
     def exported_codes(query: str) -> list[str]:
         response = client.get(f"/api/v1/fi/reports/export{query}", headers=admin_headers)

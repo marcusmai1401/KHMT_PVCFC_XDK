@@ -2171,7 +2171,7 @@ export function FIWorkspace({
   ];
 
   const exportHistoryExcel = () => {
-    if (role !== ADMIN_ROLE || exportingHistoryExcel || filteredHistoryItems.length === 0) return;
+    if (exportingHistoryExcel || filteredHistoryItems.length === 0) return;
     setExportingHistoryExcel(true);
     setError("");
     setNotice("");
@@ -3595,18 +3595,16 @@ export function FIWorkspace({
                   </>
                 )}
               </span>
-              {role === ADMIN_ROLE && (
-                <button
-                  aria-label="Xuất Excel theo bộ lọc hiện tại"
-                  className="fi-history-reload"
-                  disabled={exportingHistoryExcel || filteredHistoryItems.length === 0}
-                  onClick={exportHistoryExcel}
-                  title={filteredHistoryItems.length === 0 ? "Không có dữ liệu để xuất" : "Xuất Excel theo bộ lọc hiện tại"}
-                  type="button"
-                >
-                  <FileDown size={17} />
-                </button>
-              )}
+              <button
+                aria-label="Xuất Excel theo bộ lọc hiện tại"
+                className="fi-history-reload"
+                disabled={exportingHistoryExcel || filteredHistoryItems.length === 0}
+                onClick={exportHistoryExcel}
+                title={filteredHistoryItems.length === 0 ? "Không có dữ liệu để xuất" : "Xuất Excel theo bộ lọc hiện tại"}
+                type="button"
+              >
+                <FileDown size={17} />
+              </button>
               <button
                 className="fi-history-reload"
                 onClick={reload}

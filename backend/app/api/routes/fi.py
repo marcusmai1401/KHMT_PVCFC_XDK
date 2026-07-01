@@ -513,7 +513,15 @@ def export_reports(
     completion: str | None = None,
     authors: str | None = None,
     submitters: str | None = None,
-    _: dict = Depends(require_role(Role.ADMIN)),
+    _: dict = Depends(
+        require_role(
+            Role.TEAM_ACCOUNT,
+            Role.STAFF,
+            Role.FI_COORDINATOR,
+            Role.WORKSHOP_LEADER,
+            Role.ADMIN,
+        )
+    ),
     db: Session = Depends(get_db),
 ):
     try:

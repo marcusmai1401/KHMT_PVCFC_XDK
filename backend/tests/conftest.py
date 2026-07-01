@@ -11,7 +11,7 @@ os.environ.setdefault("OKR_JWT_SECRET", "test-secret")
 import pytest
 from fastapi.testclient import TestClient
 
-from app.db.session import Base, create_session, engine
+from app.db.session import Base, create_session, engine, sandbox_engine
 from app.main import app
 from app.services.bootstrap import seed_baseline
 
@@ -23,6 +23,8 @@ def reset_database() -> None:
             connection.execute(table.delete())
     with create_session() as db:
         seed_baseline(db)
+    Base.metadata.drop_all(bind=sandbox_engine)
+    Base.metadata.create_all(bind=sandbox_engine)
 
 
 @pytest.fixture()

@@ -7,17 +7,19 @@ from pathlib import Path
 from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
-from app.core.security import Role, hash_password
+from app.core.security import Role, hash_password, verify_password
 from app.db.session import Base, create_session, sandbox_engine
 from app.models import et_domain  # noqa: F401 - register ET tables for sandbox metadata
 from app.models.domain import SystemConfigModel, User
 from app.services.bootstrap import seed_baseline
 from app.services.cache import cache_delete_prefix
+from app.services.repositories import audit, model_to_dict
 
 
 SANDBOX_LOGIN_ID = "test"
 SANDBOX_PASSWORD = "PVCFC@123"
 SANDBOX_INITIALIZED_KEY = "sandbox_initialized_from_production"
+SANDBOX_DIRECT_LOGIN_PREFIX = "sandbox_direct_login_enabled:"
 
 
 @dataclass(frozen=True)
@@ -148,6 +150,112 @@ def sandbox_identity(user_id: str) -> SandboxIdentity | None:
         except ValueError:
             return None
         return SandboxIdentity(id=user.id, display_name=user.display_name, role=role)
+
+
+def _direct_login_key(user_id: str) -> str:
+    return f"{SANDBOX_DIRECT_LOGIN_PREFIX}{user_id}"
+
+
+def _find_sandbox_user(db: Session, user_id: str) -> User | None:
+    user = db.get(User, user_id)
+    if user is not None:
+        return user
+    lowered = user_id.lower()
+    if lowered == user_id:
+        return None
+    return db.get(User, lowered)
+
+
+def _verify_password_allowing_copy_whitespace(password: str, password_hash: str) -> bool:
+    if verify_password(password, password_hash):
+        return True
+    stripped = password.strip()
+    return stripped != password and verify_password(stripped, password_hash)
+
+
+def _direct_login_enabled(db: Session, user_id: str) -> bool:
+    marker = db.get(SystemConfigModel, _direct_login_key(user_id))
+    if marker is None:
+        return False
+    value = marker.value if isinstance(marker.value, dict) else {}
+    return bool(value.get("enabled"))
+
+
+def authenticate_sandbox_direct_login(user_id: str, password: str) -> dict[str, str | None] | None:
+    """Authenticate a sandbox user from the normal login screen.
+
+    Production direct sandbox login is disabled until a production Admin resets
+    that sandbox account. This avoids keeping the static default password usable
+    on production while still giving Admins a recoverable test account.
+    """
+    ensure_sandbox_data()
+    with create_session(sandbox=True) as db:
+        user = _find_sandbox_user(db, user_id.strip())
+        if user is None or not user.is_active:
+            return None
+        if not _direct_login_enabled(db, user.id):
+            return None
+        if not _verify_password_allowing_copy_whitespace(password, user.password_hash):
+            return None
+        return {
+            "id": user.id,
+            "display_name": user.display_name,
+            "role": user.role,
+            "team": getattr(user, "team", None),
+        }
+
+
+def list_sandbox_accounts() -> list[dict[str, str | bool | None]]:
+    ensure_sandbox_data()
+    with create_session(sandbox=True) as db:
+        users = list(db.execute(select(User).order_by(User.role, User.id)).scalars())
+        rows = []
+        for user in users:
+            data = model_to_dict(user) | {
+                "password_hash": None,
+                "account_scope": "sandbox",
+                "direct_login_enabled": _direct_login_enabled(db, user.id),
+            }
+            rows.append(data)
+        return rows
+
+
+def reset_sandbox_account_password(user_id: str, new_password: str, actor: str) -> dict:
+    ensure_sandbox_data()
+    with create_session(sandbox=True) as db:
+        user = _find_sandbox_user(db, user_id.strip())
+        if user is None:
+            raise KeyError("Không tìm thấy tài khoản kiểm thử")
+        user.password_hash = hash_password(new_password)
+        user.must_change_password = False
+        marker = db.get(SystemConfigModel, _direct_login_key(user.id))
+        value = {"enabled": True, "reset_by": actor}
+        if marker is None:
+            db.add(
+                SystemConfigModel(
+                    key=_direct_login_key(user.id),
+                    value=value,
+                    updated_by=actor,
+                )
+            )
+        else:
+            marker.value = value
+            marker.updated_by = actor
+        audit(
+            db,
+            actor,
+            "SandboxAccount",
+            user.id,
+            "admin_reset_sandbox_password",
+            {"direct_login_enabled": True},
+        )
+        db.commit()
+        db.refresh(user)
+        return model_to_dict(user) | {
+            "password_hash": None,
+            "account_scope": "sandbox",
+            "direct_login_enabled": True,
+        }
 
 
 def list_sandbox_identities() -> list[dict[str, str | None]]:

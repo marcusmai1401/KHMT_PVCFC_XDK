@@ -18,6 +18,7 @@ from app.services.repositories import audit
 from app.services.sandbox import (
     SANDBOX_LOGIN_ID,
     SANDBOX_PASSWORD,
+    authenticate_sandbox_direct_login,
     ensure_sandbox_data,
     list_sandbox_identities,
     reset_sandbox_data,
@@ -91,14 +92,37 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
 
     user = _find_login_user(db, user_id)
     if (
-        user is None
-        or not user.is_active
-        or not _verify_password_allowing_copy_whitespace(payload.password, user.password_hash)
+        user is not None
+        and user.is_active
+        and _verify_password_allowing_copy_whitespace(payload.password, user.password_hash)
     ):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sai tài khoản hoặc mật khẩu")
-    audit(db, user.id, "Account", user.id, "login", {"sandbox": False})
-    db.commit()
-    return _token_response_from_user(user)
+        audit(db, user.id, "Account", user.id, "login", {"sandbox": False})
+        db.commit()
+        return _token_response_from_user(user)
+
+    sandbox_user = authenticate_sandbox_direct_login(user_id, payload.password)
+    if sandbox_user is not None:
+        try:
+            role = Role(str(sandbox_user["role"]))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Sandbox role is invalid",
+            ) from exc
+        return TokenResponse(
+            access_token=create_access_token(
+                str(sandbox_user["id"]),
+                role,
+                team=sandbox_user.get("team"),
+                sandbox=True,
+            ),
+            must_change_password=False,
+            display_name=sandbox_user.get("display_name"),
+            role=role.value,
+            team=sandbox_user.get("team"),
+        )
+
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sai tài khoản hoặc mật khẩu")
 
 
 @router.get("/me")

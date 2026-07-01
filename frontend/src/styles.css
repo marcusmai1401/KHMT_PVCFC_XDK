@@ -3493,7 +3493,7 @@ tr:hover td {
 }
 
 .admin-account-table {
-  min-width: 1180px;
+  min-width: 1260px;
 }
 
 .admin-fi-table th {
@@ -3596,6 +3596,11 @@ tr:hover td {
 .admin-source-pill.historical {
   background: #f1f5f9;
   color: #475569;
+}
+
+.admin-source-pill.sandbox {
+  background: #ede9fe;
+  color: #5b21b6;
 }
 
 .admin-detail-button {

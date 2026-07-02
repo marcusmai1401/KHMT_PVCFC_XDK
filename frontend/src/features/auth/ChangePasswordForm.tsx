@@ -78,11 +78,6 @@ export function ChangePasswordForm({ forced, displayName, userId, onChanged, onC
 
   return (
     <main className="auth-shell">
-      <div className="auth-bg" aria-hidden="true">
-        <div className="auth-bg-orb auth-bg-orb-a" />
-        <div className="auth-bg-orb auth-bg-orb-b" />
-        <div className="auth-bg-grid" />
-      </div>
       <div className="auth-content auth-content-compact">
         <form className="auth-card auth-card-wide" onSubmit={submit}>
           <header className="auth-card-head">

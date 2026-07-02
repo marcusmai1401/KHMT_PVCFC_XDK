@@ -93,6 +93,13 @@ function displayRole(value: string) {
   return roleLabels[value] ?? value;
 }
 
+function initialsFromName(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "??";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
 function displayNotification(value: string) {
   return notificationLabels[value] ?? value;
 }
@@ -508,11 +515,6 @@ export function App() {
   if (restoringSession) {
     return (
       <main className="auth-shell" aria-busy="true">
-        <div className="auth-bg" aria-hidden="true">
-          <div className="auth-bg-orb auth-bg-orb-a" />
-          <div className="auth-bg-orb auth-bg-orb-b" />
-          <div className="auth-bg-grid" />
-        </div>
         <div className="auth-boot">
           <div className="auth-boot-mark">
             <img src="/logo.webp" alt="PVCFC" />
@@ -542,12 +544,6 @@ export function App() {
   if (!role) {
     return (
       <main className="auth-shell">
-        <div className="auth-bg" aria-hidden="true">
-          <div className="auth-bg-orb auth-bg-orb-a" />
-          <div className="auth-bg-orb auth-bg-orb-b" />
-          <div className="auth-bg-grid" />
-          <div className="auth-bg-noise" />
-        </div>
         <div className="auth-content">
           <div className="auth-hero">
             <div className="auth-hero-brand">
@@ -720,8 +716,7 @@ export function App() {
             <div className="brand">
               <img src="/logo.webp" alt="PVCFC Logo" className="brand-logo" />
               <div>
-                <strong>OKR Automation</strong>
-                <span>Xưởng Điều khiển</span>
+                <strong>Website quản lí chung Xưởng Điều khiển</strong>
               </div>
             </div>
             <button
@@ -734,98 +729,6 @@ export function App() {
               {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
             </button>
           </div>
-          <div className="field">
-            <span>Tài khoản</span>
-            <strong>{currentDisplayName ?? currentUserId}</strong>
-            <small>
-              {sandbox
-                ? `Kiểm thử · ${displayRole(role)}${currentTeam ? ` · ${displayTeam(currentTeam)}` : ""}`
-                : `${displayRole(role)}${currentTeam ? ` · ${displayTeam(currentTeam)}` : ""}`}
-            </small>
-            <div className="account-actions">
-              {!sandbox && (
-                <button
-                  className="account-action"
-                  onClick={() => setVoluntaryChange(true)}
-                  title="Đổi mật khẩu"
-                  type="button"
-                >
-                  <KeyRound size={14} />
-                  <span>Đổi mật khẩu</span>
-                </button>
-              )}
-              {isAdminProd && (
-                <button
-                  className="account-action"
-                  onClick={enterSandbox}
-                  title="Vào môi trường kiểm thử để giả lập các tài khoản"
-                  type="button"
-                >
-                  <FlaskConical size={14} />
-                  <span>Kiểm thử</span>
-                </button>
-              )}
-              {sandbox && hasRealSession && (
-                <button
-                  className="account-action"
-                  onClick={exitSandbox}
-                  title="Thoát môi trường kiểm thử"
-                  type="button"
-                >
-                  <Undo2 size={14} />
-                  <span>Thoát kiểm thử</span>
-                </button>
-              )}
-              <button
-                className="account-action"
-                onClick={logout}
-                title="Đăng xuất"
-                type="button"
-              >
-                <LogOut size={14} />
-                <span>Đăng xuất</span>
-              </button>
-            </div>
-          </div>
-          {sandbox && (
-            <div className="sidebar-sandbox">
-              <div className="sidebar-sandbox-head">
-                <FlaskConical size={14} />
-                <span>Môi trường kiểm thử</span>
-              </div>
-              <label className="sidebar-sandbox-field">
-                <span>Giả lập tài khoản</span>
-                <select
-                  value={currentUserId}
-                  onChange={(event) => switchSandboxRole(event.target.value)}
-                  aria-label="Giả lập tài khoản"
-                >
-                  {groupedIdentities.length === 0 && (
-                    <option value={currentUserId}>{currentDisplayName ?? currentUserId}</option>
-                  )}
-                  {groupedIdentities.map((group) => (
-                    <optgroup key={group.role} label={displayRole(group.role)}>
-                      {group.items.map((identity) => (
-                        <option key={identity.id} value={identity.id}>
-                          {identity.display_name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </label>
-              <button
-                className="sidebar-sandbox-reset"
-                onClick={resetSandbox}
-                disabled={resettingSandbox}
-                title="Reset toàn bộ dữ liệu kiểm thử"
-                type="button"
-              >
-                <RotateCcw size={15} />
-                <span>{resettingSandbox ? "Đang reset..." : "Reset dữ liệu kiểm thử"}</span>
-              </button>
-            </div>
-          )}
           <nav>
             <button className={tab === "okr" ? "active" : ""} onClick={() => navigateToTab("okr")} title="OKR">
               <BarChart3 size={18} />
@@ -848,6 +751,106 @@ export function App() {
               </button>
             )}
           </nav>
+          <div className="sidebar-footer">
+            {sandbox && (
+              <div className="sidebar-sandbox">
+                <div className="sidebar-sandbox-head">
+                  <FlaskConical size={14} />
+                  <span>Môi trường kiểm thử</span>
+                </div>
+                <label className="sidebar-sandbox-field">
+                  <span>Giả lập tài khoản</span>
+                  <select
+                    value={currentUserId}
+                    onChange={(event) => switchSandboxRole(event.target.value)}
+                    aria-label="Giả lập tài khoản"
+                  >
+                    {groupedIdentities.length === 0 && (
+                      <option value={currentUserId}>{currentDisplayName ?? currentUserId}</option>
+                    )}
+                    {groupedIdentities.map((group) => (
+                      <optgroup key={group.role} label={displayRole(group.role)}>
+                        {group.items.map((identity) => (
+                          <option key={identity.id} value={identity.id}>
+                            {identity.display_name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  className="sidebar-sandbox-reset"
+                  onClick={resetSandbox}
+                  disabled={resettingSandbox}
+                  title="Reset toàn bộ dữ liệu kiểm thử"
+                  type="button"
+                >
+                  <RotateCcw size={15} />
+                  <span>{resettingSandbox ? "Đang reset..." : "Reset dữ liệu kiểm thử"}</span>
+                </button>
+              </div>
+            )}
+            <div className="sidebar-account">
+              <div className="sidebar-account-top">
+                <div className="sidebar-account-avatar" aria-hidden="true">
+                  {initialsFromName(currentDisplayName ?? currentUserId)}
+                </div>
+                <div className="sidebar-account-info">
+                  <strong>{currentDisplayName ?? currentUserId}</strong>
+                  <small>
+                    {sandbox
+                      ? `Kiểm thử · ${displayRole(role)}${currentTeam ? ` · ${displayTeam(currentTeam)}` : ""}`
+                      : `${displayRole(role)}${currentTeam ? ` · ${displayTeam(currentTeam)}` : ""}`}
+                  </small>
+                </div>
+              </div>
+              <div className="account-actions">
+                {!sandbox && (
+                  <button
+                    className="account-action"
+                    onClick={() => setVoluntaryChange(true)}
+                    title="Đổi mật khẩu"
+                    type="button"
+                  >
+                    <KeyRound size={14} />
+                    <span>Đổi mật khẩu</span>
+                  </button>
+                )}
+                {isAdminProd && (
+                  <button
+                    className="account-action"
+                    onClick={enterSandbox}
+                    title="Vào môi trường kiểm thử để giả lập các tài khoản"
+                    type="button"
+                  >
+                    <FlaskConical size={14} />
+                    <span>Kiểm thử</span>
+                  </button>
+                )}
+                {sandbox && hasRealSession && (
+                  <button
+                    className="account-action"
+                    onClick={exitSandbox}
+                    title="Thoát môi trường kiểm thử"
+                    type="button"
+                  >
+                    <Undo2 size={14} />
+                    <span>Thoát kiểm thử</span>
+                  </button>
+                )}
+                <button
+                  className="account-action"
+                  onClick={logout}
+                  title="Đăng xuất"
+                  type="button"
+                >
+                  <LogOut size={14} />
+                  <span>Đăng xuất</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </aside>
       )}
       <section className={`workspace ${tab === "fi" ? "fi-workspace-shell" : ""}`}>

@@ -179,7 +179,7 @@ export function ChangePasswordForm({ forced, displayName, userId, onChanged, onC
             </ul>
           )}
 
-          {error && <p className="auth-error">{error}</p>}
+          {error && <p className="auth-error" role="alert">{error}</p>}
 
           <div className="auth-actions">
             <button className="auth-submit" type="submit" disabled={!canSubmit}>

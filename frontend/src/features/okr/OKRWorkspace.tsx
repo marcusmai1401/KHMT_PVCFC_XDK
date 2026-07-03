@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileDown, ImageDown, RefreshCw, RotateCcw, Save, Upload } from "lucide-react";
 import { api } from "../../api/client";
 import { EmptyStateBanner } from "./components/EmptyStateBanner";
+import { NoDataBlock } from "./components/EmptyBlocks";
 import { KRDrillDownPanel } from "./components/KRDrillDownPanel";
 import { MonthlyHistoryHeatmap } from "./components/MonthlyHistoryHeatmap";
 import { ObjectiveDashboard } from "./components/ObjectiveDashboard";
@@ -260,6 +261,7 @@ export function OKRWorkspace({ role, editMode = true }: { role: string; editMode
           <div className="toolbar">
             <PeriodSelector latestDataPeriod={latestDataPeriod} onChange={changePeriod} value={period} />
             <button
+              aria-label="Tải PNG snapshot"
               data-export-exclude="true"
               disabled={exportingPng || !dashboard}
               onClick={exportPng}
@@ -270,6 +272,7 @@ export function OKRWorkspace({ role, editMode = true }: { role: string; editMode
             </button>
             {showEditCommands && (
               <button
+                aria-label="Reset dữ liệu"
                 disabled={resetting}
                 onClick={handleResetData}
                 title="Reset dữ liệu"
@@ -392,7 +395,7 @@ function ObjectiveKRPanel({
               </div>
             </button>
           );
-        }) : <p className="muted">Chưa có KR liên quan cho mục tiêu này.</p>}
+        }) : <NoDataBlock message="Chưa có KR liên quan cho mục tiêu này." />}
       </div>
     </aside>
   );

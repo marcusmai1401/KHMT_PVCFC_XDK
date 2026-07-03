@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clipboard,
+  Loader2,
   Lock,
   RefreshCw,
   Save,
@@ -522,7 +523,7 @@ export function WebInputForm({
         </div>
         <div className="web-input-actions">
           <span className={unsaved ? "save-state unsaved" : "save-state"}>{saveLabel}</span>
-          <button type="button" onClick={load} title="Tải lại"><RefreshCw size={17} /></button>
+          <button aria-label="Tải lại" type="button" onClick={load} title="Tải lại"><RefreshCw size={17} className={loading ? "icon-spin" : undefined} /></button>
           {showAdminEditCommands && (
             <button
               type="button"
@@ -554,7 +555,12 @@ export function WebInputForm({
           <span style={{ width: `${completion}%` }} />
         </div>
         {error && <p className={error.includes("Đã") ? "success" : "error"}>{error}</p>}
-        {loading && <p className="muted">Đang tải dữ liệu...</p>}
+        {loading && (
+          <p className="loading-inline" role="status">
+            <Loader2 size={15} className="icon-spin" />
+            Đang tải dữ liệu...
+          </p>
+        )}
       </section>
 
       <section className="panel wide kr-input-panel">

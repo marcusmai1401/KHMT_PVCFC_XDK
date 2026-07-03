@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   Bell,
+  BellOff,
   ClipboardCheck,
   Eye,
   EyeOff,
@@ -941,6 +942,7 @@ export function App() {
               <button
                 aria-expanded={notificationsOpen}
                 aria-haspopup="true"
+                aria-label={unreadNotificationCount > 0 ? `Thông báo, ${unreadNotificationCount} chưa đọc` : "Thông báo"}
                 title="Thông báo"
                 onClick={toggleNotifications}
                 type="button"
@@ -951,7 +953,10 @@ export function App() {
               {(notificationsOpen || notifications.length > 0) && (
                 <div className="notification-list">
                   {notifications.length === 0 ? (
-                    <div className="notification-empty">Không có thông báo mới.</div>
+                    <div className="notification-empty">
+                      <BellOff size={16} />
+                      <span>Không có thông báo mới.</span>
+                    </div>
                   ) : (
                     notifications.slice(0, 4).map((item) => (
                       <button key={item.id} className={item.read ? "read" : ""} onClick={() => markRead(item.id)}>

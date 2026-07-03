@@ -27,7 +27,7 @@ type Props = {
 
 type EtTab = "dashboard" | "frameworks" | "personnel" | "assessments" | "plans";
 
-const categories = ["C\u01a1 b\u1ea3n", "Trung c\u1ea5p", "N\u00e2ng cao", "Nghi\u1ec7p v\u1ee5 h\u00e0nh ch\u00ednh"];
+const categories = ["Cơ bản", "Trung cấp", "Nâng cao", "Nghiệp vụ hành chính"];
 
 const emptyItemForm = () => ({
   id: "",
@@ -36,7 +36,7 @@ const emptyItemForm = () => ({
   competency_detail: "",
   definition: "",
   requirements_text: "",
-  category: "C\u01a1 b\u1ea3n",
+  category: "Cơ bản",
   stt: 1,
   level_requirements: Object.fromEntries(Array.from({ length: 8 }, (_, index) => [String(index + 1), 0]))
 });
@@ -235,7 +235,7 @@ const categoryOrder = new Map(categories.map((category, index) => [category, ind
 function frameworkGroups(items: any[]) {
   const map = new Map<string, any[]>();
   items.forEach((item) => {
-    const category = item.category || "Kh\u00e1c";
+    const category = item.category || "Khác";
     map.set(category, [...(map.get(category) ?? []), item]);
   });
   return Array.from(map.entries())
@@ -428,8 +428,8 @@ function FrameworkView({ role, editMode, setError }: { role: string; editMode: b
     <div className="content-grid et-grid">
       <section className="panel">
         <div className="panel-header">
-          <h2>{"Khung n\u0103ng l\u1ef1c"}</h2>
-          <button onClick={load} title="T\u1ea3i l\u1ea1i"><RefreshCw size={16} /></button>
+          <h2>{"Khung năng lực"}</h2>
+          <button aria-label="Tải lại" onClick={load} title="Tải lại" type="button"><RefreshCw size={16} /></button>
         </div>
         {editable && (
           <div className="toolbar">
@@ -438,14 +438,14 @@ function FrameworkView({ role, editMode, setError }: { role: string; editMode: b
               Import Excel
               <input type="file" accept=".xlsx" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
             </label>
-            <button onClick={importFile} disabled={!file}>{"N\u1ea1p"}</button>
+            <button onClick={importFile} disabled={!file}>{"Nạp"}</button>
           </div>
         )}
         {editable && (
           <div className="form-stack">
-            <input placeholder="M\u00e3 khung, v\u00ed d\u1ee5 KNL_\u0110K_14" value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} />
-            <input placeholder="T\u00ean v\u1ecb tr\u00ed ch\u1ee9c danh" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />
-            <button onClick={submitFramework}><Plus size={16} />{"T\u1ea1o khung"}</button>
+            <input placeholder="Mã khung, ví dụ KNL_ĐK_14" value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} />
+            <input placeholder="Tên vị trí chức danh" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />
+            <button onClick={submitFramework}><Plus size={16} />{"Tạo khung"}</button>
           </div>
         )}
         <div className="framework-selector-list">
@@ -453,7 +453,7 @@ function FrameworkView({ role, editMode, setError }: { role: string; editMode: b
             <button key={framework.id} className={`framework-select-row ${selected?.id === framework.id ? "active-row" : ""}`} onClick={() => loadDetail(framework.id)}>
               <span className="framework-code-chip">{framework.code}</span>
               <span className="framework-select-title">{frameworkTitleText(framework)}</span>
-              <span className={`framework-status-dot ${framework.is_active ? "active" : "inactive"}`} title={framework.is_active ? "\u0110ang \u00e1p d\u1ee5ng" : "Kh\u00f4ng \u00e1p d\u1ee5ng"}></span>
+              <span className={`framework-status-dot ${framework.is_active ? "active" : "inactive"}`} title={framework.is_active ? "Đang áp dụng" : "Không áp dụng"}></span>
             </button>
           ))}
         </div>
@@ -465,32 +465,32 @@ function FrameworkView({ role, editMode, setError }: { role: string; editMode: b
             <div className="framework-hero">
               <div>
                 <span className={`status ${selected.is_active ? "status-ok" : "status-na"}`}>
-                  {selected.is_active ? "\u0110ang \u00e1p d\u1ee5ng" : "B\u1ea3n nh\u00e1p"}
+                  {selected.is_active ? "Đang áp dụng" : "Bản nháp"}
                 </span>
                 <h2>{selected.code}</h2>
                 <p className="muted">{frameworkTitleText(selected)}</p>
               </div>
               <div className="toolbar">
-                <button title="Xu\u1ea5t Excel" onClick={() => api.exportEtFramework(selected.id).then((blob) => saveBlob(blob, `${selected.code}.xlsx`))}>
+                <button aria-label="Xuất Excel" title="Xuất Excel" type="button" onClick={() => api.exportEtFramework(selected.id).then((blob) => saveBlob(blob, `${selected.code}.xlsx`))}>
                   <FileDown size={16} />
                 </button>
-                {editable && <button title="Clone khung" onClick={openCloneFramework}><Copy size={16} />Clone</button>}
-                {editable && <button title="Th\u00eam n\u0103ng l\u1ef1c" onClick={startAddItem}><Plus size={16} />Năng lực</button>}
-                {editable && !selected.is_active && <button title="K\u00edch ho\u1ea1t" onClick={() => api.activateEtFramework(selected.id).then((row) => { setSelected(row); load(); })}><Power size={16} /></button>}
-                {editable && <button className="danger-button" title="X\u00f3a khung" onClick={() => setDeleteFrameworkOpen(true)}><Trash2 size={16} /></button>}
+                {editable && <button title="Clone khung" type="button" onClick={openCloneFramework}><Copy size={16} />Clone</button>}
+                {editable && <button title="Thêm năng lực" type="button" onClick={startAddItem}><Plus size={16} />Năng lực</button>}
+                {editable && !selected.is_active && <button aria-label="Kích hoạt" title="Kích hoạt" type="button" onClick={() => api.activateEtFramework(selected.id).then((row) => { setSelected(row); load(); })}><Power size={16} /></button>}
+                {editable && <button aria-label="Xóa khung" className="danger-button" title="Xóa khung" type="button" onClick={() => setDeleteFrameworkOpen(true)}><Trash2 size={16} /></button>}
               </div>
             </div>
 
             <div className="framework-summary-grid">
-              <div className="tone-skills"><span>{"S\u1ed1 k\u1ef9 n\u0103ng"}</span><strong>{items.length}</strong></div>
-              <div className="tone-average"><span>{"\u0110i\u1ec3m TB/b\u1eadc"}</span><strong>{averageByLevel}</strong></div>
-              <div className="tone-max"><span>{"T\u1ed5ng cao nh\u1ea5t"}</span><strong>{maxTotal}</strong></div>
-              <div className="tone-groups"><span>{"Nh\u00f3m n\u0103ng l\u1ef1c"}</span><strong>{grouped.length}</strong></div>
+              <div className="tone-skills"><span>{"Số kỹ năng"}</span><strong>{items.length}</strong></div>
+              <div className="tone-average"><span>{"Điểm TB/bậc"}</span><strong>{averageByLevel}</strong></div>
+              <div className="tone-max"><span>{"Tổng cao nhất"}</span><strong>{maxTotal}</strong></div>
+              <div className="tone-groups"><span>{"Nhóm năng lực"}</span><strong>{grouped.length}</strong></div>
             </div>
 
-            <div className="framework-level-total-table" aria-label="T\u1ed5ng \u0111i\u1ec3m chu\u1ea9n theo b\u1eadc">
+            <div className="framework-level-total-table" aria-label="Tổng điểm chuẩn theo bậc">
               <div className="framework-total-label">
-                <span>{"T\u1ed5ng \u0111i\u1ec3m chu\u1ea9n"}</span>
+                <span>{"Tổng điểm chuẩn"}</span>
                 <strong>{maxTotal}</strong>
               </div>
               <div className="framework-total-grid">
@@ -508,7 +508,7 @@ function FrameworkView({ role, editMode, setError }: { role: string; editMode: b
                 <section key={group.category} className="framework-group-card">
                   <div className="framework-group-header">
                     <div>
-                      <span>{"Nh\u00f3m n\u0103ng l\u1ef1c"}</span>
+                      <span>{"Nhóm năng lực"}</span>
                       <h3>{group.category}</h3>
                     </div>
                     <strong>{group.items.length}</strong>
@@ -537,15 +537,15 @@ function FrameworkView({ role, editMode, setError }: { role: string; editMode: b
                         </div>
                         <div className="framework-score-grid" aria-label="Bang diem B1 den B8">
                           {frameworkLevelScores(item).map((value, index) => (
-                            <span key={index} className={`framework-score-chip ${scoreClass(value)}`} title={`B\u1eadc ${index + 1}`}>
+                            <span key={index} className={`framework-score-chip ${scoreClass(value)}`} title={`Bậc ${index + 1}`}>
                               {value || "-"}
                             </span>
                           ))}
                         </div>
                         {editable && (
                           <div className="framework-item-actions">
-                            <button title="S\u1eeda" onClick={() => startEditItem(item)}><Pencil size={14} /></button>
-                            <button title="X\u00f3a" onClick={() => setDeleteItemTarget(item)}><Trash2 size={14} /></button>
+                            <button title="Sửa" onClick={() => startEditItem(item)}><Pencil size={14} /></button>
+                            <button title="Xóa" onClick={() => setDeleteItemTarget(item)}><Trash2 size={14} /></button>
                           </div>
                         )}
                       </article>
@@ -560,17 +560,17 @@ function FrameworkView({ role, editMode, setError }: { role: string; editMode: b
                 <div className="framework-edit-modal" role="dialog" aria-modal="true" aria-label="Chinh sua nang luc">
                   <div className="panel-header">
                     <div>
-                      <h2>{itemForm.id ? "S\u1eeda n\u0103ng l\u1ef1c" : "Th\u00eam n\u0103ng l\u1ef1c"}</h2>
-                      <p className="muted">{"C\u1eadp nh\u1eadt t\u00ean, chi ti\u1ebft v\u00e0 \u0111i\u1ec3m B1-B8 trong database local."}</p>
+                      <h2>{itemForm.id ? "Sửa năng lực" : "Thêm năng lực"}</h2>
+                      <p className="muted">{"Cập nhật tên, chi tiết và điểm B1-B8 trong database local."}</p>
                     </div>
-                    <button title="\u0110\u00f3ng" onClick={() => { setItemEditorOpen(false); setItemForm(emptyItemForm()); }}><X size={18} /></button>
+                    <button title="Đóng" onClick={() => { setItemEditorOpen(false); setItemForm(emptyItemForm()); }}><X size={18} /></button>
                   </div>
                   <div className="et-item-editor">
-                <input placeholder="M\u00e3 NLCM" value={itemForm.nlcm_code} onChange={(event) => setItemForm({ ...itemForm, nlcm_code: event.target.value })} />
-                <input placeholder="T\u00ean n\u0103ng l\u1ef1c" value={itemForm.competency_name} onChange={(event) => setItemForm({ ...itemForm, competency_name: event.target.value })} />
-                <textarea placeholder="Chi ti\u1ebft" value={itemForm.competency_detail ?? ""} onChange={(event) => setItemForm({ ...itemForm, competency_detail: event.target.value })} />
-                <textarea placeholder="\u0110\u1ecbnh ngh\u0129a" value={itemForm.definition ?? ""} onChange={(event) => setItemForm({ ...itemForm, definition: event.target.value })} />
-                <textarea placeholder="Y\u00eau c\u1ea7u ki\u1ebfn th\u1ee9c/k\u1ef9 n\u0103ng" value={itemForm.requirements_text ?? ""} onChange={(event) => setItemForm({ ...itemForm, requirements_text: event.target.value })} />
+                <input placeholder="Mã NLCM" value={itemForm.nlcm_code} onChange={(event) => setItemForm({ ...itemForm, nlcm_code: event.target.value })} />
+                <input placeholder="Tên năng lực" value={itemForm.competency_name} onChange={(event) => setItemForm({ ...itemForm, competency_name: event.target.value })} />
+                <textarea placeholder="Chi tiết" value={itemForm.competency_detail ?? ""} onChange={(event) => setItemForm({ ...itemForm, competency_detail: event.target.value })} />
+                <textarea placeholder="Định nghĩa" value={itemForm.definition ?? ""} onChange={(event) => setItemForm({ ...itemForm, definition: event.target.value })} />
+                <textarea placeholder="Yêu cầu kiến thức/kỹ năng" value={itemForm.requirements_text ?? ""} onChange={(event) => setItemForm({ ...itemForm, requirements_text: event.target.value })} />
                 <select value={itemForm.category} onChange={(event) => setItemForm({ ...itemForm, category: event.target.value })}>
                   {categories.map((category) => <option key={category}>{category}</option>)}
                 </select>
@@ -590,8 +590,8 @@ function FrameworkView({ role, editMode, setError }: { role: string; editMode: b
                   })}
                 </div>
                 <div className="toolbar">
-                  <button onClick={saveItem}><Save size={16} />{"L\u01b0u n\u0103ng l\u1ef1c"}</button>
-                  <button onClick={() => { setItemEditorOpen(false); setItemForm(emptyItemForm()); }}>{"H\u1ee7y"}</button>
+                  <button onClick={saveItem}><Save size={16} />{"Lưu năng lực"}</button>
+                  <button onClick={() => { setItemEditorOpen(false); setItemForm(emptyItemForm()); }}>{"Hủy"}</button>
                 </div>
                   </div>
                 </div>
@@ -602,23 +602,23 @@ function FrameworkView({ role, editMode, setError }: { role: string; editMode: b
                 <div className="framework-edit-modal compact" role="dialog" aria-modal="true" aria-label="Clone khung nang luc">
                   <div className="panel-header">
                     <div>
-                      <h2>{"Clone khung n\u0103ng l\u1ef1c"}</h2>
-                      <p className="muted">{"Sao ch\u00e9p to\u00e0n b\u1ed9 n\u0103ng l\u1ef1c t\u1eeb khung hi\u1ec7n t\u1ea1i, sau \u0111\u00f3 l\u01b0u th\u00e0nh khung m\u1edbi."}</p>
+                      <h2>{"Clone khung năng lực"}</h2>
+                      <p className="muted">{"Sao chép toàn bộ năng lực từ khung hiện tại, sau đó lưu thành khung mới."}</p>
                     </div>
-                    <button title="\u0110\u00f3ng" onClick={() => setCloneOpen(false)}><X size={18} /></button>
+                    <button title="Đóng" onClick={() => setCloneOpen(false)}><X size={18} /></button>
                   </div>
                   <div className="form-stack">
                     <label>
-                      <span>{"M\u00e3 khung m\u1edbi"}</span>
+                      <span>{"Mã khung mới"}</span>
                       <input value={cloneForm.code} onChange={(event) => setCloneForm({ ...cloneForm, code: event.target.value })} />
                     </label>
                     <label>
-                      <span>{"T\u00ean khung m\u1edbi"}</span>
+                      <span>{"Tên khung mới"}</span>
                       <input value={cloneForm.title} onChange={(event) => setCloneForm({ ...cloneForm, title: event.target.value })} />
                     </label>
                   </div>
                   <div className="modal-actions">
-                    <button onClick={() => setCloneOpen(false)}>{"H\u1ee7y"}</button>
+                    <button onClick={() => setCloneOpen(false)}>{"Hủy"}</button>
                     <button onClick={cloneFramework} disabled={!cloneForm.code.trim() || !cloneForm.title.trim()}><Copy size={16} />{"Clone khung"}</button>
                   </div>
                 </div>
@@ -629,17 +629,17 @@ function FrameworkView({ role, editMode, setError }: { role: string; editMode: b
                 <div className="framework-confirm-modal" role="dialog" aria-modal="true" aria-label="Xac nhan xoa khung">
                   <div className="panel-header">
                     <div>
-                      <h2>{"X\u00f3a khung n\u0103ng l\u1ef1c?"}</h2>
+                      <h2>{"Xóa khung năng lực?"}</h2>
                       <p className="muted">{selected.code} - {frameworkTitleText(selected)}</p>
                     </div>
-                    <button title="\u0110\u00f3ng" onClick={() => setDeleteFrameworkOpen(false)}><X size={18} /></button>
+                    <button title="Đóng" onClick={() => setDeleteFrameworkOpen(false)}><X size={18} /></button>
                   </div>
                   <p className="warning-text">
-                    {"Thao t\u00e1c n\u00e0y l\u00e0 x\u00f3a khung trong database, kh\u00f4ng ph\u1ea3i ch\u1ec9 \u1ea9n hi\u1ec3n th\u1ecb. Backend s\u1ebd ch\u1eb7n x\u00f3a n\u1ebfu khung \u0111ang c\u00f3 nh\u00e2n s\u1ef1, phi\u1ebfu \u0111\u00e1nh gi\u00e1 ho\u1eb7c k\u1ebf ho\u1ea1ch ph\u1ee5 thu\u1ed9c."}
+                    {"Thao tác này là xóa khung trong database, không phải chỉ ẩn hiển thị. Backend sẽ chặn xóa nếu khung đang có nhân sự, phiếu đánh giá hoặc kế hoạch phụ thuộc."}
                   </p>
                   <div className="modal-actions">
-                    <button onClick={() => setDeleteFrameworkOpen(false)}>{"H\u1ee7y"}</button>
-                    <button className="danger-button" onClick={deleteFramework}><Trash2 size={16} />{"X\u00f3a trong database"}</button>
+                    <button onClick={() => setDeleteFrameworkOpen(false)}>{"Hủy"}</button>
+                    <button className="danger-button" onClick={deleteFramework}><Trash2 size={16} />{"Xóa trong database"}</button>
                   </div>
                 </div>
               </div>
@@ -649,17 +649,17 @@ function FrameworkView({ role, editMode, setError }: { role: string; editMode: b
                 <div className="framework-confirm-modal" role="dialog" aria-modal="true" aria-label="Xac nhan xoa nang luc">
                   <div className="panel-header">
                     <div>
-                      <h2>{"X\u00f3a n\u0103ng l\u1ef1c?"}</h2>
+                      <h2>{"Xóa năng lực?"}</h2>
                       <p className="muted">{deleteItemTarget.nlcm_code} - {deleteItemTarget.competency_name}</p>
                     </div>
-                    <button title="\u0110\u00f3ng" onClick={() => setDeleteItemTarget(null)}><X size={18} /></button>
+                    <button title="Đóng" onClick={() => setDeleteItemTarget(null)}><X size={18} /></button>
                   </div>
                   <p className="warning-text">
-                    {"Thao t\u00e1c n\u00e0y x\u00f3a n\u0103ng l\u1ef1c trong database. Backend s\u1ebd ch\u1eb7n x\u00f3a n\u1ebfu n\u0103ng l\u1ef1c \u0111\u00e3 \u0111\u01b0\u1ee3c d\u00f9ng trong phi\u1ebfu \u0111\u00e1nh gi\u00e1."}
+                    {"Thao tác này xóa năng lực trong database. Backend sẽ chặn xóa nếu năng lực đã được dùng trong phiếu đánh giá."}
                   </p>
                   <div className="modal-actions">
-                    <button onClick={() => setDeleteItemTarget(null)}>{"H\u1ee7y"}</button>
-                    <button className="danger-button" onClick={() => deleteItem(deleteItemTarget.id)}><Trash2 size={16} />{"X\u00f3a n\u0103ng l\u1ef1c"}</button>
+                    <button onClick={() => setDeleteItemTarget(null)}>{"Hủy"}</button>
+                    <button className="danger-button" onClick={() => deleteItem(deleteItemTarget.id)}><Trash2 size={16} />{"Xóa năng lực"}</button>
                   </div>
                 </div>
               </div>
@@ -673,7 +673,7 @@ function FrameworkView({ role, editMode, setError }: { role: string; editMode: b
                       <h2>{detailItem.competency_name}</h2>
                       <p className="muted">{detailItem.competency_detail}</p>
                     </div>
-                    <button title="\u0110\u00f3ng" onClick={() => setDetailItem(null)}><X size={18} /></button>
+                    <button title="Đóng" onClick={() => setDetailItem(null)}><X size={18} /></button>
                   </div>
                   <div className="framework-score-grid modal-score-grid">
                     {frameworkLevelScores(detailItem).map((value, index) => (
@@ -684,21 +684,21 @@ function FrameworkView({ role, editMode, setError }: { role: string; editMode: b
                     ))}
                   </div>
                   <div className="framework-detail-section">
-                    <h3>{"\u0110\u1ecbnh ngh\u0129a"}</h3>
+                    <h3>Định nghĩa</h3>
                     {splitDetailLines(detailItem.definition).length ? (
                       splitDetailLines(detailItem.definition).map((line, index) => <p key={index}>{line}</p>)
                     ) : (
-                      <p className="muted">{"Ch\u01b0a c\u00f3 d\u1eef li\u1ec7u."}</p>
+                      <p className="muted">Chưa có dữ liệu.</p>
                     )}
                   </div>
                   <div className="framework-detail-section">
-                    <h3>{"Y\u00eau c\u1ea7u ki\u1ebfn th\u1ee9c/k\u1ef9 n\u0103ng"}</h3>
+                    <h3>Yêu cầu kiến thức/kỹ năng</h3>
                     {splitDetailLines(detailItem.requirements_text).length ? (
                       <ul>
                         {splitDetailLines(detailItem.requirements_text).map((line, index) => <li key={index}>{line}</li>)}
                       </ul>
                     ) : (
-                      <p className="muted">{"Ch\u01b0a c\u00f3 d\u1eef li\u1ec7u."}</p>
+                      <p className="muted">Chưa có dữ liệu.</p>
                     )}
                   </div>
                 </div>
@@ -706,7 +706,7 @@ function FrameworkView({ role, editMode, setError }: { role: string; editMode: b
             )}
           </>
         ) : (
-          <p className="muted">{"Ch\u01b0a c\u00f3 khung n\u0103ng l\u1ef1c."}</p>
+          <p className="muted">Chưa có khung năng lực.</p>
         )}
       </section>
     </div>
@@ -849,8 +849,8 @@ function PersonnelView({ role, editMode, setError }: { role: string; editMode: b
             />
           </div>
           <div className="toolbar">
-            <button onClick={load} title="Tải lại"><RefreshCw size={16} /></button>
-            {editable && <button onClick={openCreate} title="Thêm nhân sự"><Plus size={16} /></button>}
+            <button aria-label="Tải lại" onClick={load} title="Tải lại" type="button"><RefreshCw size={16} /></button>
+            {editable && <button aria-label="Thêm nhân sự" onClick={openCreate} title="Thêm nhân sự" type="button"><Plus size={16} /></button>}
           </div>
         </div>
         <div className="matrix et-personnel-table-wrap">
@@ -1102,7 +1102,7 @@ function AssessmentView({ role, editMode, setError }: { role: string; currentUse
   return (
     <div className="content-grid et-grid">
       <section className="panel">
-        <div className="panel-header"><h2>Phiếu đánh giá</h2><button onClick={load}><RefreshCw size={16} /></button></div>
+        <div className="panel-header"><h2>Phiếu đánh giá</h2><button aria-label="Tải lại" onClick={load} title="Tải lại" type="button"><RefreshCw size={16} /></button></div>
         {editable && (
           <div className="form-stack">
             <div
@@ -1263,7 +1263,7 @@ function LearningPlanView({ role, editMode, setError }: { role: string; editMode
   return (
     <div className="content-grid et-grid">
       <section className="panel">
-        <div className="panel-header"><h2>Kế hoạch học tập</h2><button onClick={load}><RefreshCw size={16} /></button></div>
+        <div className="panel-header"><h2>Kế hoạch học tập</h2><button aria-label="Tải lại" onClick={load} title="Tải lại" type="button"><RefreshCw size={16} /></button></div>
         {editable && (
           <div className="form-stack">
             <select value={form.personnel_id} onChange={(event) => setForm({ ...form, personnel_id: event.target.value })}>
@@ -1352,8 +1352,8 @@ function DashboardView({ setError }: { setError: (value: string) => void }) {
         <div className="panel-header">
           <h2>Dashboard năng lực ET</h2>
           <div className="toolbar">
-            <button onClick={load}><RefreshCw size={16} /></button>
-            <button onClick={() => api.exportEtDashboard(query(filters)).then((blob) => saveBlob(blob, "et-dashboard.xlsx"))}><FileDown size={16} /></button>
+            <button aria-label="Tải lại" onClick={load} title="Tải lại" type="button"><RefreshCw size={16} /></button>
+            <button aria-label="Xuất Excel" onClick={() => api.exportEtDashboard(query(filters)).then((blob) => saveBlob(blob, "et-dashboard.xlsx"))} title="Xuất Excel" type="button"><FileDown size={16} /></button>
           </div>
         </div>
         <div className="web-input-controls">

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Info } from "lucide-react";
 import { vn } from "../i18n";
+import { NoDataBlock } from "./EmptyBlocks";
 import type { TechnicalMetadata } from "../types/dashboard";
 import type { TechnicalRole } from "../roleResolver";
 
@@ -65,7 +66,7 @@ export function TechnicalPanel({
                 </div>
               ))}
             </div>
-          )) : <p className="muted">Không có cảnh báo kỹ thuật.</p>}
+          )) : <NoDataBlock message="Không có cảnh báo kỹ thuật." />}
           <details>
             <summary>Source references</summary>
             <pre>{JSON.stringify(references, null, 2)}</pre>

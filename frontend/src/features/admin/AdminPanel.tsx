@@ -402,6 +402,7 @@ export function AdminPanel() {
                     </td>
                     <td>
                       <button
+                        aria-expanded={expanded}
                         className="admin-detail-button"
                         onClick={() => setExpandedId(expanded ? null : row.id)}
                         type="button"
@@ -496,7 +497,12 @@ export function AdminPanel() {
             })}
             {filteredRows.length === 0 && (
               <tr>
-                <td colSpan={10}>Không có SK-CTKT phù hợp với bộ lọc hiện tại.</td>
+                <td colSpan={10}>
+                  <div className="table-empty-state">
+                    <Search size={20} />
+                    <span>Không có SK-CTKT phù hợp với bộ lọc hiện tại.</span>
+                  </div>
+                </td>
               </tr>
             )}
           </tbody>
@@ -699,7 +705,12 @@ export function AdminPanel() {
             ))}
             {accountRows.length === 0 && (
               <tr>
-                <td colSpan={10}>Không có tài khoản phù hợp với bộ lọc hiện tại.</td>
+                <td colSpan={10}>
+                  <div className="table-empty-state">
+                    <Search size={20} />
+                    <span>Không có tài khoản phù hợp với bộ lọc hiện tại.</span>
+                  </div>
+                </td>
               </tr>
             )}
           </tbody>
@@ -724,7 +735,7 @@ export function AdminPanel() {
             </p>
           </div>
           <button onClick={reload} disabled={loading} type="button">
-            <RefreshCw size={17} />
+            <RefreshCw size={17} className={loading ? "icon-spin" : undefined} />
             {loading ? "Đang tải..." : "Tải lại"}
           </button>
         </div>

@@ -18,6 +18,7 @@ import {
   ImagePlus,
   Info,
   ListChecks,
+  Loader2,
   PauseCircle,
   Pencil,
   PieChart,
@@ -74,6 +75,15 @@ const statusLabels: Record<string, string> = {
   Cancelled: "Đã hủy",
   Completed: "Hoàn tất",
 };
+
+const renderEmptyState = (message: string) => (
+  <div className="fi-empty-state">
+    <div className="fi-empty-state-icon">
+      <ClipboardList size={24} />
+    </div>
+    <p>{message}</p>
+  </div>
+);
 
 const importedStatusLabels: Record<string, string> = {
   Approved: "Đồng ý",
@@ -662,14 +672,14 @@ function SkImageViewer({
                 Xóa ảnh
               </button>
             )}
-            <button title="Đóng" type="button" onClick={onClose}>
+            <button aria-label="Đóng" title="Đóng" type="button" onClick={onClose}>
               <X size={18} />
             </button>
           </div>
         </div>
         <div className="image-viewer-stage">
           {hasMultiple ? (
-            <button className="image-viewer-nav" onClick={previous} title="Ảnh trước" type="button">
+            <button aria-label="Ảnh trước" className="image-viewer-nav" onClick={previous} title="Ảnh trước" type="button">
               <ChevronLeft size={22} />
             </button>
           ) : (
@@ -683,7 +693,7 @@ function SkImageViewer({
             <div className="image-placeholder">Đang tải ảnh...</div>
           )}
           {hasMultiple ? (
-            <button className="image-viewer-nav" onClick={next} title="Ảnh sau" type="button">
+            <button aria-label="Ảnh sau" className="image-viewer-nav" onClick={next} title="Ảnh sau" type="button">
               <ChevronRight size={22} />
             </button>
           ) : (
@@ -2367,8 +2377,10 @@ export function FIWorkspace({
             <div className="toolbar">
               {actions.includes("edit") && (
                 <button
+                  aria-label={`Sửa ${item.sk_code || item.title}`}
                   title={editedAfterSubmit ? "Chỉnh sửa (sẽ gửi noti xét duyệt lại)" : "Chỉnh sửa nội dung/kế hoạch"}
                   onClick={() => openEdit(item)}
+                  type="button"
                 >
                   <Pencil size={16} />
                 </button>
@@ -2388,7 +2400,7 @@ export function FIWorkspace({
           </div>
         );
       })}
-      {rows.length === 0 && <p className="muted">{emptyText}</p>}
+      {rows.length === 0 && renderEmptyState(emptyText)}
     </div>
   );
 
@@ -2617,6 +2629,7 @@ export function FIWorkspace({
                         <small title={img.file_name}>{img.file_name}</small>
                         {canManageEditImages && (
                           <button
+                            aria-label={`Xóa ảnh ${img.file_name}`}
                             className="image-card-delete"
                             title="Xóa ảnh"
                             onClick={() => handleDeleteImage(editTarget.id, img.id)}
@@ -2923,8 +2936,8 @@ export function FIWorkspace({
       <section className="panel fi-processing-panel">
         <div className="panel-header">
           <h2>Sáng kiến của tôi</h2>
-          <button onClick={reload} title="Tải lại danh sách">
-            <RefreshCw size={17} />
+          <button aria-label="Tải lại danh sách" disabled={dashboardLoading} onClick={reload} title="Tải lại danh sách" type="button">
+            <RefreshCw size={17} className={dashboardLoading ? "icon-spin" : undefined} />
           </button>
         </div>
         <p className="muted" style={{ marginTop: -4, marginBottom: 10 }}>
@@ -2963,8 +2976,8 @@ export function FIWorkspace({
                   : "Toàn bộ SK đang trong luồng xét duyệt. Admin có thể xem & ghi đè quyết định nếu cần."}
               </p>
             </div>
-            <button onClick={reload} title="Tải lại hàng đợi xét duyệt">
-              <RefreshCw size={17} />
+            <button aria-label="Tải lại hàng đợi xét duyệt" disabled={dashboardLoading} onClick={reload} title="Tải lại hàng đợi xét duyệt" type="button">
+              <RefreshCw size={17} className={dashboardLoading ? "icon-spin" : undefined} />
             </button>
           </div>
           <div className="fi-review-filter segmented-control" role="tablist" aria-label="Bộ lọc xét duyệt">
@@ -3062,15 +3075,15 @@ export function FIWorkspace({
                 </div>
               );
             })}
-            {reviewQueue.length === 0 && (
-              <p className="muted">
-                {reviewFilter === "pending"
+            {reviewQueue.length === 0 &&
+              renderEmptyState(
+                reviewFilter === "pending"
                   ? "Không có SK nào đang chờ xét duyệt."
                   : reviewFilter === "reviewed"
                   ? "Chưa có SK nào được đánh giá."
-                  : "Hàng đợi đang trống."}
-              </p>
-            )}
+                  : "Hàng đợi đang trống."
+              )
+            }
           </div>
         </section>
       )}
@@ -3249,6 +3262,7 @@ export function FIWorkspace({
                     <small title={img.file_name}>{img.file_name}</small>
                     {canUploadForSelected && (
                       <button
+                        aria-label={`Xóa ảnh ${img.file_name}`}
                         className="image-card-delete"
                         title="Xóa ảnh"
                         onClick={() => handleDeleteImage(selectedItem.id, img.id)}
@@ -3272,12 +3286,24 @@ export function FIWorkspace({
               <h2>FI Dashboard</h2>
               <p className="muted">Cập nhật {dashboard?.generated_at ? formatHistoryTime(dashboard.generated_at) : "—"}</p>
             </div>
-            <button className="fi-dashboard-refresh" onClick={reload} title="Tải lại FI Dashboard" type="button">
-              <RefreshCw size={17} />
+            <button
+              aria-label="Tải lại FI Dashboard"
+              className="fi-dashboard-refresh"
+              disabled={dashboardLoading}
+              onClick={reload}
+              title="Tải lại FI Dashboard"
+              type="button"
+            >
+              <RefreshCw size={17} className={dashboardLoading ? "icon-spin" : undefined} />
             </button>
           </div>
 
-          {dashboardLoading && <p className="muted">Đang tải FI Dashboard...</p>}
+          {dashboardLoading && (
+            <p className="loading-inline" role="status">
+              <Loader2 size={15} className="icon-spin" />
+              Đang tải FI Dashboard...
+            </p>
+          )}
           {error && <p className="error">{error}</p>}
 
           <div className="fi-dashboard-kpis">
@@ -3350,7 +3376,7 @@ export function FIWorkspace({
               <small className="muted">tỉ lệ phê duyệt, KHMT và hoàn thành cho từng đội</small>
             </div>
             {dashboardTeams.length === 0 ? (
-              <p className="muted">Chưa có dữ liệu FI.</p>
+              renderEmptyState("Chưa có dữ liệu FI.")
             ) : (
               <div className="fi-dashboard-team-grid">
                 {dashboardTeams.map((team: any) => {
@@ -3452,15 +3478,18 @@ export function FIWorkspace({
                 <h3>KHMT theo tháng</h3>
                 <small className="muted">phân bổ SK đã vào KHMT theo từng tháng</small>
               </div>
-              <div className="fi-khmt-month-grid">
-                {dashboardKhmtMonths.map((month: any) => (
-                  <div className="fi-khmt-month" key={`${month.year}-${month.month}`}>
-                    <span>T{month.month}/{month.year}</span>
-                    <strong>{formatCount(month.count)}</strong>
-                  </div>
-                ))}
-                {dashboardKhmtMonths.length === 0 && <p className="muted">Chưa có SK nào được xét vào KHMT.</p>}
-              </div>
+              {dashboardKhmtMonths.length === 0 ? (
+                renderEmptyState("Chưa có SK nào được xét vào KHMT.")
+              ) : (
+                <div className="fi-khmt-month-grid">
+                  {dashboardKhmtMonths.map((month: any) => (
+                    <div className="fi-khmt-month" key={`${month.year}-${month.month}`}>
+                      <span>T{month.month}/{month.year}</span>
+                      <strong>{formatCount(month.count)}</strong>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="fi-dashboard-card">
               <div className="fi-dashboard-section-title">
@@ -3606,12 +3635,14 @@ export function FIWorkspace({
                 <FileDown size={17} />
               </button>
               <button
+                aria-label="Tải lại lịch sử FI"
                 className="fi-history-reload"
+                disabled={dashboardLoading}
                 onClick={reload}
                 title="Tải lại lịch sử FI"
                 type="button"
               >
-                <RefreshCw size={17} />
+                <RefreshCw size={17} className={dashboardLoading ? "icon-spin" : undefined} />
               </button>
             </div>
           </div>
@@ -3767,6 +3798,7 @@ export function FIWorkspace({
                       <div className="legacy-row-controls">
                         {actions.includes("edit") && (
                           <button
+                            aria-label={`Sửa ${item.sk_code || item.title}`}
                             className="legacy-icon-action"
                             title="Chỉnh sửa nội dung/kế hoạch"
                             onClick={() => openEdit(item)}
@@ -3906,15 +3938,15 @@ export function FIWorkspace({
               })}
             </div>
           ))}
-          {historyItems.length === 0 && (
-            <p className="muted">
-              {historyTeams.length > 0
+          {historyItems.length === 0 &&
+            renderEmptyState(
+              historyTeams.length > 0
                 ? `Không có FI cho đội ${historyTeams.map(displayTeam).join(", ")}.`
-                : "Không có FI nào."}
-            </p>
-          )}
+                : "Không có FI nào."
+            )
+          }
           {historyItems.length > 0 && filteredHistoryItems.length === 0 && (
-            <p className="muted">Không có FI cho tháng đang chọn.</p>
+            renderEmptyState("Không có Sáng kiến/CTKT nào cho tháng đang chọn.")
           )}
         </div>
       </section>

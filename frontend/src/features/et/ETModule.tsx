@@ -861,7 +861,7 @@ function PersonnelView({ role, editMode, setError }: { role: string; editMode: b
             <tbody>
               {visibleRows.map((row) => (
                 <tr key={row.id} className={`et-personnel-row tone-${personnelStatusTone(row.status)}`}>
-                  <td><span className="et-code-chip">{row.employee_code || "Chưa có"}</span></td>
+                  <td><span className="et-code-chip">{row.employee_code || "—"}</span></td>
                   <td>
                     <div className="et-person-name-cell">
                       <span className={`et-person-avatar tone-${personnelRoleTone(row)}`}>{personnelInitials(row.full_name)}</span>
@@ -870,10 +870,10 @@ function PersonnelView({ role, editMode, setError }: { role: string; editMode: b
                       </div>
                     </div>
                   </td>
-                  <td><span className={`et-data-pill et-role-${personnelRoleTone(row)}`}>{personnelRoleLabel(row.role || row.position_code) || "Chưa chọn"}</span></td>
-                  <td><span className="et-team-pill">{row.team || "Chưa có"}</span></td>
-                  <td><span className={`et-data-pill et-status-${personnelStatusTone(row.status)}`}>{personnelStatusLabel(row.status) || "Chưa có"}</span></td>
-                  <td><span className={`et-salary-pill et-salary-${salaryTone(row.salary_grade)}`}>{row.salary_grade || "Chưa có"}</span></td>
+                  <td><span className={`et-data-pill et-role-${personnelRoleTone(row)}`}>{personnelRoleLabel(row.role || row.position_code) || "—"}</span></td>
+                  <td><span className="et-team-pill">{row.team || "—"}</span></td>
+                  <td><span className={`et-data-pill et-status-${personnelStatusTone(row.status)}`}>{personnelStatusLabel(row.status) || "—"}</span></td>
+                  <td><span className={`et-salary-pill et-salary-${salaryTone(row.salary_grade)}`}>{row.salary_grade || "—"}</span></td>
                   {editable && (
                     <td className="et-row-actions">
                       <button onClick={() => editRow(row)} title={row.source_type === "user" ? "Tạo hồ sơ" : "Sửa nhân sự"}>
@@ -1338,6 +1338,10 @@ function DashboardView({ setError }: { setError: (value: string) => void }) {
   const [filters, setFilters] = useState({ team: "", position: "", level: "", result: "" });
   const [dashboard, setDashboard] = useState<any | null>(null);
   const [heatmap, setHeatmap] = useState<any | null>(null);
+  const dashboardRows = dashboard?.rows ?? [];
+  const hasDashboardRows = dashboardRows.length > 0;
+  const heatmapRows = heatmap?.rows ?? [];
+  const hasHeatmapRows = heatmapRows.length > 0;
 
   const load = () => {
     const params = query(filters);
@@ -1378,38 +1382,46 @@ function DashboardView({ setError }: { setError: (value: string) => void }) {
               <div><strong>{dashboard.aggregate.not_assessed_count}</strong><span>Chưa đánh giá</span></div>
               <div><strong>{dashboard.aggregate.draft_count}</strong><span>Đang đánh giá</span></div>
             </div>
-            <div className="matrix">
-              <table>
-                <thead><tr><th>Team</th><th>Nhân sự</th><th>Bậc</th><th>Đạt</th><th>GAP</th><th>Tổng GAP</th><th>Kết quả</th></tr></thead>
-                <tbody>
-                  {dashboard.rows.map((row: any) => (
-                    <tr key={row.personnel_id}>
-                      <td>{row.team}</td>
-                      <td>{row.full_name}</td>
-                      <td>{row.current_level}</td>
-                      <td>{row.achieved_count}</td>
-                      <td>{row.gap_count}</td>
-                      <td>{row.total_gap}</td>
-                      <td><span className={resultClass(row.overall_result)}>{row.overall_result}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="et-top-lists">
-              <div>
-                <h2>Top NLCM GAP</h2>
-                {dashboard.top_gap_items.map((item: any) => <p key={item.nlcm_code}>{item.nlcm_code} · {item.gap_personnel_count}</p>)}
+            {hasDashboardRows ? (
+              <>
+                <div className="matrix">
+                  <table>
+                    <thead><tr><th>Team</th><th>Nhân sự</th><th>Bậc</th><th>Đạt</th><th>GAP</th><th>Tổng GAP</th><th>Kết quả</th></tr></thead>
+                    <tbody>
+                      {dashboardRows.map((row: any) => (
+                        <tr key={row.personnel_id}>
+                          <td>{row.team}</td>
+                          <td>{row.full_name}</td>
+                          <td>{row.current_level}</td>
+                          <td>{row.achieved_count}</td>
+                          <td>{row.gap_count}</td>
+                          <td>{row.total_gap}</td>
+                          <td><span className={resultClass(row.overall_result)}>{row.overall_result}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="et-top-lists">
+                  <div>
+                    <h2>Top NLCM GAP</h2>
+                    {dashboard.top_gap_items.map((item: any) => <p key={item.nlcm_code}>{item.nlcm_code} · {item.gap_personnel_count}</p>)}
+                  </div>
+                  <div>
+                    <h2>Top nhân sự GAP</h2>
+                    {dashboard.top_gap_personnel.map((person: any) => <p key={person.personnel_id}>{person.full_name} · {person.gap_count}</p>)}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="table-empty-state et-dashboard-empty">
+                Chưa có dữ liệu đánh giá phù hợp với bộ lọc hiện tại.
               </div>
-              <div>
-                <h2>Top nhân sự GAP</h2>
-                {dashboard.top_gap_personnel.map((person: any) => <p key={person.personnel_id}>{person.full_name} · {person.gap_count}</p>)}
-              </div>
-            </div>
+            )}
           </>
         )}
       </section>
-      {heatmap && (
+      {heatmap && hasHeatmapRows && (
         <section className="panel wide">
           <h2>Heatmap GAP</h2>
           <div className="matrix et-heatmap">
@@ -1418,7 +1430,7 @@ function DashboardView({ setError }: { setError: (value: string) => void }) {
                 <tr><th>NLCM</th>{heatmap.personnel.map((person: any) => <th key={person.id}>{person.full_name}</th>)}</tr>
               </thead>
               <tbody>
-                {heatmap.rows.map((row: any) => (
+                {heatmapRows.map((row: any) => (
                   <tr key={row.nlcm_code}>
                     <td className="wrap-cell">{row.nlcm_code}<br />{row.competency_name}</td>
                     {row.cells.map((cell: any) => (

@@ -715,9 +715,12 @@ export function App() {
         <aside className="sidebar">
           <div className="sidebar-head">
             <div className="brand">
-              <img src="/logo.webp" alt="PVCFC Logo" className="brand-logo" />
-              <div>
-                <strong>Website quản lí chung Xưởng Điều khiển</strong>
+              <div className="brand-logo-wrapper">
+                <img src="/logo.webp" alt="PVCFC Logo" className="brand-logo" />
+              </div>
+              <div className="brand-meta">
+                <span className="brand-system-tag">Website Quản Lý Chung</span>
+                <h2 className="brand-system-name" title="Xưởng Điều khiển">Xưởng Điều khiển</h2>
               </div>
             </div>
             <button
@@ -792,18 +795,28 @@ export function App() {
                 </button>
               </div>
             )}
-            <div className="sidebar-account">
+            <div className="sidebar-profile-card">
               <div className="sidebar-account-top">
                 <div className="sidebar-account-avatar" aria-hidden="true">
                   {initialsFromName(currentDisplayName ?? currentUserId)}
                 </div>
                 <div className="sidebar-account-info">
-                  <strong>{currentDisplayName ?? currentUserId}</strong>
-                  <small>
-                    {sandbox
-                      ? `Kiểm thử · ${displayRole(role)}${currentTeam ? ` · ${displayTeam(currentTeam)}` : ""}`
-                      : `${displayRole(role)}${currentTeam ? ` · ${displayTeam(currentTeam)}` : ""}`}
-                  </small>
+                  <strong className="profile-name" title={currentDisplayName ?? currentUserId}>
+                    {currentDisplayName ?? currentUserId}
+                  </strong>
+                  <div className="profile-role-meta">
+                    <span className="profile-role" title={displayRole(role)}>
+                      {displayRole(role)}
+                    </span>
+                    {currentTeam && (
+                      <span className="profile-team" title={displayTeam(currentTeam)}>
+                        {displayTeam(currentTeam)}
+                      </span>
+                    )}
+                    {sandbox && (
+                      <span className="profile-sandbox-badge">Kiểm thử</span>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="account-actions">
@@ -841,7 +854,7 @@ export function App() {
                   </button>
                 )}
                 <button
-                  className="account-action"
+                  className="account-action logout-btn"
                   onClick={logout}
                   title="Đăng xuất"
                   type="button"

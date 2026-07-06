@@ -15949,3 +15949,34 @@ nav button.active {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
+
+/* Hành động chính của biểu mẫu đăng ký SK-CTKT. */
+.fi-register-submit {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px rgba(36, 53, 138, 0.24);
+  color: #ffffff;
+  font-weight: 800;
+  justify-content: center;
+  min-height: 44px;
+  width: 100%;
+}
+
+.fi-register-submit:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  box-shadow: 0 6px 16px rgba(36, 53, 138, 0.32);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.fi-register-submit:focus-visible {
+  box-shadow: var(--focus-ring), 0 4px 12px rgba(36, 53, 138, 0.24);
+}
+
+.fi-register-submit:disabled {
+  background: #d9deec;
+  border-color: #c7cfdf;
+  color: #667085;
+  box-shadow: none;
+}

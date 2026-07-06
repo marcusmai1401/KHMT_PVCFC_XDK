@@ -49,7 +49,7 @@ const TEAM_DISPLAY_LABELS: Record<string, string> = {
 const REVIEWER_ROLES = [ADMIN_ROLE, FI_COORDINATOR_ROLE];
 const REVIEW_DECISION_STATUSES = ["Submitted", "Reviewed", "Deferred", "Approved", "Rejected"];
 const REVIEWED_STATUSES = ["Approved", "Rejected", "Deferred", "Reviewed"];
-// Sau khi đã trình xét duyệt, tác giả vẫn được sửa nội dung (trừ Completed/Cancelled).
+// Sau khi đã đăng ký xét duyệt, tác giả vẫn được sửa nội dung (trừ Completed/Cancelled).
 // Edit này sẽ kích hoạt noti SK_CONTENT_EDITED để FI/Admin xét duyệt lại.
 const AUTHOR_EDITABLE_STATUSES = [
   "Draft",
@@ -320,7 +320,7 @@ function statusTone(status: string) {
 
 function historyActionLabel(history: any) {
   if (!history.from_status && history.to_status === "Draft") return "Ghi nhận đăng ký";
-  if (!history.from_status && history.to_status === "Submitted") return "Trình xét duyệt";
+  if (!history.from_status && history.to_status === "Submitted") return "Đăng ký xét duyệt";
   if (!history.from_status) return displayStatus(history.to_status);
   return `${displayStatus(history.from_status)} → ${displayStatus(history.to_status)}`;
 }
@@ -1620,9 +1620,9 @@ export function FIWorkspace({
       reload();
       reloadDetail(created.id);
       if (failedFiles.length > 0) {
-        setError(`Đã trình xét duyệt nhưng ${failedFiles.length}/${filesToUpload.length} ảnh chưa tải lên được. Có thể thử tải lại trong phần chi tiết hồ sơ.`);
+        setError(`Đã đăng ký xét duyệt nhưng ${failedFiles.length}/${filesToUpload.length} ảnh chưa tải lên được. Có thể thử tải lại trong phần chi tiết hồ sơ.`);
       } else {
-        setNotice(filesToUpload.length > 0 ? `Đã trình xét duyệt và tải lên ${filesToUpload.length} ảnh bằng chứng.` : "Đã trình xét duyệt.");
+        setNotice(filesToUpload.length > 0 ? `Đã đăng ký xét duyệt và tải lên ${filesToUpload.length} ảnh bằng chứng.` : "Đã đăng ký xét duyệt.");
         // Reset form for next entry after successful save. Tác giả quay về chính chủ
         // để lần đăng ký kế tiếp mặc định là của mình (tránh giữ lại tên người được giúp).
         const today = new Date();
@@ -2370,7 +2370,7 @@ export function FIWorkspace({
               )}
               <small>
                 {displayStatus(item.status)}
-                {item.submitted_at && item.status === "Submitted" && ` · trình ${new Date(item.submitted_at).toLocaleDateString("vi-VN")}`}
+                {item.submitted_at && item.status === "Submitted" && ` · đăng ký ngày ${new Date(item.submitted_at).toLocaleDateString("vi-VN")}`}
                 {isKhmtConsidered(item) && ` · ${khmtLabel(item)}`}
               </small>
             </button>
@@ -2900,7 +2900,7 @@ export function FIWorkspace({
               />
             </div>
             <label>
-              Ảnh bằng chứng FI <span className="muted">(tùy chọn — có thể thêm sau khi trình xét duyệt)</span>
+              Ảnh bằng chứng FI <span className="muted">(tùy chọn — có thể thêm sau khi đăng ký xét duyệt)</span>
             </label>
             <button type="button" onClick={() => draftFileInputRef.current?.click()}>
               <ImagePlus size={16} />
@@ -2908,7 +2908,7 @@ export function FIWorkspace({
             </button>
             {evidenceFiles.length > 0 && (
               <div className="evidence-file-list">
-                <small className="muted">{evidenceFiles.length} ảnh sẽ được tải lên sau khi trình xét duyệt.</small>
+                <small className="muted">{evidenceFiles.length} ảnh sẽ được tải lên sau khi đăng ký xét duyệt.</small>
                 {evidenceFiles.map((file, index) => (
                   <div className="evidence-file-row" key={`${file.name}-${file.lastModified}-${index}`}>
                     <span>{file.name}</span>
@@ -2923,9 +2923,9 @@ export function FIWorkspace({
                 ))}
               </div>
             )}
-            <button type="button" onClick={create} disabled={creating}>
+            <button className="fi-register-submit" type="button" onClick={create} disabled={creating}>
               <ClipboardCheck size={17} />
-              {creating ? "Đang trình xét duyệt..." : "Trình xét duyệt"}
+              {creating ? "Đang đăng ký xét duyệt..." : "Đăng ký xét duyệt"}
             </button>
           </div>
           {error && <p className="error">{error}</p>}
@@ -2941,12 +2941,12 @@ export function FIWorkspace({
           </button>
         </div>
         <p className="muted" style={{ marginTop: -4, marginBottom: 10 }}>
-          Danh sách SK-CTKT mà bạn là tác giả/người đứng tên. Sau khi trình xét duyệt, bạn vẫn được sửa nội dung;
+          Danh sách SK-CTKT mà bạn là tác giả/người đứng tên. Sau khi đăng ký xét duyệt, bạn vẫn được sửa nội dung;
           khi sửa, đầu mối FI và Quản trị sẽ nhận thông báo để xem xét lại.
         </p>
         {error && <p className="error">{error}</p>}
         <div className="fi-list-block">
-          {renderOwnershipItems(myItems, "Bạn chưa đứng tên SK-CTKT nào. Hãy điền form bên trái để trình xét duyệt.", "mine")}
+          {renderOwnershipItems(myItems, "Bạn chưa đứng tên SK-CTKT nào. Hãy điền form bên trái để đăng ký xét duyệt.", "mine")}
         </div>
         <div className="fi-list-block fi-sent-block">
           <div className="fi-list-block-head">
@@ -3036,7 +3036,7 @@ export function FIWorkspace({
                       </span>
                       {item.submitted_at && (
                         <span className="fi-review-submitted">
-                          trình {new Date(item.submitted_at).toLocaleDateString("vi-VN")}
+                          đăng ký ngày {new Date(item.submitted_at).toLocaleDateString("vi-VN")}
                         </span>
                       )}
                       {isKhmtConsidered(item) && <span className="fi-review-khmt">{khmtLabel(item)}</span>}

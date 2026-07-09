@@ -48,7 +48,6 @@ EDITABLE_AFTER_SUBMIT_STATUSES = {
     SKStatus.SUBMITTED.value,
     SKStatus.NEED_MORE_INFO.value,
     SKStatus.REVIEWED.value,
-    SKStatus.APPROVED.value,
     SKStatus.REJECTED.value,
     SKStatus.DEFERRED.value,
 }

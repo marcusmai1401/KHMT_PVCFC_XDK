@@ -56,7 +56,6 @@ const AUTHOR_EDITABLE_STATUSES = [
   "NeedMoreInfo",
   "Submitted",
   "Reviewed",
-  "Approved",
   "Rejected",
   "Deferred",
 ];

@@ -555,11 +555,11 @@ def test_legacy_import_is_owned_by_matching_author_account(client, admin_headers
                 team="TBCH",
                 content_description="Nội dung legacy",
                 completion_plan="T9/2026",
-                status="Approved",
+                status="Deferred",
                 status_history=[
                     {
                         "from_status": None,
-                        "to_status": "Approved",
+                        "to_status": "Deferred",
                         "changed_by": "deploy-import",
                         "comments": {"submitted_by": "deploy-import"},
                     }
@@ -891,6 +891,15 @@ def test_sk_image_lifecycle_is_separate_from_create_schema(client, admin_headers
     assert deleted.status_code == 200
     assert deleted.json() == {"deleted": True}
     assert client.get(f"/api/v1/fi/sk-ctkt/{record_id}/images", headers=user_headers).json() == []
+
+    approved = client.post(f"/api/v1/fi/sk-ctkt/{record_id}/approve", headers=admin_headers, json={})
+    assert approved.status_code == 200, approved.text
+    locked_upload = client.post(
+        f"/api/v1/fi/sk-ctkt/{record_id}/images",
+        headers=user_headers,
+        files={"file": ("after-approval.png", b"locked", "image/png")},
+    )
+    assert locked_upload.status_code == 403
 
 
 def test_team_uploaded_sk_image_is_visible_to_fi_after_submit(client):

@@ -552,6 +552,26 @@ def test_only_author_can_edit_new_sk_content(db_session):
     assert updated.content_description == "Tác giả sửa"
 
 
+def test_author_cannot_edit_approved_sk_content(db_session):
+    record = create_sk_ctkt(
+        db_session,
+        {
+            "author_name": "Hữu Văn Cưng",
+            "team": "TBCH",
+            "title": "Title",
+            "content_description": "Content",
+            "completion_plan": "T6/2026",
+            "year": 2026,
+        },
+        "cunghv",
+    )
+    transition_sk_ctkt(db_session, record.id, "submit", "cunghv", "Staff")
+    transition_sk_ctkt(db_session, record.id, "approve", "fi1", "FI_Coordinator")
+
+    with pytest.raises(PermissionError):
+        update_sk_ctkt(db_session, record.id, {"content_description": "Không được sửa"}, "cunghv", "Staff")
+
+
 def test_fi_coordinator_can_set_deferred_from_submitted(db_session):
     record = create_sk_ctkt(
         db_session,
@@ -886,7 +906,7 @@ def test_legacy_sk_content_can_be_edited_by_resolved_author_only(db_session):
         team="TBCH",
         content_description="Content",
         completion_plan="T6/2026",
-        status="Approved",
+        status="Deferred",
         status_history=[],
         is_public=True,
         is_counted_for_okr=False,
@@ -900,6 +920,11 @@ def test_legacy_sk_content_can_be_edited_by_resolved_author_only(db_session):
     assert updated.content_description == "Tác giả sửa legacy"
     with pytest.raises(PermissionError, match="Chỉ tác giả"):
         update_sk_ctkt(db_session, record.id, {"content_description": "Admin sửa legacy"}, "admin", "Admin")
+
+    updated.status = "Approved"
+    db_session.commit()
+    with pytest.raises(PermissionError):
+        update_sk_ctkt(db_session, record.id, {"content_description": "Tác giả sửa sau Đồng ý"}, "trunghd", "Staff")
 
 
 def test_historical_approved_can_be_revised_by_fi_coordinator(db_session):

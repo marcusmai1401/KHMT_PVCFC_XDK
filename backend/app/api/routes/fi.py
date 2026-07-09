@@ -22,8 +22,11 @@ from app.services.fi.service import (
     count_for_okr,
     create_sk_ctkt,
     delete_sk_ctkt,
+    effective_author_user_id,
+    effective_submitter_user_id,
     export_fi_reports_to_excel,
     fi_dashboard,
+    is_import_actor,
     is_author_or_submitter,
     require_visible,
     submitter_user_id,
@@ -91,7 +94,7 @@ def _principal_author_name(principal: dict) -> str:
 def _user_display_name(user: User | None, user_id: str | None) -> str | None:
     if not user_id:
         return None
-    if user_id == "historical-import":
+    if is_import_actor(user_id):
         return "Hệ thống"
     if user is None:
         return user_id
@@ -100,10 +103,17 @@ def _user_display_name(user: User | None, user_id: str | None) -> str | None:
 
 def _sk_to_dict(record: SKCTKTModel, db: Session, *, include_images: bool = False) -> dict:
     data = model_to_dict(record)
-    submitted_by = submitter_user_id(record)
+    raw_submitted_by = submitter_user_id(record)
+    effective_author = effective_author_user_id(record, db)
+    submitted_by = effective_submitter_user_id(record, db)
     submitter = db.get(User, submitted_by) if submitted_by else None
     data["submitted_by"] = submitted_by
-    data["submitted_by_name"] = _user_display_name(submitter, submitted_by)
+    data["submitted_by_name"] = (
+        record.author_name
+        if record.is_historical_import and (not raw_submitted_by or is_import_actor(raw_submitted_by))
+        else _user_display_name(submitter, submitted_by)
+    )
+    data["effective_author_user_id"] = effective_author or (None if is_import_actor(record.author_user_id) else record.author_user_id)
     if include_images:
         data["supporting_images"] = [
             sk_image_to_dict(image)
@@ -202,7 +212,7 @@ def public_sk(
     db: Session = Depends(get_db),
 ):
     namespace = "sandbox" if principal.get("sandbox") else "prod"
-    cache_key = f"fi:public_sk:v6:{namespace}:{team or ''}:{author or ''}:{khmt_month or ''}:{khmt_year or ''}:{q or ''}:{historical if historical is not None else ''}"
+    cache_key = f"fi:public_sk:v7:{namespace}:{team or ''}:{author or ''}:{khmt_month or ''}:{khmt_year or ''}:{q or ''}:{historical if historical is not None else ''}"
     cached = cache_get(cache_key)
     if cached is not None:
         return cached
@@ -422,7 +432,7 @@ def clear_assignment(
 def upload_image(record_id: str, file: UploadFile = File(...), principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.ADMIN)), db: Session = Depends(get_db)):
     record = _record_or_404(db, record_id)
     if principal["role"] in {Role.TEAM_ACCOUNT.value, Role.STAFF.value, Role.FI_COORDINATOR.value}:
-        if not is_author_or_submitter(record, principal["user_id"]) or record.status not in AUTHOR_CONTENT_EDITABLE_STATUSES:
+        if not is_author_or_submitter(record, principal["user_id"], db) or record.status not in AUTHOR_CONTENT_EDITABLE_STATUSES:
             raise HTTPException(status_code=403, detail="Only owner can upload images for editable entries")
     safe_name = _safe_filename(file.filename)
     content_type = _validate_image_upload(safe_name, file.content_type)
@@ -479,7 +489,7 @@ def delete_image(record_id: str, image_id: str, principal: dict = Depends(requir
     if image is None or image.sk_ctkt_id != record_id:
         raise HTTPException(status_code=404, detail="Image not found")
     if principal["role"] in {Role.TEAM_ACCOUNT.value, Role.STAFF.value, Role.FI_COORDINATOR.value}:
-        if not is_author_or_submitter(record, principal["user_id"]) or record.status not in AUTHOR_CONTENT_EDITABLE_STATUSES:
+        if not is_author_or_submitter(record, principal["user_id"], db) or record.status not in AUTHOR_CONTENT_EDITABLE_STATUSES:
             raise HTTPException(status_code=403, detail="Only owner can delete images for editable entries")
     try:
         Path(image.file_path).unlink(missing_ok=True)

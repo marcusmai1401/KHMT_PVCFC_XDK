@@ -223,15 +223,22 @@ function normalizeAuthorQuery(value: string | null | undefined) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/đ/g, "d");
+    .replace(/đ/g, "d")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 const SYSTEM_ACTOR_ID = "historical-import";
+const SYSTEM_ACTOR_IDS = new Set([SYSTEM_ACTOR_ID, "deploy-import"]);
+
+function isSystemActorId(value: string | null | undefined) {
+  return SYSTEM_ACTOR_IDS.has(String(value || "").trim());
+}
 
 function personFilterKey(userId: string | null | undefined, displayName: string | null | undefined) {
   const cleanId = String(userId || "").trim();
-  if (cleanId && cleanId !== SYSTEM_ACTOR_ID) return `id:${cleanId}`;
-  const nameKey = normalizeAuthorQuery(displayName || (cleanId === SYSTEM_ACTOR_ID ? "Hệ thống" : "")).trim();
+  if (cleanId && !isSystemActorId(cleanId)) return `id:${cleanId}`;
+  const nameKey = normalizeAuthorQuery(displayName || (isSystemActorId(cleanId) ? "Hệ thống" : ""));
   return nameKey ? `name:${nameKey}` : "";
 }
 
@@ -333,6 +340,7 @@ function actorLabel(actor: string | null | undefined) {
     leader: "Lãnh đạo Xưởng",
     test: "Tài khoản kiểm thử",
     "historical-import": "Hệ thống",
+    "deploy-import": "Hệ thống",
   };
   return labels[actor] ?? actor;
 }
@@ -387,33 +395,102 @@ export function khmtLabel(item: any) {
 }
 
 export function recordSubmitterId(item: any): string | null {
-  if (item?.submitted_by) return String(item.submitted_by);
+  if (item?.submitted_by && !isSystemActorId(item.submitted_by)) return String(item.submitted_by);
+  if (item?.effective_author_user_id && item?.is_historical_import) return String(item.effective_author_user_id);
   if (item?.created_by) return String(item.created_by);
   const history = Array.isArray(item?.status_history) ? item.status_history : [];
   const first = history[0];
   if (!first || typeof first !== "object") return null;
   const comments = typeof first.comments === "object" && first.comments !== null ? first.comments : {};
-  return String(comments.submitted_by || comments.created_by || first.changed_by || "") || null;
+  const fallback = String(comments.submitted_by || comments.created_by || first.changed_by || "") || null;
+  return isSystemActorId(fallback) && item?.effective_author_user_id ? String(item.effective_author_user_id) : fallback;
 }
 
-function buildPersonFilterOptions(
+function recordAuthorId(item: any): string | null {
+  if (item?.effective_author_user_id) return String(item.effective_author_user_id);
+  if (item?.author_user_id && !isSystemActorId(item.author_user_id)) return String(item.author_user_id);
+  return null;
+}
+
+function employeeLabel(employee: EmployeeOption) {
+  return employee.full_name || employee.display_name || employee.id;
+}
+
+function employeeNameAliases(employee: EmployeeOption) {
+  const aliases = new Set<string>();
+  [employee.full_name, employee.display_name].forEach((value) => {
+    const clean = String(value || "").trim();
+    if (!clean) return;
+    aliases.add(clean);
+    if (clean.includes(" - ")) aliases.add(clean.split(" - ", 1)[0].trim());
+  });
+  return Array.from(aliases);
+}
+
+function buildEmployeeIdentityMaps(employees: EmployeeOption[]) {
+  const byId = new Map<string, EmployeeOption>();
+  const byNameAndTeam = new Map<string, EmployeeOption>();
+  const byName = new Map<string, EmployeeOption | null>();
+
+  employees.forEach((employee) => {
+    byId.set(employee.id, employee);
+    employeeNameAliases(employee).forEach((alias) => {
+      const nameKey = normalizeAuthorQuery(alias);
+      if (!nameKey) return;
+      byNameAndTeam.set(`${nameKey}::${employee.team || ""}`, employee);
+      if (!byName.has(nameKey)) {
+        byName.set(nameKey, employee);
+      } else if (byName.get(nameKey)?.id !== employee.id) {
+        byName.set(nameKey, null);
+      }
+    });
+  });
+
+  return { byId, byName, byNameAndTeam };
+}
+
+export function buildPersonFilterOptions(
   rows: any[],
   employees: EmployeeOption[],
   mode: "author" | "submitter",
   labelById: Map<string, string>,
 ): PersonFilterOption[] {
   const options = new Map<string, PersonFilterOption>();
-  const upsert = (userId: string | null | undefined, displayName: string | null | undefined, team: string | null | undefined, countDelta: number) => {
-    const label = (displayName || (userId ? labelById.get(userId) : "") || userId || "Hệ thống").trim();
-    const key = personFilterKey(userId, label);
+  const employeeMaps = buildEmployeeIdentityMaps(employees);
+  const resolveEmployee = (
+    userId: string | null | undefined,
+    displayName: string | null | undefined,
+    team: string | null | undefined,
+  ) => {
+    const cleanId = String(userId || "").trim();
+    if (cleanId && !isSystemActorId(cleanId)) return employeeMaps.byId.get(cleanId) || null;
+    const nameKey = normalizeAuthorQuery(displayName);
+    if (!nameKey) return null;
+    return employeeMaps.byNameAndTeam.get(`${nameKey}::${team || ""}`) || employeeMaps.byName.get(nameKey) || null;
+  };
+  const upsert = (
+    userId: string | null | undefined,
+    displayName: string | null | undefined,
+    team: string | null | undefined,
+    countDelta: number,
+  ) => {
+    const employee = mode === "author" ? resolveEmployee(userId, displayName, team) : null;
+    const canonicalUserId = employee?.id || userId;
+    const canonicalTeam = employee?.team ?? team;
+    const label = (
+      employee
+        ? employeeLabel(employee)
+        : displayName || (userId ? labelById.get(userId) : "") || userId || "Hệ thống"
+    ).trim();
+    const key = personFilterKey(canonicalUserId, label);
     if (!key) return;
-    const accountId = userId && userId !== SYSTEM_ACTOR_ID ? userId : null;
-    const nameKey = normalizeAuthorQuery(label).trim();
-    const searchText = normalizeAuthorQuery(`${label} ${accountId || ""} ${displayTeam(team)}`).trim();
+    const accountId = canonicalUserId && !isSystemActorId(canonicalUserId) ? canonicalUserId : null;
+    const nameKey = normalizeAuthorQuery(label);
+    const searchText = normalizeAuthorQuery(`${label} ${displayName || ""} ${accountId || ""} ${displayTeam(canonicalTeam)}`);
     const existing = options.get(key);
     if (existing) {
       existing.count += countDelta;
-      if (!existing.team && team) existing.team = team;
+      if (!existing.team && canonicalTeam) existing.team = canonicalTeam;
       existing.searchText = `${existing.searchText} ${searchText}`.trim();
       return;
     }
@@ -421,7 +498,7 @@ function buildPersonFilterOptions(
       key,
       label,
       accountId,
-      team: team || null,
+      team: canonicalTeam || null,
       count: countDelta,
       nameKey,
       searchText,
@@ -430,7 +507,7 @@ function buildPersonFilterOptions(
 
   rows.forEach((item) => {
     if (mode === "author") {
-      const authorId = item?.author_user_id === SYSTEM_ACTOR_ID ? null : item?.author_user_id;
+      const authorId = isSystemActorId(item?.author_user_id) ? item?.effective_author_user_id : item?.author_user_id;
       upsert(authorId, item?.author_name, item?.team, 1);
       return;
     }
@@ -455,7 +532,10 @@ function expandPersonFilterKeys(selected: string[], optionByKey: Map<string, Per
   selected.forEach((key) => {
     keys.add(key);
     const option = optionByKey.get(key);
-    if (option?.nameKey) keys.add(`name:${option.nameKey}`);
+    if (option?.nameKey) {
+      const teamKey = normalizeAuthorQuery(option.team);
+      keys.add(teamKey ? `name:${option.nameKey}:team:${teamKey}` : `name:${option.nameKey}`);
+    }
   });
   return Array.from(keys);
 }
@@ -506,18 +586,20 @@ export function visibleActionsForSk(role: string, currentUserId: string, item: a
   if (role === ADMIN_ROLE && !editMode) return actions;
   const reviewableStatuses = REVIEW_DECISION_STATUSES;
   const isAuthor = AUTHOR_ROLES.includes(role);
-  const isOwnAuthor = item.author_user_id === currentUserId;
+  const authorId = recordAuthorId(item);
+  const isOwnAuthor = authorId === currentUserId;
   const isOwnSubmitter = recordSubmitterId(item) === currentUserId;
   const canManageAsOwner = isOwnAuthor || isOwnSubmitter;
   // Tác giả được sửa nội dung trong toàn bộ vòng đời của SK (kể cả sau khi
-  // đã đánh giá) miễn là chưa hoàn tất/hủy và không phải dữ liệu legacy.
+  // đã đánh giá) miễn là chưa hoàn tất/hủy. Legacy import được map về account
+  // tác giả thật ở backend nên vẫn đi theo cùng quyền owner.
   // Sau khi sửa, FI/Admin sẽ nhận noti SK_CONTENT_EDITED để xét duyệt lại.
-  const canEdit = canManageAsOwner && !item.is_historical_import && AUTHOR_EDITABLE_STATUSES.includes(item.status);
+  const canEdit = canManageAsOwner && AUTHOR_EDITABLE_STATUSES.includes(item.status);
   // FI_Coordinator không được xét duyệt SK do chính mình đăng ký (xung đột lợi ích).
   const canReviewDecision =
     REVIEWER_ROLES.includes(role) &&
     reviewableStatuses.includes(item.status) &&
-    !(role === FI_COORDINATOR_ROLE && (item.author_user_id === currentUserId || recordSubmitterId(item) === currentUserId));
+    !(role === FI_COORDINATOR_ROLE && (authorId === currentUserId || recordSubmitterId(item) === currentUserId));
   const canAssign =
     !item.is_historical_import &&
     (role === ADMIN_ROLE || (role === TEAM_ROLE && item.team === currentUserId)) &&
@@ -535,11 +617,10 @@ export function visibleActionsForSk(role: string, currentUserId: string, item: a
 const isReviewerRole = (role: string) => REVIEWER_ROLES.includes(role);
 
 function canUploadImages(role: string, currentUserId: string, item: any, editMode = true) {
-  if (item.is_historical_import) return false;
   if (role === ADMIN_ROLE) return editMode;
   return (
     AUTHOR_ROLES.includes(role) &&
-    (item.author_user_id === currentUserId || recordSubmitterId(item) === currentUserId) &&
+    (recordAuthorId(item) === currentUserId || recordSubmitterId(item) === currentUserId) &&
     AUTHOR_EDITABLE_STATUSES.includes(item.status)
   );
 }
@@ -1995,10 +2076,8 @@ export function FIWorkspace({
   // Form đăng ký luôn hiện cho ai có quyền tạo SK (kể cả FI_Coordinator/Admin).
   const showForm = canRegister;
   // "Sáng kiến của tôi" bám theo tác giả/người đứng tên; "Phiếu tôi đã gửi" bám theo người tạo phiếu.
-  const myItems = items.filter((item) =>
-    role === ADMIN_ROLE ? item.author_user_id === currentUserId : item.author_user_id === currentUserId
-  );
-  const sentItems = items.filter((item) => recordSubmitterId(item) === currentUserId && item.author_user_id !== currentUserId);
+  const myItems = items.filter((item) => recordAuthorId(item) === currentUserId);
+  const sentItems = items.filter((item) => recordSubmitterId(item) === currentUserId && recordAuthorId(item) !== currentUserId);
   const userLabelById = useMemo(() => {
     const map = new Map<string, string>();
     authorOptions.forEach((row) => {
@@ -2006,11 +2085,13 @@ export function FIWorkspace({
     });
     allHistoryItems.forEach((item) => {
       const submittedBy = recordSubmitterId(item);
+      const authorId = recordAuthorId(item);
       if (submittedBy && item.submitted_by_name) map.set(submittedBy, item.submitted_by_name);
-      if (item.author_user_id && item.author_name) map.set(item.author_user_id, item.author_name);
+      if (authorId && item.author_name) map.set(authorId, item.author_name);
     });
     map.set(currentUserId, accountAuthorName);
     map.set(SYSTEM_ACTOR_ID, "Hệ thống");
+    map.set("deploy-import", "Hệ thống");
     return map;
   }, [accountAuthorName, allHistoryItems, authorOptions, currentUserId]);
   const displayUser = (userId: string | null) => {
@@ -2023,7 +2104,7 @@ export function FIWorkspace({
   const reviewQueueAll = items.filter((item) => {
     if (item.is_historical_import) return false;
     if (item.status === "Draft" || item.status === "Cancelled") return false;
-    if (role === FI_COORDINATOR_ROLE && (item.author_user_id === currentUserId || recordSubmitterId(item) === currentUserId)) return false;
+    if (role === FI_COORDINATOR_ROLE && (recordAuthorId(item) === currentUserId || recordSubmitterId(item) === currentUserId)) return false;
     return true;
   });
   const reviewQueue = reviewQueueAll.filter((item) => {
@@ -2084,14 +2165,17 @@ export function FIWorkspace({
     mode: "author" | "submitter",
   ) => {
     if (selectedKeys.length === 0) return true;
-    const itemId = mode === "author" ? item?.author_user_id : recordSubmitterId(item);
+    const itemId = mode === "author" ? recordAuthorId(item) : recordSubmitterId(item);
     const itemName = mode === "author" ? item?.author_name : item?.submitted_by_name || displayUser(itemId);
-    const itemKey = personFilterKey(itemId === SYSTEM_ACTOR_ID ? null : itemId, itemName);
-    const itemNameKey = normalizeAuthorQuery(itemName).trim();
+    const itemKey = personFilterKey(isSystemActorId(itemId) ? null : itemId, itemName);
+    const itemNameKey = normalizeAuthorQuery(itemName);
+    const itemTeamKey = normalizeAuthorQuery(item?.team);
     return selectedKeys.some((key) => {
       if (key === itemKey) return true;
       const selectedOption = optionByKey.get(key);
-      return Boolean(selectedOption?.nameKey && selectedOption.nameKey === itemNameKey);
+      if (!selectedOption?.nameKey || selectedOption.nameKey !== itemNameKey) return false;
+      const selectedTeamKey = normalizeAuthorQuery(selectedOption.team);
+      return !selectedTeamKey || !itemTeamKey || selectedTeamKey === itemTeamKey;
     });
   };
   const historyDecisionCounts = historyItems.reduce<Record<HistoryDecisionFilter, number>>(
@@ -2356,13 +2440,14 @@ export function FIWorkspace({
         const actions = visibleActionsForSk(role, currentUserId, item, editMode);
         const editedAfterSubmit = item.status !== "Draft" && AUTHOR_EDITABLE_STATUSES.includes(item.status);
         const submitterId = recordSubmitterId(item);
+        const authorId = recordAuthorId(item);
         return (
           <div className={`workflow-item ${selectedItem?.id === item.id ? "active-row" : ""}`} key={item.id}>
             <button className="workflow-main" onClick={() => openItem(item.id)} type="button">
               <strong>{item.sk_code}</strong>
               <span>{item.title}</span>
               <small>Tác giả: {item.author_name} · {displayTeam(item.team)}</small>
-              {mode === "mine" && submitterId && submitterId !== item.author_user_id && (
+              {mode === "mine" && submitterId && submitterId !== authorId && (
                 <small>Người đăng ký: {displayUser(submitterId)}</small>
               )}
               {mode === "sent" && (

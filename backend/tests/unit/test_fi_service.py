@@ -3,6 +3,8 @@ from datetime import date
 import pytest
 
 from app.services.fi.service import (
+    _fi_export_record_matches,
+    _fi_person_filter_matches,
     assign_khmt,
     can_view_sk,
     clear_khmt,
@@ -12,8 +14,66 @@ from app.services.fi.service import (
     transition_sk_ctkt,
     update_sk_ctkt,
 )
-from app.models.domain import NotificationModel, SKCTKTModel
+from app.models.domain import NotificationModel, SKCTKTModel, User
 from sqlalchemy import select
+
+
+def test_person_filter_matches_imported_author_with_extra_spacing():
+    selected_keys = {"id:tuyenpv", "name:pham van tuyen:team:tbch"}
+
+    assert _fi_person_filter_matches(
+        "historical-import",
+        "Phạm Văn  Tuyên",
+        "TBCH",
+        selected_keys,
+    )
+    assert not _fi_person_filter_matches(
+        "historical-import",
+        "Phạm Văn  Tuyên",
+        "TBĐL",
+        selected_keys,
+    )
+
+
+def test_fi_export_person_filters_match_resolved_legacy_author(db_session):
+    db_session.add(
+        User(
+            id="trunghd",
+            display_name="Hồ Đức Trung - Đội TBCH",
+            full_name="Hồ Đức Trung",
+            password_hash="hash",
+            role="Staff",
+            team="TBCH",
+            is_active=True,
+        )
+    )
+    record = SKCTKTModel(
+        id="sk-legacy-export-owner",
+        sk_code="HIST-TBCH-TBCH-01",
+        title="Legacy export",
+        author_name="Hồ Đức Trung",
+        author_user_id="historical-import",
+        team="TBCH",
+        content_description="Content",
+        completion_plan="T9/2026",
+        status="Approved",
+        status_history=[
+            {
+                "from_status": None,
+                "to_status": "Approved",
+                "changed_by": "deploy-import",
+                "comments": {"submitted_by": "deploy-import"},
+            }
+        ],
+        is_public=True,
+        is_counted_for_okr=False,
+        is_historical_import=True,
+    )
+    db_session.add(record)
+    db_session.commit()
+
+    assert _fi_export_record_matches(record, {"authors": {"id:trunghd"}}, db_session)
+    assert _fi_export_record_matches(record, {"submitters": {"id:trunghd"}}, db_session)
 
 
 def test_sk_code_unique_per_team_month(db_session):
@@ -805,13 +865,24 @@ def test_can_view_sk_allows_cross_team_submitted_records_but_keeps_drafts_privat
         assert can_view_sk(other_draft, principal) is False
 
 
-def test_legacy_sk_content_cannot_be_edited_even_by_author_or_admin(db_session):
+def test_legacy_sk_content_can_be_edited_by_resolved_author_only(db_session):
+    db_session.add(
+        User(
+            id="trunghd",
+            display_name="Hồ Đức Trung - Đội TBCH",
+            full_name="Hồ Đức Trung",
+            password_hash="hash",
+            role="Staff",
+            team="TBCH",
+            is_active=True,
+        )
+    )
     record = SKCTKTModel(
         id="sk-legacy-content-lock",
         sk_code="HIST-TBCH-TBCH-10",
         title="Legacy",
-        author_name="A",
-        author_user_id="baomt",
+        author_name="Hồ Đức Trung",
+        author_user_id="historical-import",
         team="TBCH",
         content_description="Content",
         completion_plan="T6/2026",
@@ -824,9 +895,10 @@ def test_legacy_sk_content_cannot_be_edited_even_by_author_or_admin(db_session):
     db_session.add(record)
     db_session.commit()
 
-    with pytest.raises(PermissionError, match="legacy"):
-        update_sk_ctkt(db_session, record.id, {"content_description": "Sửa legacy"}, "baomt", "Staff")
-    with pytest.raises(PermissionError, match="legacy"):
+    updated = update_sk_ctkt(db_session, record.id, {"content_description": "Tác giả sửa legacy"}, "trunghd", "Staff")
+
+    assert updated.content_description == "Tác giả sửa legacy"
+    with pytest.raises(PermissionError, match="Chỉ tác giả"):
         update_sk_ctkt(db_session, record.id, {"content_description": "Admin sửa legacy"}, "admin", "Admin")
 
 

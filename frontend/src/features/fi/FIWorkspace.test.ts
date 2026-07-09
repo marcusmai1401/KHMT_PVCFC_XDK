@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildPersonFilterOptions,
   canSelectKhmtMonth,
   displayTeam,
   hasKhmtPendingChange,
@@ -8,6 +9,56 @@ import {
   recordSubmitterId,
   visibleActionsForSk,
 } from "./FIWorkspace";
+
+describe("FI person filters", () => {
+  it("merges historical author rows into the matching employee account option", () => {
+    const employees = [
+      {
+        id: "tungtp",
+        display_name: "Trịnh Phước Tùng - Đội TBĐL",
+        full_name: "Trịnh Phước Tùng",
+        team: "TBĐL",
+        role: "Staff",
+      },
+    ];
+    const rows = [
+      { author_name: "Trịnh Phước Tùng", author_user_id: "historical-import", team: "TBĐL" },
+      { author_name: "Trịnh Phước Tùng", author_user_id: "tungtp", team: "TBĐL" },
+    ];
+
+    const options = buildPersonFilterOptions(rows, employees, "author", new Map());
+
+    expect(options).toHaveLength(1);
+    expect(options[0]).toMatchObject({
+      key: "id:tungtp",
+      accountId: "tungtp",
+      label: "Trịnh Phước Tùng",
+      team: "TBĐL",
+      count: 2,
+    });
+  });
+
+  it("normalizes imported author spacing before matching an employee account", () => {
+    const employees = [
+      {
+        id: "tuyenpv",
+        display_name: "Phạm Văn Tuyên - Đội TBCH",
+        full_name: "Phạm Văn Tuyên",
+        team: "TBCH",
+        role: "Staff",
+      },
+    ];
+    const rows = [
+      { author_name: "Phạm Văn  Tuyên", author_user_id: "historical-import", team: "TBCH" },
+    ];
+
+    const options = buildPersonFilterOptions(rows, employees, "author", new Map());
+
+    expect(options).toHaveLength(1);
+    expect(options[0].key).toBe("id:tuyenpv");
+    expect(options[0].count).toBe(1);
+  });
+});
 
 describe("FI action visibility", () => {
   it("allows a team account to edit/delete its own draft but not another person's draft", () => {
@@ -44,6 +95,23 @@ describe("FI action visibility", () => {
     expect(recordSubmitterId(proxySubmitted)).toBe("baomt");
     expect(visibleActionsForSk("Staff", "baomt", proxySubmitted)).toEqual(["edit", "delete"]);
     expect(visibleActionsForSk("Staff", "quyenpt", proxySubmitted)).toEqual(["edit", "delete"]);
+  });
+
+  it("maps deploy-import legacy submissions back to the resolved author account", () => {
+    const legacySubmitted = {
+      status: "Approved",
+      is_historical_import: true,
+      author_user_id: "historical-import",
+      submitted_by: "deploy-import",
+      effective_author_user_id: "trunghd",
+      status_history: [
+        { changed_by: "deploy-import", comments: { submitted_by: "deploy-import" } },
+      ],
+    };
+
+    expect(recordSubmitterId(legacySubmitted)).toBe("trunghd");
+    expect(visibleActionsForSk("Staff", "trunghd", legacySubmitted)).toEqual(["edit"]);
+    expect(visibleActionsForSk("Staff", "other", legacySubmitted)).toEqual([]);
   });
 
   it("shows one review decision action for FI_Coordinator on Submitted items", () => {

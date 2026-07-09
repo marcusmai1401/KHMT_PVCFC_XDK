@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildPersonFilterOptions,
   canSelectKhmtMonth,
   displayTeam,
   hasKhmtPendingChange,
@@ -8,6 +9,56 @@ import {
   recordSubmitterId,
   visibleActionsForSk,
 } from "./FIWorkspace";
+
+describe("FI person filters", () => {
+  it("merges historical author rows into the matching employee account option", () => {
+    const employees = [
+      {
+        id: "tungtp",
+        display_name: "Trịnh Phước Tùng - Đội TBĐL",
+        full_name: "Trịnh Phước Tùng",
+        team: "TBĐL",
+        role: "Staff",
+      },
+    ];
+    const rows = [
+      { author_name: "Trịnh Phước Tùng", author_user_id: "historical-import", team: "TBĐL" },
+      { author_name: "Trịnh Phước Tùng", author_user_id: "tungtp", team: "TBĐL" },
+    ];
+
+    const options = buildPersonFilterOptions(rows, employees, "author", new Map());
+
+    expect(options).toHaveLength(1);
+    expect(options[0]).toMatchObject({
+      key: "id:tungtp",
+      accountId: "tungtp",
+      label: "Trịnh Phước Tùng",
+      team: "TBĐL",
+      count: 2,
+    });
+  });
+
+  it("normalizes imported author spacing before matching an employee account", () => {
+    const employees = [
+      {
+        id: "tuyenpv",
+        display_name: "Phạm Văn Tuyên - Đội TBCH",
+        full_name: "Phạm Văn Tuyên",
+        team: "TBCH",
+        role: "Staff",
+      },
+    ];
+    const rows = [
+      { author_name: "Phạm Văn  Tuyên", author_user_id: "historical-import", team: "TBCH" },
+    ];
+
+    const options = buildPersonFilterOptions(rows, employees, "author", new Map());
+
+    expect(options).toHaveLength(1);
+    expect(options[0].key).toBe("id:tuyenpv");
+    expect(options[0].count).toBe(1);
+  });
+});
 
 describe("FI action visibility", () => {
   it("allows a team account to edit/delete its own draft but not another person's draft", () => {
@@ -46,6 +97,29 @@ describe("FI action visibility", () => {
     expect(visibleActionsForSk("Staff", "quyenpt", proxySubmitted)).toEqual(["edit", "delete"]);
   });
 
+  it("maps deploy-import legacy submissions back to the resolved author account", () => {
+    const legacySubmitted = {
+      status: "Deferred",
+      is_historical_import: true,
+      author_user_id: "historical-import",
+      submitted_by: "deploy-import",
+      effective_author_user_id: "trunghd",
+      status_history: [
+        { changed_by: "deploy-import", comments: { submitted_by: "deploy-import" } },
+      ],
+    };
+
+    expect(recordSubmitterId(legacySubmitted)).toBe("trunghd");
+    expect(visibleActionsForSk("Staff", "trunghd", legacySubmitted)).toEqual(["edit"]);
+    expect(visibleActionsForSk("Staff", "other", legacySubmitted)).toEqual([]);
+  });
+
+  it("does not allow owners to edit SK after the decision is Approved", () => {
+    const approved = { status: "Approved", author_user_id: "u1" };
+
+    expect(visibleActionsForSk("Staff", "u1", approved)).toEqual([]);
+  });
+
   it("shows one review decision action for FI_Coordinator on Submitted items", () => {
     expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Submitted" })).toEqual(["reviewDecision"]);
   });
@@ -74,12 +148,11 @@ describe("FI action visibility", () => {
 
     expect(visibleActionsForSk("Admin", "admin", approved)).toEqual(["reviewDecision", "assignKhmt", "delete"]);
     expect(visibleActionsForSk("Admin", "admin", { ...approved, author_user_id: "admin" })).toEqual([
-      "edit",
       "reviewDecision",
       "assignKhmt",
       "delete",
     ]);
-    expect(visibleActionsForSk("Team_Account", "TBCH", approved)).toEqual(["edit", "assignKhmt"]);
+    expect(visibleActionsForSk("Team_Account", "TBCH", approved)).toEqual(["assignKhmt"]);
     expect(visibleActionsForSk("Team_Account", "TBĐL", approved)).toEqual([]);
     expect(visibleActionsForSk("Workshop_Leader", "leader", approved)).toEqual([]);
   });
@@ -88,7 +161,7 @@ describe("FI action visibility", () => {
     const approved = { status: "Approved", author_user_id: "TBCH", team: "TBCH" };
 
     expect(visibleActionsForSk("Admin", "admin", approved, false)).toEqual([]);
-    expect(visibleActionsForSk("Team_Account", "TBCH", approved, false)).toEqual(["edit", "assignKhmt"]);
+    expect(visibleActionsForSk("Team_Account", "TBCH", approved, false)).toEqual(["assignKhmt"]);
   });
 
   it("allows admin and the owning team account to choose KHMT month", () => {

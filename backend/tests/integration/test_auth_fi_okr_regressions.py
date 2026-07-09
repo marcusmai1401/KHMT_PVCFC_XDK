@@ -14,14 +14,21 @@ def _login(client, user_id: str, password: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
-def _create_user(client, admin_headers, user_id: str, role: str = "Team_Account", team: str = "TBCH") -> dict[str, str]:
+def _create_user(
+    client,
+    admin_headers,
+    user_id: str,
+    role: str = "Team_Account",
+    team: str = "TBCH",
+    full_name: str | None = None,
+) -> dict[str, str]:
     response = client.post(
         "/api/v1/admin/users",
         headers=admin_headers,
         json={
             "id": user_id,
             "display_name": user_id,
-            "full_name": user_id,
+            "full_name": full_name or user_id,
             "password": "pw",
             "role": role,
             "team": team,
@@ -528,6 +535,67 @@ def test_legacy_sk_is_history_and_can_be_reviewed_from_history(client, admin_hea
     assert client.get("/api/v1/fi/sk-ctkt/sk-legacy", headers=admin_headers).status_code == 404
 
 
+def test_legacy_import_is_owned_by_matching_author_account(client, admin_headers):
+    author_headers = _create_user(
+        client,
+        admin_headers,
+        "trunghd",
+        role="Staff",
+        team="TBCH",
+        full_name="Hồ Đức Trung",
+    )
+    with create_session() as db:
+        db.add(
+            SKCTKTModel(
+                id="sk-legacy-author-owned",
+                sk_code="HIST-TBCH-TBCH-100",
+                title="Legacy tác giả thật",
+                author_name="Hồ Đức Trung",
+                author_user_id="historical-import",
+                team="TBCH",
+                content_description="Nội dung legacy",
+                completion_plan="T9/2026",
+                status="Deferred",
+                status_history=[
+                    {
+                        "from_status": None,
+                        "to_status": "Deferred",
+                        "changed_by": "deploy-import",
+                        "comments": {"submitted_by": "deploy-import"},
+                    }
+                ],
+                is_public=True,
+                is_counted_for_okr=False,
+                is_historical_import=True,
+                bm01_source_file="legacy-fi-import",
+                bm01_source_sheet="TBCH",
+                bm01_source_row=100,
+                bm01_raw_conclusion="",
+            )
+        )
+        db.commit()
+
+    legacy_history = client.get("/api/v1/fi/sk-ctkt/public?historical=true&team=TBCH", headers=author_headers)
+    assert legacy_history.status_code == 200, legacy_history.text
+    legacy_item = next(item for item in legacy_history.json() if item["id"] == "sk-legacy-author-owned")
+    assert legacy_item["submitted_by"] == "trunghd"
+    assert legacy_item["submitted_by_name"] == "Hồ Đức Trung"
+    assert legacy_item["effective_author_user_id"] == "trunghd"
+
+    updated = client.put(
+        "/api/v1/fi/sk-ctkt/sk-legacy-author-owned",
+        headers=author_headers,
+        json={
+            "title": "Legacy tác giả đã sửa",
+            "content_description": "Nội dung đã cập nhật",
+            "completion_plan": "Dự kiến hoàn thành 09/2026",
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["title"] == "Legacy tác giả đã sửa"
+    assert updated.json()["submitted_by_name"] == "Hồ Đức Trung"
+
+
 def test_fi_history_export_uses_history_filters(client, admin_headers):
     def record(
         record_id: str,
@@ -823,6 +891,15 @@ def test_sk_image_lifecycle_is_separate_from_create_schema(client, admin_headers
     assert deleted.status_code == 200
     assert deleted.json() == {"deleted": True}
     assert client.get(f"/api/v1/fi/sk-ctkt/{record_id}/images", headers=user_headers).json() == []
+
+    approved = client.post(f"/api/v1/fi/sk-ctkt/{record_id}/approve", headers=admin_headers, json={})
+    assert approved.status_code == 200, approved.text
+    locked_upload = client.post(
+        f"/api/v1/fi/sk-ctkt/{record_id}/images",
+        headers=user_headers,
+        files={"file": ("after-approval.png", b"locked", "image/png")},
+    )
+    assert locked_upload.status_code == 403
 
 
 def test_team_uploaded_sk_image_is_visible_to_fi_after_submit(client):

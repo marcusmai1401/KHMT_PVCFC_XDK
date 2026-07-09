@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import Role
-from app.models.domain import SKCTKTModel, SKCodeSequenceModel, SKImageModel
+from app.models.domain import SKCTKTModel, SKCodeSequenceModel, SKImageModel, User
 from app.services.fi.completion import (
     completion_date_to_datetime,
     completion_plan_completed_at,
@@ -48,11 +48,11 @@ EDITABLE_AFTER_SUBMIT_STATUSES = {
     SKStatus.SUBMITTED.value,
     SKStatus.NEED_MORE_INFO.value,
     SKStatus.REVIEWED.value,
-    SKStatus.APPROVED.value,
     SKStatus.REJECTED.value,
     SKStatus.DEFERRED.value,
 }
 AUTHOR_CONTENT_EDITABLE_STATUSES = {SKStatus.DRAFT.value, *EDITABLE_AFTER_SUBMIT_STATUSES}
+IMPORT_ACTOR_IDS = {"historical-import", "deploy-import"}
 
 
 def _utc_now() -> datetime:
@@ -117,8 +117,61 @@ def submitter_user_id(record: SKCTKTModel) -> str | None:
     return str(submitted_by or first.get("changed_by") or "") or None
 
 
-def is_author_or_submitter(record: SKCTKTModel, actor: str) -> bool:
-    return record.author_user_id == actor or submitter_user_id(record) == actor
+def is_import_actor(user_id: str | None) -> bool:
+    return str(user_id or "").strip() in IMPORT_ACTOR_IDS
+
+
+def _user_name_aliases(user: User) -> set[str]:
+    aliases: set[str] = set()
+    for value in (user.full_name, user.display_name):
+        clean = str(value or "").strip()
+        if not clean:
+            continue
+        aliases.add(_normalize_person_filter_value(clean))
+        if " - " in clean:
+            aliases.add(_normalize_person_filter_value(clean.split(" - ", 1)[0]))
+    return {alias for alias in aliases if alias}
+
+
+def resolve_legacy_author_user(record: SKCTKTModel, db: Session) -> User | None:
+    if not record.is_historical_import and not is_import_actor(record.author_user_id):
+        return None
+    target_name = _normalize_person_filter_value(record.author_name)
+    if not target_name:
+        return None
+    candidates = db.execute(
+        select(User).where(
+            User.is_active.is_(True),
+            User.team == record.team,
+            User.role.in_(AUTHOR_ROLES),
+        )
+    ).scalars()
+    matches = [user for user in candidates if target_name in _user_name_aliases(user)]
+    return matches[0] if len(matches) == 1 else None
+
+
+def effective_author_user_id(record: SKCTKTModel, db: Session | None = None) -> str | None:
+    if record.author_user_id and not is_import_actor(record.author_user_id):
+        return record.author_user_id
+    if db is None:
+        return None
+    resolved_author = resolve_legacy_author_user(record, db)
+    return resolved_author.id if resolved_author else None
+
+
+def effective_submitter_user_id(record: SKCTKTModel, db: Session | None = None) -> str | None:
+    submitted_by = submitter_user_id(record)
+    if submitted_by and not is_import_actor(submitted_by):
+        return submitted_by
+    return effective_author_user_id(record, db) if record.is_historical_import else submitted_by
+
+
+def is_author_or_submitter(record: SKCTKTModel, actor: str, db: Session | None = None) -> bool:
+    if record.author_user_id == actor or submitter_user_id(record) == actor:
+        return True
+    if db is None:
+        return False
+    return effective_author_user_id(record, db) == actor or effective_submitter_user_id(record, db) == actor
 
 
 def create_sk_ctkt(
@@ -219,9 +272,7 @@ def update_sk_ctkt(
         raise KeyError("SK-CTKT not found")
     requested_fields = set(payload)
     shared_content_edit = bool(requested_fields) and requested_fields <= SHARED_CONTENT_EDIT_FIELDS
-    if record.is_historical_import:
-        raise PermissionError("FI legacy chỉ dùng để tra cứu lịch sử, không chỉnh sửa nội dung")
-    if not is_author_or_submitter(record, actor):
+    if not is_author_or_submitter(record, actor, db):
         raise PermissionError("Chỉ tác giả hoặc người gửi hộ mới được chỉnh sửa")
     if record.status in {SKStatus.CANCELLED.value, SKStatus.COMPLETED.value}:
         raise PermissionError("SK đã hoàn tất hoặc đã hủy, không chỉnh sửa được nội dung")
@@ -265,9 +316,15 @@ def _notify_content_edit(db: Session, record: SKCTKTModel, actor: str) -> None:
     notify(db, "SK_CONTENT_EDITED", payload, recipient_role=Role.ADMIN.value)
 
 
-def _validate_actor_for_transition(record: SKCTKTModel, action: str, actor: str, role: str) -> None:
+def _validate_actor_for_transition(
+    record: SKCTKTModel,
+    action: str,
+    actor: str,
+    role: str,
+    db: Session | None = None,
+) -> None:
     if action in {FIAction.SUBMIT.value, FIAction.CANCEL.value} and role in AUTHOR_ROLES:
-        if not is_author_or_submitter(record, actor):
+        if not is_author_or_submitter(record, actor, db):
             raise PermissionError("Chỉ tài khoản tạo SK mới được thực hiện thao tác này")
         if action == FIAction.SUBMIT.value and record.status not in {
             SKStatus.DRAFT.value,
@@ -287,7 +344,7 @@ def _validate_actor_for_transition(record: SKCTKTModel, action: str, actor: str,
             )
         # Tránh xung đột lợi ích: Đầu mối FI không được xét duyệt SK do chính mình đăng ký.
         # Admin sẽ là người xét duyệt cho các SK của FI_Coordinator.
-        if record.author_user_id == actor or submitter_user_id(record) == actor:
+        if is_author_or_submitter(record, actor, db):
             raise PermissionError(
                 "Đầu mối FI không được xét duyệt SK do chính mình đứng tên hoặc gửi hộ — vui lòng để Admin xét duyệt"
             )
@@ -306,12 +363,12 @@ def transition_sk_ctkt(
     if record is None:
         raise KeyError("SK-CTKT not found")
     if action == FIAction.SUBMIT.value and record.status == SKStatus.SUBMITTED.value:
-        _validate_actor_for_transition(record, action, actor, role)
+        _validate_actor_for_transition(record, action, actor, role, db)
         return record
     if record.is_historical_import:
         if action not in HISTORICAL_REVIEW_ACTIONS or record.status not in REVIEWABLE_STATUSES:
             raise PermissionError("FI legacy chỉ cho đánh giá các mục Chờ xét duyệt, Xem xét sau, Đồng ý hoặc Không đồng ý")
-    _validate_actor_for_transition(record, action, actor, role)
+    _validate_actor_for_transition(record, action, actor, role, db)
     result = next_status(record.status, action, role, note)
     before = record.status
     now = _utc_now()
@@ -741,11 +798,11 @@ def _filtered_fi_export_records(db: Session, filters: dict[str, set[Any]]) -> li
     records = db.execute(
         select(SKCTKTModel).where(SKCTKTModel.status != SKStatus.DRAFT.value)
     ).scalars().all()
-    filtered = [record for record in records if _fi_export_record_matches(record, filters)]
+    filtered = [record for record in records if _fi_export_record_matches(record, filters, db)]
     return sorted(filtered, key=_fi_export_sort_key)
 
 
-def _fi_export_record_matches(record: SKCTKTModel, filters: dict[str, set[Any]]) -> bool:
+def _fi_export_record_matches(record: SKCTKTModel, filters: dict[str, set[Any]], db: Session) -> bool:
     registration_month, _ = _fi_registration_period(record)
     teams = filters.get("teams") or set()
     months = filters.get("registration_months") or set()
@@ -764,31 +821,47 @@ def _fi_export_record_matches(record: SKCTKTModel, filters: dict[str, set[Any]])
         return False
     if completion and _fi_completion_filter(record) not in completion:
         return False
-    if authors and not _fi_person_filter_matches(record.author_user_id, record.author_name, authors):
+    author_id = effective_author_user_id(record, db) or record.author_user_id
+    if authors and not _fi_person_filter_matches(author_id, record.author_name, record.team, authors):
         return False
-    submitter_id = submitter_user_id(record)
-    if submitters and not _fi_person_filter_matches(submitter_id, None, submitters):
+    raw_submitter_id = submitter_user_id(record)
+    submitter_id = effective_submitter_user_id(record, db)
+    submitter_name = (
+        record.author_name
+        if record.is_historical_import and (not raw_submitter_id or is_import_actor(raw_submitter_id))
+        else None
+    )
+    if submitters and not _fi_person_filter_matches(submitter_id, submitter_name, record.team, submitters):
         return False
     return True
 
 
 def _normalize_person_filter_value(value: str | None) -> str:
     text = str(value or "").strip().lower().replace("đ", "d")
-    return "".join(
+    normalized = "".join(
         char for char in unicodedata.normalize("NFD", text)
         if unicodedata.category(char) != "Mn"
     )
+    return " ".join(normalized.split())
 
 
-def _fi_person_filter_matches(user_id: str | None, display_name: str | None, selected_keys: set[Any]) -> bool:
+def _fi_person_filter_matches(
+    user_id: str | None,
+    display_name: str | None,
+    team: str | None,
+    selected_keys: set[Any],
+) -> bool:
     keys: set[str] = set()
-    if user_id and user_id != "historical-import":
+    if user_id and not is_import_actor(user_id):
         keys.add(f"id:{user_id}")
-    if user_id == "historical-import":
+    if is_import_actor(user_id):
         keys.add("name:he thong")
     name_key = _normalize_person_filter_value(display_name)
     if name_key:
         keys.add(f"name:{name_key}")
+        team_key = _normalize_person_filter_value(team)
+        if team_key:
+            keys.add(f"name:{name_key}:team:{team_key}")
     return bool(keys & {str(key) for key in selected_keys})
 
 

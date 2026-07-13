@@ -1,10 +1,18 @@
 from pathlib import Path
+import importlib.util
 import sys
+import types
 
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+# The backend CI environment intentionally does not install the deployment-only
+# SSH client. These tests exercise the pure command/workflow builders, so a
+# module placeholder keeps collection independent from deploy credentials/tools.
+if importlib.util.find_spec("paramiko") is None:
+    sys.modules["paramiko"] = types.ModuleType("paramiko")
 
 from deploy_prod import remote_deploy_command
 

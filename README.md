@@ -219,7 +219,7 @@ kiểm tra production
 
 ### GitHub Actions đang làm gì?
 
-Workflow chính nằm ở `.github/workflows/deploy-production.yml`.
+Workflow chính nằm ở `.github/workflows/deploy.yml`.
 
 Khi tạo Pull Request vào `main`:
 
@@ -269,14 +269,10 @@ Hoặc chạy trên giao diện GitHub:
 
 1. Vào GitHub repo.
 2. Mở tab `Actions`.
-3. Chọn workflow `CI and Production Deploy`.
+3. Chọn workflow `Test and deploy production`.
 4. Bấm `Run workflow`.
 
-Các tùy chọn thủ công:
-
-- `reset_user_passwords`: mặc định tắt, chỉ bật khi thật sự muốn reset password các user seed.
-
-Deploy vẫn chạy thêm bước password hygiene an toàn: chỉ reset user chưa login/chưa đổi mật khẩu mặc định, bỏ qua Admin và user đã có log đổi mật khẩu.
+Workflow thủ công chỉ chấp nhận ref `main`. Deploy thường không reset mật khẩu của user đã tồn tại và không chạy password hygiene dựa trên audit history.
 
 ### GitHub Secrets production
 
@@ -287,9 +283,10 @@ Deploy dùng GitHub Environment `production` và các secret sau:
 | `VPS_HOST` | IP VPS production |
 | `VPS_PORT` | Port SSH |
 | `VPS_USER` | User SSH |
-| `VPS_PASSWORD` | Password SSH |
+| `VPS_SSH_PRIVATE_KEY` | SSH private key của tài khoản deploy |
+| `VPS_SSH_KEY_PASSPHRASE` | Passphrase của key, nếu có |
 | `VPS_REMOTE_DIR` | Thư mục deploy trên VPS, hiện là `/opt/okr-system` |
-| `VPS_HOST_KEY` | Khuyến nghị, dùng xác thực SSH host key |
+| `VPS_HOST_KEY` | Bắt buộc, dòng known_hosts đã xác minh fingerprint |
 
 Không commit password, `.env.production`, private key hoặc thông tin nhạy cảm vào repo.
 

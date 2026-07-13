@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
-import getpass
+import hashlib
 import os
 from pathlib import Path
 import posixpath
+import secrets
 import shlex
 import sys
 import tarfile
@@ -15,9 +16,7 @@ import time
 import paramiko
 
 
-DEFAULT_HOST = "103.200.20.225"
 DEFAULT_PORT = 22
-DEFAULT_USER = "root"
 DEFAULT_REMOTE_DIR = "/opt/okr-system"
 
 EXCLUDE_DIRS = {
@@ -80,11 +79,31 @@ def build_archive(root: Path, archive_path: Path) -> None:
                 archive.add(path, arcname=rel)
 
 
-def connect(host: str, port: int, user: str, password: str, *, accept_new_host_key: bool = False) -> paramiko.SSHClient:
+def connect(
+    host: str,
+    port: int,
+    user: str,
+    *,
+    key_path: Path,
+    known_hosts_path: Path,
+    key_passphrase: str | None = None,
+) -> paramiko.SSHClient:
     ssh = paramiko.SSHClient()
     ssh.load_system_host_keys()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy() if accept_new_host_key else paramiko.RejectPolicy())
-    ssh.connect(hostname=host, port=port, username=user, password=password, timeout=30)
+    ssh.load_host_keys(str(known_hosts_path))
+    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+    ssh.connect(
+        hostname=host,
+        port=port,
+        username=user,
+        key_filename=str(key_path),
+        passphrase=key_passphrase,
+        allow_agent=False,
+        look_for_keys=False,
+        timeout=30,
+        banner_timeout=30,
+        auth_timeout=30,
+    )
     return ssh
 
 
@@ -92,6 +111,7 @@ def upload(ssh: paramiko.SSHClient, local_path: Path, remote_path: str) -> None:
     sftp = ssh.open_sftp()
     try:
         sftp.put(str(local_path), remote_path)
+        sftp.chmod(remote_path, 0o600)
     finally:
         sftp.close()
 
@@ -122,20 +142,15 @@ def run(ssh: paramiko.SSHClient, command: str) -> None:
 def remote_deploy_command(
     remote_dir: str,
     remote_archive: str,
+    archive_sha256: str,
     seed_users: bool,
-    reset_user_passwords: bool,
     seed_et_data: bool,
 ) -> str:
     compose = "docker compose --env-file .env.production -f docker-compose.prod.yml"
     if seed_users:
-        reset_flag = " --reset-passwords" if reset_user_passwords else ""
-        seed_block = f"echo \"Seeding 56 user accounts for Xưởng Điều khiển\"\n{compose} exec -T backend python scripts/seed_users_xuong_dk.py{reset_flag}"
+        seed_block = f"echo \"Seeding 56 user accounts for Xưởng Điều khiển\"\n{compose} exec -T backend python scripts/seed_users_xuong_dk.py"
     else:
         seed_block = "true"
-    password_hygiene_block = (
-        f"echo \"Resetting safe default password candidates\"\n"
-        f"{compose} exec -T backend python scripts/reset_default_password_candidates.py --apply"
-    )
     if seed_et_data:
         et_seed_block = "\n".join(
             [
@@ -147,6 +162,8 @@ def remote_deploy_command(
         et_seed_block = "true"
     return f"""
 set -euo pipefail
+log() {{ printf '[%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }}
+trap 'rm -f -- {shlex.quote(remote_archive)}' EXIT
 mkdir -p {shlex.quote(remote_dir)} /backup/okr
 cd {shlex.quote(remote_dir)}
 if [ ! -f .env.production ]; then
@@ -158,40 +175,51 @@ if ! grep -qE '^OKR_ENVIRONMENT=production\\s*$' .env.production; then
   echo "Without it, dev-only shortcuts (e.g. the sandbox default-password login) default to enabled. Add the line and re-run." >&2
   exit 3
 fi
+env_value() {{ grep -E "^$1=" .env.production | tail -n 1 | cut -d= -f2- || true; }}
+JWT_SECRET_VALUE=$(env_value OKR_JWT_SECRET)
+POSTGRES_PASSWORD_VALUE=$(env_value POSTGRES_PASSWORD)
+if [ "${{#JWT_SECRET_VALUE}}" -lt 32 ] || [ "$JWT_SECRET_VALUE" = "dev-change-me" ] || printf '%s' "$JWT_SECRET_VALUE" | grep -qi 'change-this'; then
+  echo "OKR_JWT_SECRET must be a non-placeholder secret of at least 32 characters." >&2
+  exit 4
+fi
+if [ "${{#POSTGRES_PASSWORD_VALUE}}" -lt 16 ] || printf '%s' "$POSTGRES_PASSWORD_VALUE" | grep -qi 'change-this'; then
+  echo "POSTGRES_PASSWORD must be a non-placeholder secret of at least 16 characters." >&2
+  exit 5
+fi
+log "Verifying deployment archive integrity"
+printf '%s  %s\n' {shlex.quote(archive_sha256)} {shlex.quote(remote_archive)} | sha256sum -c -
 stamp=$(date +%Y%m%d%H%M%S)
 POSTGRES_USER_VALUE=$(grep -E '^POSTGRES_USER=' .env.production | tail -n 1 | cut -d= -f2- || true)
 POSTGRES_DB_VALUE=$(grep -E '^POSTGRES_DB=' .env.production | tail -n 1 | cut -d= -f2- || true)
 POSTGRES_USER_VALUE=${{POSTGRES_USER_VALUE:-okr}}
 POSTGRES_DB_VALUE=${{POSTGRES_DB_VALUE:-okr_automation}}
 if {compose} ps postgres >/dev/null 2>&1; then
-  echo "Backing up PostgreSQL to /backup/okr/okr_${{stamp}}.sql.gz"
+  log "Backing up PostgreSQL"
   {compose} exec -T postgres pg_dump -U "${{POSTGRES_USER_VALUE}}" "${{POSTGRES_DB_VALUE}}" | gzip > "/backup/okr/okr_${{stamp}}.sql.gz"
 fi
 if [ -d storage ]; then
-  echo "Backing up storage to /backup/okr/storage_${{stamp}}.tar.gz"
+  log "Backing up storage"
   tar -czf "/backup/okr/storage_${{stamp}}.tar.gz" storage
 fi
-echo "Cleaning old source files"
+log "Cleaning old source files"
 find . -mindepth 1 -maxdepth 1 ! -name '.env.production' ! -name 'storage' -exec rm -rf -- {{}} +
-echo "Extracting source archive"
+log "Extracting verified source archive"
 tar -xzf {shlex.quote(remote_archive)} -C {shlex.quote(remote_dir)}
 rm -f {shlex.quote(remote_archive)}
 mkdir -p storage/uploads storage/exports storage/templates storage/backups
-echo "Rebuilding containers"
+log "Rebuilding containers"
 {compose} up -d --build
-echo "Running migrations"
+log "Running migrations"
 {compose} exec -T backend alembic upgrade head
-echo "Seeding user accounts"
+log "Seeding user accounts without changing existing passwords"
 {seed_block}
-echo "Checking default-password hygiene"
-{password_hygiene_block}
-echo "Seeding ET competency frameworks and personnel"
+log "Seeding ET competency frameworks and personnel"
 {et_seed_block}
-echo "Checking services"
+log "Checking services"
 {compose} ps
 curl -fsS http://127.0.0.1/health
 echo
-echo "Deploy complete"
+log "Deploy complete"
 """
 
 
@@ -203,45 +231,58 @@ def main() -> int:
         )
 
     parser = argparse.ArgumentParser(description="Deploy OKR system to the production VPS.")
-    parser.add_argument("--host", default=os.getenv("VPS_HOST", DEFAULT_HOST))
-    parser.add_argument("--port", type=int, default=int(os.getenv("VPS_PORT", DEFAULT_PORT)))
-    parser.add_argument("--user", default=os.getenv("VPS_USER", DEFAULT_USER))
-    parser.add_argument("--remote-dir", default=os.getenv("VPS_REMOTE_DIR", DEFAULT_REMOTE_DIR))
+    parser.add_argument("--host", default=os.getenv("VPS_HOST"))
+    parser.add_argument("--port", type=int, default=int(os.getenv("VPS_PORT") or DEFAULT_PORT))
+    parser.add_argument("--user", default=os.getenv("VPS_USER"))
+    parser.add_argument("--remote-dir", default=os.getenv("VPS_REMOTE_DIR") or DEFAULT_REMOTE_DIR)
+    parser.add_argument("--ssh-key", default=os.getenv("VPS_SSH_KEY_PATH"))
+    parser.add_argument("--known-hosts", default=os.getenv("VPS_KNOWN_HOSTS_PATH"))
     parser.add_argument(
         "--skip-user-seed",
         action="store_true",
         help="Bỏ qua bước chạy scripts/seed_users_xuong_dk.py.",
     )
     parser.add_argument(
-        "--reset-user-passwords",
-        action="store_true",
-        help="Khi seed user, reset password mặc định cho user đã tồn tại.",
-    )
-    parser.add_argument(
         "--skip-et-seed",
         action="store_true",
         help="Bỏ qua bước seed Khung năng lực và Nhân sự ET production.",
     )
-    parser.add_argument(
-        "--accept-new-host-key",
-        action="store_true",
-        default=os.getenv("VPS_ACCEPT_NEW_HOST_KEY") == "1",
-        help="Trust an unknown SSH host key on first connection.",
-    )
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parent
-    password = os.getenv("VPS_PASSWORD") or getpass.getpass(f"Password for {args.user}@{args.host}: ")
-    remote_archive = posixpath.join("/tmp", f"okr-deploy-{int(time.time())}.tar.gz")
+    required = {
+        "VPS_HOST": args.host,
+        "VPS_USER": args.user,
+        "VPS_SSH_KEY_PATH": args.ssh_key,
+        "VPS_KNOWN_HOSTS_PATH": args.known_hosts,
+    }
+    missing = [name for name, value in required.items() if not value]
+    if missing:
+        raise SystemExit(f"Missing required deployment configuration: {', '.join(missing)}")
+    key_path = Path(args.ssh_key)
+    known_hosts_path = Path(args.known_hosts)
+    if not key_path.is_file() or not known_hosts_path.is_file():
+        raise SystemExit("SSH key or pinned known-hosts file is missing")
+
+    remote_archive = posixpath.join("/tmp", f"okr-deploy-{secrets.token_hex(16)}.tar.gz")
 
     with tempfile.TemporaryDirectory() as temp_dir:
         archive_path = Path(temp_dir) / "okr-deploy.tar.gz"
         print("Building deployment archive...")
         build_archive(root, archive_path)
+        archive_sha256 = hashlib.sha256(archive_path.read_bytes()).hexdigest()
         print(f"Archive size: {archive_path.stat().st_size / (1024 * 1024):.1f} MB")
+        print(f"Archive SHA-256: {archive_sha256}")
 
         print(f"Connecting to {args.user}@{args.host}:{args.port}...")
-        ssh = connect(args.host, args.port, args.user, password, accept_new_host_key=args.accept_new_host_key)
+        ssh = connect(
+            args.host,
+            args.port,
+            args.user,
+            key_path=key_path,
+            known_hosts_path=known_hosts_path,
+            key_passphrase=os.getenv("VPS_SSH_KEY_PASSPHRASE") or None,
+        )
         try:
             print(f"Uploading archive to {remote_archive}...")
             upload(ssh, archive_path, remote_archive)
@@ -251,8 +292,8 @@ def main() -> int:
                 remote_deploy_command(
                     args.remote_dir,
                     remote_archive,
+                    archive_sha256,
                     seed_users=not args.skip_user_seed,
-                    reset_user_passwords=args.reset_user_passwords,
                     seed_et_data=not args.skip_et_seed,
                 ),
             )

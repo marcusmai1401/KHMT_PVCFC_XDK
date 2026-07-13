@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-WORKFLOW_FILE="deploy-production.yml"
+WORKFLOW_FILE="deploy.yml"
 BRANCH="main"
-RESET_USER_PASSWORDS="false"
 WATCH="false"
 
 usage() {
@@ -14,8 +13,6 @@ Usage:
   ./deploy_github_actions.sh [options]
 
 Options:
-  --branch <name>              Branch/ref to deploy. Default: main
-  --reset-user-passwords       Reset seeded/demo user passwords during deploy
   --watch                      Wait and stream the GitHub Actions run result
   -h, --help                   Show this help
 
@@ -23,7 +20,8 @@ Examples:
   ./deploy_github_actions.sh --watch
 
 Notes:
-  - This script does not store the VPS password.
+  - Only the main branch can deploy.
+  - This script does not store the VPS private key.
   - GitHub Actions reads VPS secrets from the production environment.
   - Install and login GitHub CLI first: gh auth login
 EOF
@@ -31,18 +29,6 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --branch)
-      if [[ $# -lt 2 || -z "${2:-}" ]]; then
-        echo "Missing value for --branch" >&2
-        exit 2
-      fi
-      BRANCH="$2"
-      shift 2
-      ;;
-    --reset-user-passwords)
-      RESET_USER_PASSWORDS="true"
-      shift
-      ;;
     --watch)
       WATCH="true"
       shift
@@ -84,11 +70,7 @@ fi
 echo "Triggering GitHub Actions production deploy..."
 echo "  workflow: $WORKFLOW_FILE"
 echo "  ref:      $BRANCH"
-echo "  reset pw: $RESET_USER_PASSWORDS"
-
-gh workflow run "$WORKFLOW_FILE" \
-  --ref "$BRANCH" \
-  -f reset_user_passwords="$RESET_USER_PASSWORDS"
+gh workflow run "$WORKFLOW_FILE" --ref "$BRANCH"
 
 echo "Deploy request submitted. Fetching latest run..."
 sleep 3

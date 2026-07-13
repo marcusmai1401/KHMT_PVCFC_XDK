@@ -1,7 +1,7 @@
 from functools import cached_property
 from pathlib import Path
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -117,6 +117,21 @@ class Settings(BaseSettings):
         extra="ignore",
         populate_by_name=True,
     )
+
+    @model_validator(mode="after")
+    def validate_production_secrets(self) -> "Settings":
+        if self.environment.strip().lower() != "production":
+            return self
+        secret = self.jwt_secret.strip()
+        if (
+            len(secret) < 32
+            or secret == "dev-change-me"
+            or "change-this" in secret.lower()
+        ):
+            raise ValueError(
+                "OKR_JWT_SECRET must be a non-placeholder secret of at least 32 characters in production"
+            )
+        return self
 
     @cached_property
     def effective_database_url(self) -> str:

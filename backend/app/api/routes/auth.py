@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import (
     Role,
     create_access_token,
@@ -17,6 +18,7 @@ from app.services.repositories import audit
 from app.services.sandbox import (
     SANDBOX_LOGIN_ID,
     SANDBOX_PASSWORD,
+    ensure_sandbox_data,
     list_sandbox_identities,
     reset_sandbox_data,
     sandbox_identity,
@@ -29,8 +31,12 @@ class SandboxRoleRequest(BaseModel):
     user_id: str
 
 
+def _sandbox_enabled() -> bool:
+    return settings.environment.strip().lower() != "production"
+
+
 def _require_sandbox(principal: dict = Depends(current_principal)) -> dict:
-    if not principal.get("sandbox"):
+    if not _sandbox_enabled() or not principal.get("sandbox"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Chỉ dùng được trong môi trường kiểm thử")
     return principal
 
@@ -71,7 +77,8 @@ def _verify_password_allowing_copy_whitespace(password: str, password_hash: str)
 def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     user_id = payload.user_id.strip()
     if (
-        user_id.lower() == SANDBOX_LOGIN_ID
+        _sandbox_enabled()
+        and user_id.lower() == SANDBOX_LOGIN_ID
         and payload.password.strip() == SANDBOX_PASSWORD
     ):
         reset_sandbox_data()
@@ -152,6 +159,8 @@ def enter_sandbox(
     """
     if principal.get("sandbox"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Đang ở môi trường kiểm thử")
+    if not _sandbox_enabled():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sandbox is disabled in production")
     ensure_sandbox_data()
     identity = sandbox_identity("admin")
     if identity is None:

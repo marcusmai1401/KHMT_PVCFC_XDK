@@ -88,16 +88,9 @@ def test_sandbox_test_login_is_case_insensitive(client):
     assert body["display_name"] == "Khách kiểm thử - Quản trị"
 
 
-def test_direct_sandbox_test_login_works_in_production(client, monkeypatch):
+def test_direct_sandbox_test_login_is_disabled_in_production(client, monkeypatch):
     monkeypatch.setattr(settings, "environment", "production")
 
     response = client.post("/api/v1/auth/login", json={"user_id": "Test", "password": "PVCFC@123"})
 
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["role"] == "Admin"
-    headers = {"Authorization": f"Bearer {body['access_token']}"}
-    me = client.get("/api/v1/auth/me", headers=headers)
-    assert me.status_code == 200, me.text
-    assert me.json()["sandbox"] is True
-    assert me.json()["user_id"] == "test"
+    assert response.status_code == 401, response.text

@@ -1,64 +1,66 @@
 # GitHub Actions Production Deploy
 
-File workflow: `.github/workflows/deploy-production.yml`
+Workflow production nằm tại `.github/workflows/deploy.yml`.
 
-## Luồng làm việc đề xuất
+## Luồng triển khai
 
-1. Developer tạo branch riêng từ `main`.
-2. Push branch lên GitHub và mở Pull Request.
-3. GitHub Actions chạy CI cho frontend/backend.
-4. Sau khi review xong, merge vào `main`.
-5. Workflow trên `main` chạy CI lại, sau đó deploy lên VPS production.
+- Workflow tự chạy khi có `push`/merge vào `main`.
+- Có thể chạy lại thủ công bằng `workflow_dispatch`, nhưng mọi job đều kiểm tra `github.ref == refs/heads/main`; ref khác sẽ không deploy.
+- Frontend test/build và toàn bộ backend test phải pass trước khi job deploy được chạy.
+- Job deploy dùng GitHub Environment `production`, có concurrency lock và timeout.
 
-Nên bật branch protection cho `main` để yêu cầu Pull Request và CI pass trước khi merge.
+Nên bật branch protection cho `main` và Required reviewers cho environment `production`.
 
-## GitHub Secrets cần tạo
+## GitHub Environment secrets
 
-Vào `Settings` -> `Secrets and variables` -> `Actions`, tạo các secret:
+Tạo các secret sau tại `Settings` → `Environments` → `production`:
 
-| Secret | Giá trị |
-| --- | --- |
-| `VPS_HOST` | IP VPS production, ví dụ `103.200.20.225` |
-| `VPS_PORT` | Port SSH, thường là `22` |
-| `VPS_USER` | User SSH, hiện tại là `root` |
-| `VPS_PASSWORD` | Mật khẩu SSH production |
-| `VPS_REMOTE_DIR` | Thư mục deploy, mặc định `/opt/okr-system` |
-| `VPS_HOST_KEY` | Khuyến nghị. Output từ `ssh-keyscan -p 22 103.200.20.225` |
+| Secret | Bắt buộc | Nội dung |
+|---|---:|---|
+| `VPS_HOST` | Có | Host/IP VPS production |
+| `VPS_PORT` | Không | SSH port; mặc định `22` |
+| `VPS_USER` | Có | Tài khoản deploy qua SSH |
+| `VPS_SSH_PRIVATE_KEY` | Có | Private key đầy đủ, không commit vào repo |
+| `VPS_SSH_KEY_PASSPHRASE` | Không | Passphrase nếu private key được mã hóa |
+| `VPS_REMOTE_DIR` | Không | Mặc định `/opt/okr-system` |
+| `VPS_HOST_KEY` | Có | Dòng `known_hosts` đã được xác minh ngoài băng |
 
-Nếu không có `VPS_HOST_KEY`, workflow sẽ tự chạy `ssh-keyscan`. Cách tốt hơn là lưu host key cố định vào secret để tránh tự tin host key mới.
+Không dùng `VPS_PASSWORD`. Workflow fail-closed nếu thiếu private key hoặc pinned host key và không tự chạy `ssh-keyscan`.
 
-## GitHub Environment
+## Lấy và xác minh host key
 
-Nên tạo environment tên `production` trong `Settings` -> `Environments`.
+Chạy từ một máy/mạng đáng tin cậy:
 
-Khuyến nghị bật `Required reviewers` để mỗi lần deploy production phải có người duyệt trong GitHub trước khi job deploy chạy.
+```bash
+ssh-keyscan -p 22 YOUR_VPS_HOST > vps_known_hosts
+ssh-keygen -lf vps_known_hosts
+```
 
-## Server production cần có sẵn
+Đối chiếu fingerprint với fingerprint đọc trực tiếp trên VPS (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`) qua kênh độc lập. Chỉ sau khi khớp mới lưu nguyên dòng `known_hosts` vào secret `VPS_HOST_KEY`. Không lấy host key ngay trong workflow vì kết quả đó chưa được xác thực và có thể bị MITM.
+
+## Yêu cầu trên VPS
 
 - Docker và Docker Compose plugin.
-- File `/opt/okr-system/.env.production`.
-- Port `80` mở ra ngoài.
-- Thư mục backup `/backup/okr` sẽ được script tạo nếu chưa có.
+- File `/opt/okr-system/.env.production` chỉ đọc được bởi tài khoản phù hợp.
+- `OKR_ENVIRONMENT=production`.
+- `OKR_JWT_SECRET` ngẫu nhiên, tối thiểu 32 ký tự, không phải placeholder.
+- `POSTGRES_PASSWORD` ngẫu nhiên, tối thiểu 16 ký tự, không phải placeholder.
+- Tài khoản SSH nên là user deploy riêng, key-only, với quyền tối thiểu cần cho Docker và các thư mục `/opt/okr-system`, `/backup/okr`.
 
-Workflow dùng lại `deploy_prod.py` trong GitHub Actions:
+## Các kiểm soát trong deploy
 
-- Build archive source.
-- Upload lên VPS.
-- Backup PostgreSQL và storage.
-- Rebuild Docker containers.
-- Chạy Alembic migration.
-- Seed user accounts nhưng mặc định không reset password.
-- Chạy bước password hygiene an toàn: chỉ reset user chưa login/chưa đổi mật khẩu mặc định, bỏ qua Admin và user đã có log đổi mật khẩu.
-- Kiểm tra `/health`.
+- GitHub Actions chính chủ được pin bằng commit SHA.
+- SSH chỉ dùng private key; tắt SSH agent/key discovery và từ chối host key không khớp.
+- Archive remote dùng tên ngẫu nhiên 128-bit, permission `0600`, và được kiểm tra SHA-256 trước khi giải nén.
+- Luôn backup PostgreSQL và `storage` trước khi thay source.
+- Shell remote dùng `set -euo pipefail`, timestamp log, timeout ở job và cleanup archive/key bằng `trap`/`always()`.
+- Deploy thường chỉ seed tài khoản mới; không reset hash của tài khoản đã tồn tại và không chạy password-hygiene dựa trên audit history.
+- Health check chạy cả trên VPS và từ GitHub runner.
 
-## Chạy workflow thủ công
+## Chạy lại thủ công
 
-Trong tab `Actions`, chọn `CI and Production Deploy` -> `Run workflow`.
+```bash
+./deploy_github_actions.sh --watch
+```
 
-Các option manual:
-
-- `reset_user_passwords`: mặc định tắt. Chỉ bật khi thật sự muốn reset password seed user.
-
-## Bảo mật cần làm
-
-Mật khẩu root đã từng được chia sẻ trong chat nội bộ, nên nên rotate password VPS. Sau đó nên tạo user deploy riêng, cấp quyền Docker cần thiết, và chuyển từ password sang SSH key trong một bước cải tiến tiếp theo.
+Script luôn dispatch workflow từ `main`. Việc reset mật khẩu hàng loạt không còn là option deploy; nếu thật sự cần reset, phải dùng quy trình quản trị riêng có danh sách tài khoản, phê duyệt và audit rõ ràng.

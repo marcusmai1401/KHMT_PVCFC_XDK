@@ -538,6 +538,7 @@ export function App() {
           setNotice("Đã đổi mật khẩu thành công.");
         }}
         onCancel={voluntaryChange ? () => setVoluntaryChange(false) : undefined}
+        onLogout={mustChangePassword ? logout : undefined}
       />
     );
   }

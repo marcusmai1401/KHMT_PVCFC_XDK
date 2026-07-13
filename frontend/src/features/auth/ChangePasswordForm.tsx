@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CheckCircle2, Eye, EyeOff, KeyRound, ShieldCheck, XCircle } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, KeyRound, LogOut, ShieldCheck, XCircle } from "lucide-react";
 import { api, type LoginResponse } from "../../api/client";
 
 type Props = {
@@ -8,6 +8,7 @@ type Props = {
   userId: string;
   onChanged: (response: LoginResponse) => void;
   onCancel?: () => void;
+  onLogout?: () => void;
 };
 
 type Rule = {
@@ -43,7 +44,7 @@ function scorePassword(pw: string, old: string): { score: number; label: string;
   return { score, ...map[Math.min(score, map.length - 1)] };
 }
 
-export function ChangePasswordForm({ forced, displayName, userId, onChanged, onCancel }: Props) {
+export function ChangePasswordForm({ forced, displayName, userId, onChanged, onCancel, onLogout }: Props) {
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -189,6 +190,12 @@ export function ChangePasswordForm({ forced, displayName, userId, onChanged, onC
             {!forced && onCancel && (
               <button type="button" className="auth-secondary" onClick={onCancel}>
                 Hủy
+              </button>
+            )}
+            {forced && onLogout && (
+              <button type="button" className="auth-secondary" onClick={onLogout}>
+                <LogOut size={16} />
+                Đăng xuất
               </button>
             )}
           </div>

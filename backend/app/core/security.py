@@ -85,10 +85,29 @@ def current_principal(
     }
 
 
+def require_password_change_complete(
+    principal: dict[str, Any] = Depends(current_principal),
+) -> dict[str, Any]:
+    """Block business APIs until a temporary password has been replaced.
+
+    Authentication endpoints intentionally use ``current_principal`` directly,
+    allowing a pending account to inspect its session and change its password.
+    Every role-protected application endpoint passes through this dependency.
+    """
+    if principal.get("must_change_password") and not principal.get("sandbox"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn phải đổi mật khẩu trước khi sử dụng hệ thống",
+        )
+    return principal
+
+
 def require_role(*roles: Role):
     allowed = {role.value for role in roles}
 
-    def dependency(principal: dict[str, str] = Depends(current_principal)) -> dict[str, str]:
+    def dependency(
+        principal: dict[str, Any] = Depends(require_password_change_complete),
+    ) -> dict[str, Any]:
         if principal["role"] not in allowed:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tài khoản không có quyền thực hiện thao tác này")
         return principal

@@ -14984,21 +14984,30 @@ textarea {
   color: var(--text-main);
 }
 
-/* Login: compact internal gateway */
+/* Login: internal gateway (refined) */
 .auth-shell {
   place-items: center;
-  padding: 32px;
-  background: #f5f7fb;
+  padding: 40px;
+  background:
+    radial-gradient(1000px 640px at 12% -8%, rgba(22, 131, 75, 0.09), transparent 60%),
+    radial-gradient(820px 560px at 105% 108%, rgba(36, 53, 138, 0.08), transparent 58%),
+    var(--bg-main);
   color: var(--text-main);
   font-family: "Be Vietnam Pro", "Inter", "Segoe UI", ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
 .auth-content {
-  width: min(900px, 100%);
-  grid-template-columns: minmax(0, 360px) minmax(0, 420px);
+  width: min(980px, 100%);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 430px);
   align-items: stretch;
-  gap: 20px;
-  animation: none;
+  gap: 28px;
+  animation: authFadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.auth-content-compact {
+  width: min(540px, 100%);
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: center;
 }
 
 .auth-hero,
@@ -15012,29 +15021,29 @@ textarea {
 
 .auth-hero {
   align-content: start;
-  gap: 18px;
-  padding: 24px;
+  gap: 24px;
+  padding: 32px;
 }
 
 .auth-hero-brand {
-  gap: 14px;
+  gap: 16px;
 }
 
 .auth-hero-logo {
-  width: 56px;
-  height: 56px;
+  width: 60px;
+  height: 60px;
   border-radius: var(--radius-md);
   box-shadow: none;
 }
 
 .auth-hero-logo img {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
 }
 
 .auth-hero-name strong {
   color: var(--primary);
-  font-size: 17px;
+  font-size: 19px;
   line-height: 1.35;
   white-space: normal;
 }
@@ -15046,7 +15055,6 @@ textarea {
 }
 
 .auth-hero-tagline,
-.auth-hero-lede,
 .auth-hero-copyright,
 .auth-external-notice,
 .auth-help {
@@ -15055,22 +15063,40 @@ textarea {
 
 .auth-hero-lede {
   max-width: none;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border: 1px solid #d7eadf;
   border-radius: var(--radius-md);
   background: var(--brand-green-soft);
+  color: var(--brand-green-deep);
   font-size: 13px;
   font-weight: 650;
   line-height: 1.5;
 }
 
 .auth-hero-features {
-  display: none;
+  display: grid;
+  gap: 10px;
+}
+
+.auth-hero-features li {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--bg-main);
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+.auth-hero-features li:hover {
+  border-color: rgba(22, 131, 75, 0.32);
+  box-shadow: none;
+  transform: none;
 }
 
 .auth-hero-foot {
-  gap: 8px;
+  gap: 10px;
   margin-top: auto;
+  padding-top: 20px;
+  border-top: 1px dashed var(--border);
 }
 
 .auth-credits {
@@ -15089,19 +15115,26 @@ textarea {
 }
 
 .auth-card {
-  padding: 24px;
-  overflow: visible;
-  animation: none;
+  position: relative;
+  padding: 34px;
+  overflow: hidden;
+  animation: authCardIn 0.6s 0.05s cubic-bezier(0.16, 1, 0.3, 1) both;
+  box-shadow: var(--shadow-md);
 }
 
 .auth-card-glow {
-  display: none;
+  position: absolute;
+  inset: -1px -1px auto -1px;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-bright) 45%, var(--brand-green) 100%);
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
 }
 
 .auth-card-head {
-  gap: 6px;
-  margin-bottom: 18px;
-  padding-bottom: 16px;
+  gap: 7px;
+  margin-bottom: 22px;
+  padding-bottom: 18px;
 }
 
 .auth-card-eyebrow {
@@ -15115,11 +15148,11 @@ textarea {
 
 .auth-card-head h1 {
   color: var(--primary);
-  font-size: 24px;
+  font-size: 27px;
 }
 
 .auth-card-body {
-  gap: 14px;
+  gap: 16px;
 }
 
 .auth-field > span {
@@ -15133,28 +15166,34 @@ textarea {
 }
 
 .auth-input input {
-  min-height: 44px;
+  min-height: 46px;
   padding-top: 10px;
   padding-bottom: 10px;
   font-size: 15px;
 }
 
 .auth-submit {
-  min-height: 44px;
+  min-height: 46px;
   border-radius: var(--radius-md);
-  background: var(--accent);
-  box-shadow: none;
+  background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 100%);
+  box-shadow: 0 10px 22px -10px rgba(36, 53, 138, 0.45);
 }
 
 .auth-submit:hover:not(:disabled) {
-  background: var(--accent-hover);
-  box-shadow: none;
-  transform: none;
+  background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent-hover) 100%);
+  box-shadow: 0 14px 28px -10px rgba(36, 53, 138, 0.5);
+  transform: translateY(-1px);
 }
 
 .auth-card-foot {
-  margin-top: 18px;
-  padding-top: 14px;
+  margin-top: 22px;
+  padding-top: 18px;
+}
+
+@media (max-width: 700px) {
+  .auth-hero-features {
+    display: none;
+  }
 }
 
 /* App shell */

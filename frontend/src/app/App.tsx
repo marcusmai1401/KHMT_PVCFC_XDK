@@ -745,9 +745,9 @@ export function App() {
                 <span>Năng lực ET</span>
               </button>
             )}
-            <button className={tab === "fi" ? "active" : ""} onClick={() => navigateToTab("fi")} title="FI">
+            <button className={tab === "fi" ? "active" : ""} onClick={() => navigateToTab("fi")} title="FI (SK-CTKT)">
               <Lightbulb size={18} />
-              <span>FI</span>
+              <span>FI (SK-CTKT)</span>
             </button>
             {canAccessTab(role, "admin") && (
               <button className={tab === "admin" ? "active" : ""} onClick={() => navigateToTab("admin")} title="Quản trị">
@@ -1023,11 +1023,11 @@ export function App() {
           aria-current={tab === "fi" ? "page" : undefined}
           className={tab === "fi" ? "active" : ""}
           onClick={() => navigateToTab("fi")}
-          title="FI"
+          title="FI (SK-CTKT)"
           type="button"
         >
           <Lightbulb size={19} />
-          <span>FI</span>
+          <span>FI (SK-CTKT)</span>
         </button>
         {canAccessTab(role, "admin") && (
           <button

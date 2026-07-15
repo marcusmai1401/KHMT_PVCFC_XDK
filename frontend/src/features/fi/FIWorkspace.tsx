@@ -737,7 +737,7 @@ function SkImageViewer({
     <div className="image-viewer-backdrop" role="dialog" aria-modal="true" aria-label="Xem ảnh bằng chứng">
       <div className="image-viewer">
         <div className="image-viewer-toolbar">
-          <strong>{image.file_name}</strong>
+          <strong title={image.file_name}>{image.file_name}</strong>
           <div>
             {canDelete && (
               <button

@@ -6753,8 +6753,11 @@ th {
   color: #ffffff;
   display: grid;
   gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
   max-height: calc(100vh - 48px);
   max-height: calc(100dvh - 48px);
+  min-width: 0;
+  overflow: hidden;
   padding: 12px;
   width: min(980px, 100%);
 }
@@ -6764,9 +6767,12 @@ th {
   display: flex;
   gap: 12px;
   justify-content: space-between;
+  min-width: 0;
 }
 
 .image-viewer-toolbar strong {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -6788,6 +6794,8 @@ th {
   gap: 10px;
   grid-template-columns: 44px minmax(0, 1fr) 44px;
   min-height: min(68vh, 720px);
+  min-width: 0;
+  width: 100%;
 }
 
 .image-viewer-stage img {
@@ -6795,6 +6803,7 @@ th {
   justify-self: center;
   max-height: min(68vh, 720px);
   max-width: 100%;
+  min-width: 0;
   object-fit: contain;
 }
 

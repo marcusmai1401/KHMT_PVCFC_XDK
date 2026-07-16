@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import create_session
 from app.models.domain import HistoricalSnapshotModel, TeamMonthlySummaryModel, TeamReportModel
+from app.services.cache import cache_delete_prefix
 from app.services.okr.constants import TEAMS
 from app.services.okr.historical_snapshot import (
     _dashboard_month_columns,
@@ -639,29 +640,35 @@ def _record_parsed_report(
         )
 
 
-def _verify_completeness(db: Session, *, year: int = HISTORICAL_YEAR) -> dict[str, Any]:
+def _verify_completeness(
+    db: Session,
+    *,
+    year: int = HISTORICAL_YEAR,
+    months: tuple[int, ...] = HISTORICAL_MONTHS,
+) -> dict[str, Any]:
+    selected_months = tuple(sorted(set(months)))
     report_rows = db.execute(
         select(TeamReportModel.team, TeamReportModel.report_month).where(
             TeamReportModel.is_current_version.is_(True),
             TeamReportModel.report_status.in_(["submitted", "locked"]),
             TeamReportModel.report_year == year,
-            TeamReportModel.report_month.in_(HISTORICAL_MONTHS),
+            TeamReportModel.report_month.in_(selected_months),
         )
     ).all()
     summary_rows = db.execute(
         select(TeamMonthlySummaryModel.team, TeamMonthlySummaryModel.month).where(
             TeamMonthlySummaryModel.year == year,
-            TeamMonthlySummaryModel.month.in_(HISTORICAL_MONTHS),
+            TeamMonthlySummaryModel.month.in_(selected_months),
         )
     ).all()
     snapshot_rows = db.execute(
         select(HistoricalSnapshotModel.team, HistoricalSnapshotModel.month).where(
             HistoricalSnapshotModel.team.in_(TEAMS),
             HistoricalSnapshotModel.year == year,
-            HistoricalSnapshotModel.month.in_(HISTORICAL_MONTHS),
+            HistoricalSnapshotModel.month.in_(selected_months),
         )
     ).all()
-    expected = {(team, month) for team in TEAMS for month in HISTORICAL_MONTHS}
+    expected = {(team, month) for team in TEAMS for month in selected_months}
     report_set = {(team, int(month)) for team, month in report_rows if team in TEAMS and month}
     summary_set = {(team, int(month)) for team, month in summary_rows if team in TEAMS and month}
     snapshot_set = {(team, int(month)) for team, month in snapshot_rows if team in TEAMS and month}
@@ -669,6 +676,7 @@ def _verify_completeness(db: Session, *, year: int = HISTORICAL_YEAR) -> dict[st
     missing_summaries = sorted(expected - summary_set)
     missing_snapshots = sorted(expected - snapshot_set)
     return {
+        "months_checked": list(selected_months),
         "team_reports_complete": not missing_reports,
         "team_monthly_summaries_complete": not missing_summaries,
         "dashboard_history_snapshots_complete": not missing_snapshots,
@@ -725,7 +733,7 @@ def run_historical_import(
                     error_type="KR_MAPPING_MISSING",
                 )
             )
-            report.completeness = _verify_completeness(session)
+            report.completeness = _verify_completeness(session, months=selected_months)
             report.complete = False
             return report
 
@@ -900,7 +908,7 @@ def run_historical_import(
             + result.table_counts["team_monthly_summaries"]["updated"]
             for result in report.file_results
         )
-        report.completeness = _verify_completeness(session)
+        report.completeness = _verify_completeness(session, months=selected_months)
         report.complete = (
             not report.errors
             and report.completeness.get("team_reports_complete", False)
@@ -945,6 +953,8 @@ def main(argv: list[str] | None = None) -> int:
         commit=not args.no_commit,
         months=tuple(args.months),
     )
+    if not args.no_commit:
+        cache_delete_prefix("okr:dashboard")
     print(report.render_text())
     return 0 if report.complete else 1
 

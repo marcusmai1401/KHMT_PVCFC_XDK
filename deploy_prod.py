@@ -211,6 +211,8 @@ log "Rebuilding containers"
 {compose} up -d --build
 log "Running migrations"
 {compose} exec -T backend alembic upgrade head
+log "Importing historical OKR data for T5/2026"
+{compose} exec -T backend python scripts/import_historical.py /app/KHMT_Monthly --months 5 --imported-by deploy-import
 log "Seeding user accounts without changing existing passwords"
 {seed_block}
 log "Seeding ET competency frameworks and personnel"

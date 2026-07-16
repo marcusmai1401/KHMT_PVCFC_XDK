@@ -1,3 +1,4 @@
+from datetime import date, datetime
 from pathlib import Path
 import re
 import unicodedata
@@ -95,7 +96,9 @@ def detect_report_column_groups(sheet) -> list[tuple[int, int, int]]:
                 continue
             assessment_header = values[idx] if idx < len(values) else ""
             notes_header = values[idx + 1] if idx + 1 < len(values) else ""
-            if not _is_assessment_header(assessment_header) or not _is_notes_header(notes_header):
+            detailed_header = _is_assessment_header(assessment_header) and _is_notes_header(notes_header)
+            compact_merged_header = "báo cáo tình hình thực hiện" in value and idx + 2 <= len(values)
+            if not detailed_header and not compact_merged_header:
                 continue
             group = (idx, idx + 1, idx + 2)
             if group not in seen:
@@ -116,7 +119,9 @@ def _column_group_exists(sheet, group: tuple[int, int, int]) -> bool:
         assessment_header = str(sheet.cell(row, assessment_col).value or "").lower()
         notes_header = str(sheet.cell(row, notes_col).value or "").lower()
         if "tình hình thực hiện" in report_header:
-            return _is_assessment_header(assessment_header) and _is_notes_header(notes_header)
+            return (
+                _is_assessment_header(assessment_header) and _is_notes_header(notes_header)
+            ) or "báo cáo tình hình thực hiện" in report_header
     return False
 
 
@@ -149,7 +154,15 @@ def get_report_columns_for_month(sheet, team: str | None, month: int | None) -> 
 
 def _has_plan(report_text: str, assessment_text: str, notes: str) -> bool:
     text = f"{report_text} {assessment_text} {notes}".lower()
-    no_plan_tokens = ["không có kế hoạch", "khong co ke hoach", "n/a", "không áp dụng", "khong ap dung"]
+    no_plan_tokens = [
+        "không có kế hoạch",
+        "khong co ke hoach",
+        "không có chương trình",
+        "khong co chuong trinh",
+        "n/a",
+        "không áp dụng",
+        "khong ap dung",
+    ]
     return not any(token in text for token in no_plan_tokens)
 
 
@@ -371,6 +384,15 @@ def _team_summary_from_known_layout(
 ) -> tuple[str | None, dict[str, Any] | None]:
     report_col, assessment_col, _notes_col = report_cols
     candidates: list[tuple[int, int]] = []
+    summary_labels = ("kết quả đánh giá", "đánh giá chung", "kết luận chung")
+    for row in range(1, min(sheet.max_row, 60) + 1):
+        for col in range(1, sheet.max_column + 1):
+            label = _normalize_lookup_text(str(sheet.cell(row, col).value or ""))
+            if not any(token in label for token in map(_normalize_lookup_text, summary_labels)):
+                continue
+            value, source = _first_value_to_right(sheet, row, col)
+            if value:
+                return normalize_assessment(value) or value, source
     if team == "TBHTĐK":
         candidates.append((39, assessment_col))
     elif team == "TBCH":
@@ -408,6 +430,45 @@ def _infer_monthly_assessment_from_krs(assessments: list[dict[str, Any]]) -> str
     if "OK" in statuses:
         return "Hoàn thành"
     return None
+
+
+PLANNING_CONTEXT_COLUMNS = {
+    "sequence": 1,
+    "raw_team_kr_code": 2,
+    "team_kr_name": 3,
+    "measurement": 4,
+    "purpose": 5,
+    "measurement_frequency": 6,
+    "objective_weight": 7,
+    "action_plan": 8,
+    "start_date": 9,
+    "expected_completion_date": 10,
+    "budget_billion_vnd": 11,
+    "owner": 12,
+    "evaluator": 13,
+}
+
+
+def _json_cell_value(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
+def _planning_context(sheet, row: int) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    context: dict[str, Any] = {}
+    source_cells: dict[str, dict[str, Any]] = {}
+    for field_name, col in PLANNING_CONTEXT_COLUMNS.items():
+        value = _json_cell_value(sheet.cell(row, col).value)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            continue
+        context[field_name] = value
+        source_cells[field_name] = _cell_reference(sheet, row, col, field_name)
+    return context, source_cells
 
 
 def parse_team_report(
@@ -458,7 +519,9 @@ def parse_team_report(
         notes = _text(selected_sheet.cell(row, notes_col).value)
         has_plan = _has_plan(report_text, raw_assessment, notes)
         metrics = extract_metrics(report_text, workshop_code)
+        planning_context, planning_source_cells = _planning_context(selected_sheet, row)
         source_cells = {
+            **planning_source_cells,
             "implementation_report": _cell_reference(
                 selected_sheet, row, report_col, "Implementation_Report"
             ),
@@ -473,7 +536,7 @@ def parse_team_report(
             if warning:
                 warnings.append(warning)
         warnings.extend(warnings_for_ambiguous_metrics(metrics, source_cell))
-        if not assessment:
+        if not assessment and has_plan:
             warnings.append(
                 _warning(
                     "MISSING_REQUIRED_FIELD",
@@ -509,7 +572,11 @@ def parse_team_report(
         assessments.append(
             {
                 "workshop_kr_code": workshop_code,
+                "raw_team_kr_code": planning_context.get("raw_team_kr_code") or raw_code,
                 "kr_name": master[workshop_code].kr_name,
+                "team_kr_name": planning_context.get("team_kr_name")
+                or _text(selected_sheet.cell(row, 3).value),
+                "planning_context": planning_context,
                 "team_self_assessment": assessment,
                 "dashboard_status": dashboard_status,
                 "has_plan": has_plan,

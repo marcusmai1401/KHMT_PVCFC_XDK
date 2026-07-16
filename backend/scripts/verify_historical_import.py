@@ -19,12 +19,13 @@ from app.models.domain import (
     TeamReportModel,
 )
 from app.services.okr.constants import TEAMS
+from app.services.okr.rules import normalize_assessment
 from app.services.okr.team_normalizer import normalize_team_label
 
 
-MONTHS = [1, 2, 3, 4]
+MONTHS = [1, 2, 3, 4, 5]
 YEAR = 2026
-SOURCE_DIR = settings.workspace_dir / "KHMT_T1_T2_T3_T4"
+SOURCE_DIR = settings.workspace_dir / "KHMT_Monthly"
 TEMPLATE_DIR = settings.workspace_dir / "template_xlsx"
 
 SOURCE_FILES = {
@@ -32,6 +33,7 @@ SOURCE_FILES = {
     2: SOURCE_DIR / "OKR tháng 02-2026 - X.ĐK.xlsx",
     3: SOURCE_DIR / "OKR tháng 03-2026 - X.ĐK.xlsx",
     4: SOURCE_DIR / "OKR tháng 04-2026 - X.ĐK.xlsx",
+    5: SOURCE_DIR / "OKR tháng 05-2026 - X.ĐK.xlsx",
 }
 
 TEMPLATE_FILES = {
@@ -46,9 +48,10 @@ TEAM_ROW_RANGES = {
     2: range(22, 28),
     3: range(22, 28),
     4: range(20, 26),
+    5: range(20, 27),
 }
 
-DASHBOARD_MONTH_COLS = {1: 6, 2: 8, 3: 10, 4: 12}
+DASHBOARD_MONTH_COLS = {1: 6, 2: 8, 3: 10, 4: 12, 5: 14}
 
 
 def read_dashboard_cell(file_path: Path, month: int) -> dict[str, str]:
@@ -109,8 +112,17 @@ def read_team_level_from_xlsx(file_path: Path, team: str, month: int) -> dict[st
     for row in range(1, min(target_sheet.max_row, 60) + 1):
         for col in range(1, min(target_sheet.max_column, 22) + 1):
             raw = str(target_sheet.cell(row, col).value or "").strip().lower()
-            if "đánh giá chung" in raw or "đánh giá tháng" in raw or "danh gia chung" in raw:
-                for c2 in range(col + 1, min(target_sheet.max_column, col + 5) + 1):
+            if any(
+                label in raw
+                for label in (
+                    "đánh giá chung",
+                    "đánh giá tháng",
+                    "danh gia chung",
+                    "kết quả đánh giá",
+                    "kết luận chung",
+                )
+            ):
+                for c2 in range(col + 1, target_sheet.max_column + 1):
                     v = str(target_sheet.cell(row, c2).value or "").strip()
                     if v:
                         result["monthly_assessment"] = v
@@ -331,7 +343,13 @@ def print_month_report(month: int, db):
             xlsx_info = read_team_level_from_xlsx(source_file, team, month)
             xlsx_assessment = xlsx_info.get("monthly_assessment") or ""
             db_assessment = db_reports.get(team, {}).get("monthly_assessment") or ""
-            match = "MATCH" if xlsx_assessment and db_assessment and xlsx_assessment == db_assessment else ("SKIP" if not xlsx_assessment else "MISMATCH")
+            normalized_xlsx = normalize_assessment(xlsx_assessment)
+            normalized_db = normalize_assessment(db_assessment)
+            match = (
+                "MATCH"
+                if normalized_xlsx and normalized_db and normalized_xlsx == normalized_db
+                else ("SKIP" if not xlsx_assessment else "MISMATCH")
+            )
             print(f"    {team} team_report monthly: {match}  (xlsx='{xlsx_assessment}' vs db='{db_assessment}')")
 
     print()

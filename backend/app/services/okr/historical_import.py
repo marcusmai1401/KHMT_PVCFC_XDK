@@ -10,6 +10,7 @@ import threading
 from typing import Any
 
 from openpyxl import load_workbook
+from openpyxl.utils.cell import column_index_from_string
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -24,13 +25,14 @@ from app.services.okr.historical_snapshot import (
 )
 from app.services.okr.kr_mapping import KRMapping, mapping_by_code
 from app.services.okr.rules import normalize_assessment
+from app.services.okr.team_normalizer import normalize_team_label
 from app.services.okr.workbook import parse_team_report
 from app.services.repositories import json_safe, make_id, warning_from_dict
 
 
 SOURCE_FILE_PATTERN = re.compile(r"OKR tháng (\d{2})-(\d{4})", re.IGNORECASE)
 HISTORICAL_YEAR = 2026
-HISTORICAL_MONTHS = (1, 2, 3, 4)
+HISTORICAL_MONTHS = (1, 2, 3, 4, 5)
 TEMPLATE_FILES = {
     "TBHTĐK": "TBHTĐK.xlsx",
     "TBCH": "TBCH.xlsx",
@@ -172,16 +174,22 @@ def extract_month_year_from_filename(filename: str) -> tuple[int, int]:
     return month, year
 
 
-def discover_source_files(directory: Path) -> list[DiscoveredFile]:
+def discover_source_files(
+    directory: Path,
+    months: tuple[int, ...] | None = None,
+) -> list[DiscoveredFile]:
     discovered: list[DiscoveredFile] = []
+    selected_months = months or HISTORICAL_MONTHS
     if not directory.exists():
         return discovered
     for path in sorted(directory.glob("*.xlsx")):
+        if path.name.startswith("~$"):
+            continue
         try:
             month, year = extract_month_year_from_filename(path.name)
         except ValueError:
             continue
-        if year == HISTORICAL_YEAR and month in HISTORICAL_MONTHS:
+        if year == HISTORICAL_YEAR and month in selected_months:
             discovered.append(DiscoveredFile(path=path, month=month, year=year, file_name=path.name))
     return discovered
 
@@ -212,6 +220,7 @@ def resolve_kr_mapping(workspace_dir: Path | None = None) -> dict[str, KRMapping
     root = workspace_dir or settings.workspace_dir
     candidates = [
         root / "template_xlsx" / "OKR_Workshop.xlsx",
+        root / "KHMT_Monthly" / "OKR tháng 04-2026 - X.ĐK.xlsx",
         root / "KHMT_T1_T2_T3_T4" / "OKR tháng 04-2026 - X.ĐK.xlsx",
     ]
     for candidate in candidates:
@@ -254,6 +263,138 @@ def extract_dashboard_history_lookup(file_path: Path) -> dict[tuple[str, int], s
         return values
     finally:
         workbook.close()
+
+
+def _normalize_dashboard_status(value: Any) -> str | None:
+    status = str(value or "").strip().upper().replace(" ", "")
+    if status in {"GOOD", "OK", "NG"}:
+        return status
+    if status in {"#N/A", "N/A", "NA"}:
+        return "#N/A"
+    return None
+
+
+def extract_dashboard_matrix_lookup(
+    file_path: Path,
+    kr_mapping: dict[str, KRMapping],
+) -> dict[tuple[str, str], dict[str, Any]]:
+    workbook = load_workbook(file_path, read_only=True, data_only=True, keep_links=False)
+    try:
+        if "Dashboard" not in workbook.sheetnames:
+            return {}
+        sheet = workbook["Dashboard"]
+        result: dict[tuple[str, str], dict[str, Any]] = {}
+        for row in range(1, min(sheet.max_row, 20) + 1):
+            team, _original = normalize_team_label(str(sheet.cell(row, 1).value or ""))
+            if team not in TEAMS:
+                continue
+            row_values: dict[tuple[str, str], dict[str, Any]] = {}
+            for code, mapping in kr_mapping.items():
+                col = column_index_from_string(mapping.dashboard_column)
+                status = _normalize_dashboard_status(sheet.cell(row, col).value)
+                if status is None:
+                    continue
+                row_values[(team, code)] = {
+                    "status": status,
+                    "source_cell": {
+                        "sheet_name": "Dashboard",
+                        "row": row,
+                        "column": mapping.dashboard_column,
+                        "field_name": "Dashboard_Status",
+                    },
+                }
+            if len(row_values) >= min(20, len(kr_mapping)):
+                result.update(row_values)
+        return result
+    finally:
+        workbook.close()
+
+
+def apply_dashboard_matrix_statuses(
+    parsed: dict[str, Any],
+    dashboard_matrix: dict[tuple[str, str], dict[str, Any]],
+    kr_mapping: dict[str, KRMapping],
+) -> None:
+    team = str(parsed.get("team") or "")
+    if team not in TEAMS or not dashboard_matrix:
+        return
+    warnings = parsed.setdefault("warnings", [])
+    warnings[:] = [
+        warning
+        for warning in warnings
+        if warning.get("warning_type") != "TEMPLATE_VALIDATION_ERROR"
+    ]
+    source_references = parsed.setdefault("source_cell_references", [])
+    assessments = parsed.setdefault("assessments", [])
+    assessments_by_code = {
+        str(assessment.get("workshop_kr_code")): assessment
+        for assessment in assessments
+        if assessment.get("workshop_kr_code")
+    }
+    for code, mapping in kr_mapping.items():
+        authoritative = dashboard_matrix.get((team, code))
+        if authoritative is None:
+            continue
+        dashboard_status = str(authoritative["status"])
+        dashboard_source = dict(authoritative["source_cell"])
+        assessment = assessments_by_code.get(code)
+        if assessment is None:
+            if dashboard_status == "#N/A":
+                continue
+            warning = {
+                "warning_type": "MISSING_TEAM_KR_DETAIL",
+                "severity": "HIGH",
+                "source_cell": dashboard_source,
+                "extracted_value": {
+                    "team": team,
+                    "workshop_kr_code": code,
+                    "dashboard_status": dashboard_status,
+                },
+                "reason": "Dashboard has a status but the team report has no matching KR detail row",
+                "admin_action": "PENDING",
+            }
+            warnings.append(warning)
+            assessment = {
+                "workshop_kr_code": code,
+                "raw_team_kr_code": "",
+                "kr_name": mapping.kr_name,
+                "team_kr_name": "",
+                "planning_context": {},
+                "team_self_assessment": "",
+                "dashboard_status": dashboard_status,
+                "has_plan": True,
+                "implementation_report": "",
+                "notes": "",
+                "source_cell": dashboard_source,
+                "source_cells": {"dashboard_status": dashboard_source},
+                "metrics": [],
+                "detail_missing": True,
+            }
+            assessments.append(assessment)
+            assessments_by_code[code] = assessment
+            source_references.append(dashboard_source)
+            continue
+        parsed_status = str(assessment.get("dashboard_status") or "#N/A")
+        if parsed_status != dashboard_status:
+            warnings.append(
+                {
+                    "warning_type": "DASHBOARD_STATUS_MISMATCH",
+                    "severity": "MEDIUM",
+                    "source_cell": dashboard_source,
+                    "extracted_value": {
+                        "team": team,
+                        "workshop_kr_code": code,
+                        "team_report_status": parsed_status,
+                        "dashboard_status": dashboard_status,
+                    },
+                    "reason": "Dashboard status differs from the status derived from the team report",
+                    "admin_action": "PENDING",
+                }
+            )
+        assessment["dashboard_status"] = dashboard_status
+        assessment.setdefault("source_cells", {})["dashboard_status"] = dashboard_source
+        assessment["dashboard_status_from_dashboard"] = True
+        source_references.append(dashboard_source)
 
 
 def parse_template_report(
@@ -311,6 +452,14 @@ def upsert_team_report(
             TeamReportModel.is_current_version.is_(True),
         )
     ).scalars().all()
+    for existing in existing_records:
+        if (
+            existing.file_hash == source_hash
+            and existing.assessments == parsed_data.get("assessments", [])
+            and existing.team_level == parsed_data.get("team_level", {})
+            and existing.source_cell_references == parsed_data.get("source_cell_references", [])
+        ):
+            return existing, "skipped"
     version = 1
     replaced_report_id = None
     action = "inserted"
@@ -391,6 +540,14 @@ def upsert_team_monthly_summary(
         db.add(record)
         db.flush()
         return record, "inserted"
+    if (
+        existing.discipline_status == discipline_status
+        and existing.discipline_description == team_level.get("discipline_description")
+        and existing.related_kr == team_level.get("related_kr")
+        and existing.monthly_assessment == monthly_assessment
+        and existing.stats == stats
+    ):
+        return existing, "skipped"
     existing.discipline_status = discipline_status
     existing.discipline_description = team_level.get("discipline_description")
     existing.related_kr = team_level.get("related_kr")
@@ -467,7 +624,8 @@ def _record_parsed_report(
         result.teams_imported.append(str(parsed.get("team")))
         result.records_per_team[str(parsed.get("team"))] = len(parsed.get("assessments") or [])
         for warning in parsed.get("warnings", []):
-            warning_from_dict(db, report.id, warning)
+            if report_action != "skipped":
+                warning_from_dict(db, report.id, warning)
             result.warnings.append(_issue_from_warning(source_path.name, warning))
     except Exception as exc:
         result.success = False
@@ -532,6 +690,7 @@ def run_historical_import(
     db: Session | None = None,
     workspace_dir: Path | None = None,
     commit: bool = True,
+    months: tuple[int, ...] | None = None,
 ) -> ImportSessionReport:
     source_directory = Path(source_directory)
     root = workspace_dir or source_directory.parent
@@ -539,9 +698,13 @@ def run_historical_import(
     session = db or create_session()
     report = ImportSessionReport()
     try:
-        discovered = discover_source_files(source_directory)
+        selected_months = tuple(sorted(set(months or HISTORICAL_MONTHS)))
+        invalid_months = [month for month in selected_months if month not in HISTORICAL_MONTHS]
+        if invalid_months:
+            raise ValueError(f"Unsupported historical import months: {invalid_months}")
+        discovered = discover_source_files(source_directory, selected_months)
         by_month = {item.month: item for item in discovered}
-        for required_month in HISTORICAL_MONTHS:
+        for required_month in selected_months:
             if required_month not in by_month:
                 report.warnings.append(
                     ImportIssue(
@@ -571,7 +734,8 @@ def run_historical_import(
             file_result = FileImportResult(file_name=item.file_name, month=item.month, year=item.year)
             report.file_results.append(file_result)
             try:
-                read_workbook_with_timeout(item.path)
+                probe_workbook = read_workbook_with_timeout(item.path)
+                probe_workbook.close()
             except Exception as exc:
                 file_result.success = False
                 file_result.errors.append(
@@ -595,6 +759,20 @@ def run_historical_import(
                         severity="HIGH",
                         reason=f"Cannot parse dashboard history fallback: {exc}",
                         error_type="DASHBOARD_HISTORY_PARSE_FAILED",
+                    )
+                )
+
+            try:
+                dashboard_matrix = extract_dashboard_matrix_lookup(item.path, kr_mapping)
+            except Exception as exc:
+                dashboard_matrix = {}
+                file_result.warnings.append(
+                    ImportIssue(
+                        source_file=item.file_name,
+                        sheet="Dashboard",
+                        severity="HIGH",
+                        reason=f"Cannot parse dashboard KR matrix: {exc}",
+                        error_type="DASHBOARD_MATRIX_PARSE_FAILED",
                     )
                 )
 
@@ -623,7 +801,7 @@ def run_historical_import(
                     )
                 )
 
-            if item.month in {1, 2, 3}:
+            if item.month != 4:
                 for team in TEAMS:
                     try:
                         parsed = parse_team_report(
@@ -635,6 +813,7 @@ def run_historical_import(
                         )
                         parsed["source_path"] = item.path
                         _apply_dashboard_fallback(parsed, dashboard_history)
+                        apply_dashboard_matrix_statuses(parsed, dashboard_matrix, kr_mapping)
                         _record_parsed_report(
                             session,
                             file_result,
@@ -677,6 +856,7 @@ def run_historical_import(
                             kr_mapping,
                         )
                         _apply_dashboard_fallback(parsed, dashboard_history)
+                        apply_dashboard_matrix_statuses(parsed, dashboard_matrix, kr_mapping)
                         _record_parsed_report(
                             session,
                             file_result,
@@ -739,20 +919,32 @@ def run_historical_import(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Import historical KHMT/OKR data for T1-T4 2026")
+    parser = argparse.ArgumentParser(description="Import historical KHMT/OKR data for T1-T5 2026")
     parser.add_argument(
         "source_directory",
         nargs="?",
-        default=str(settings.workspace_dir / "KHMT_T1_T2_T3_T4"),
+        default=str(settings.workspace_dir / "KHMT_Monthly"),
         help="Directory containing historical source workbooks",
     )
     parser.add_argument("--imported-by", default="historical_import")
-    parser.add_argument("--no-commit", action="store_true", help="Run through parsing/storage without committing")
+    parser.add_argument(
+        "--months",
+        nargs="+",
+        type=int,
+        default=list(HISTORICAL_MONTHS),
+        help="Only import the selected month numbers (for example: --months 5)",
+    )
+    parser.add_argument(
+        "--no-commit",
+        action="store_true",
+        help="Run through parsing/storage without committing",
+    )
     args = parser.parse_args(argv)
     report = run_historical_import(
         Path(args.source_directory),
         imported_by=args.imported_by,
         commit=not args.no_commit,
+        months=tuple(args.months),
     )
     print(report.render_text())
     return 0 if report.complete else 1

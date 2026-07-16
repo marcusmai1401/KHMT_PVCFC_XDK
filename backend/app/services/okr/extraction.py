@@ -36,9 +36,35 @@ def _target(source: str) -> float | None:
     return _number(match.group("target")) if match else None
 
 
+def _is_date_like_ratio(source: str, match: re.Match[str]) -> bool:
+    actual_text = match.group("actual")
+    total_text = match.group("total")
+    if any(separator in actual_text or separator in total_text for separator in (".", ",")):
+        return False
+    actual = int(actual_text)
+    total = int(total_text)
+    if not (1 <= actual <= 31 and 1 <= total <= 12):
+        return False
+    before = source[max(0, match.start() - 24) : match.start()].lower()
+    after = source[match.end() : match.end() + 20].lower()
+    if re.match(r"\s*/\s*\d{2,4}", after):
+        return True
+    if re.match(r"\s*[:~]", after):
+        return True
+    return bool(
+        re.search(
+            r"(?:ngày|ngay|đến|den|từ|tu|tháng|chạy bộ|lần\s*\d+\s*:)\s*$",
+            before,
+            re.IGNORECASE,
+        )
+    )
+
+
 def _ratio_metrics(source: str, kind: str, target: float | None, confidence: float = 0.9) -> list[ExtractedMetric]:
     metrics = []
     for match in RATIO_RE.finditer(source):
+        if _is_date_like_ratio(source, match):
+            continue
         actual = _number(match.group("actual"))
         total = _number(match.group("total"))
         percentage = round(actual / total * 100, 2) if total else None

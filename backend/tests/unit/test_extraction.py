@@ -50,3 +50,12 @@ def test_ambiguous_metrics_warning():
     assert len(metrics) == 2
     assert warnings
     assert warnings[0]["warning_type"] == "AMBIGUOUS_DATA"
+
+
+def test_ratio_extraction_ignores_dates_but_keeps_progress_ratios():
+    metrics = extract_metrics(
+        "Chạy bộ 09/05: tham gia 11/13 người; ngày 23/05/2026 tham gia 10/12 người",
+        "O6.KR1",
+    )
+
+    assert [(metric.actual, metric.total) for metric in metrics] == [(11, 13), (10, 12)]

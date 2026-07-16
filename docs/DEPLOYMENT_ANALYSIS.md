@@ -139,7 +139,7 @@ KHMT Hàng tháng/
 │   └── backups/
 │
 ├── template_xlsx/                    # Excel templates cho 4 đội/tổ
-├── KHMT_T1_T2_T3_T4/                # Historical OKR data
+├── KHMT_Monthly/                    # Historical OKR data
 ├── docs/                             # Technical docs
 │
 ├── start-dev.ps1                     # Dev launcher (PowerShell)

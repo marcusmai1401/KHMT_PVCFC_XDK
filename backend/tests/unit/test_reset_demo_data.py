@@ -50,7 +50,7 @@ def test_reset_demo_data_preserves_verified_historical_imports(db_session, tmp_p
     monkeypatch.setattr(settings, "workspace_dir", tmp_path)
     monkeypatch.setattr(settings, "storage_dir", storage_dir)
 
-    historical_file = tmp_path / "KHMT_T1_T2_T3_T4" / "OKR tháng 01-2026 - X.ĐK.xlsx"
+    historical_file = tmp_path / "KHMT_Monthly" / "OKR tháng 01-2026 - X.ĐK.xlsx"
     historical_file.parent.mkdir()
     historical_file.write_text("verified", encoding="utf-8")
     demo_upload = upload_dir / "demo.xlsx"

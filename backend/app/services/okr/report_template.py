@@ -231,7 +231,7 @@ def _load_base_workbook(target: Path):
             for candidate in [
                 settings.source_okr_workbook,
                 settings.workspace_dir / "template_xlsx" / APPROVED_TEMPLATE_FILENAME,
-                settings.workspace_dir / "KHMT_T1_T2_T3_T4" / "OKR tháng 04-2026 - X.ĐK.xlsx",
+                settings.workspace_dir / "KHMT_Monthly" / "OKR tháng 04-2026 - X.ĐK.xlsx",
             ]
             if candidate.exists()
         ),

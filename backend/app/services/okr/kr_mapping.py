@@ -67,7 +67,7 @@ def candidate_master_workbook_paths() -> list[Path]:
     return [
         settings.source_okr_workbook,
         settings.workspace_dir / "template_xlsx" / "OKR_Workshop.xlsx",
-        settings.workspace_dir / "KHMT_T1_T2_T3_T4" / "OKR tháng 04-2026 - X.ĐK.xlsx",
+        settings.workspace_dir / "KHMT_Monthly" / "OKR tháng 04-2026 - X.ĐK.xlsx",
     ]
 
 

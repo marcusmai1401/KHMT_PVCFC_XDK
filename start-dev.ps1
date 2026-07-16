@@ -251,7 +251,7 @@ function Seed-ProdLikeData {
     if (Test-TcpPort $BackendPort) {
         throw "Backend đang chạy trên port $BackendPort. Dừng backend trước khi seed."
     }
-    $historicalDir = Join-Path $RootDir "KHMT_T1_T2_T3_T4"
+    $historicalDir = Join-Path $RootDir "KHMT_Monthly"
     $bm01Workbook = Join-Path $RootDir "FI xlsx\BM 01 Dang ky - Danh gia SK _Rev1.xlsx"
 
     # Mirror exactly the production deploy steps (deploy_prod.py:138-196).

@@ -19,7 +19,7 @@ RUN pip install --upgrade pip \
     && pip install .
 
 COPY template_xlsx /app/template_xlsx
-COPY KHMT_T1_T2_T3_T4 /app/KHMT_T1_T2_T3_T4
+COPY KHMT_Monthly /app/KHMT_Monthly
 
 RUN mkdir -p /app/storage/uploads /app/storage/exports /app/storage/templates /app/storage/backups
 

@@ -12,7 +12,7 @@ $RootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BackendDir = Join-Path $RootDir "backend"
 $BackendVenv = Join-Path $BackendDir ".venv"
 $BackendPython = Join-Path $BackendVenv "Scripts\python.exe"
-$HistoricalDir = Join-Path $RootDir "KHMT_T1_T2_T3_T4"
+$HistoricalDir = Join-Path $RootDir "KHMT_Monthly"
 $BM01Workbook = Join-Path $RootDir "FI xlsx\BM 01 Dang ky - Danh gia SK _Rev1.xlsx"
 
 function Write-Step {

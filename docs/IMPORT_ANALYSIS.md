@@ -9,7 +9,7 @@
 
 - Website/dashboard phải hiển thị theo cấu trúc cố định của hệ thống, không phụ thuộc layout Excel gốc.
 - Tool import được phép dò động theo nhãn, header, tên đội/tổ, tháng báo cáo và source cell; mục tiêu là lấy đúng dữ liệu để đưa lên dashboard web.
-- T1, T2, T3 lấy dữ liệu từ 3 file gốc chưa chuẩn hóa trong `KHMT_T1_T2_T3_T4/`.
+- T1, T2, T3 lấy dữ liệu từ 3 file gốc chưa chuẩn hóa trong `KHMT_Monthly/`.
 - T4 là tháng đã được user chuẩn hóa kỹ hơn theo template chung; dữ liệu đội/tổ T4 ưu tiên đọc từ `template_xlsx/` khi import team reports.
 - Các template T4 hiện có: `template_xlsx/TBHTĐK.xlsx`, `template_xlsx/TBCH.xlsx`, `template_xlsx/TBĐL.xlsx`, `template_xlsx/TCĐK.xlsx`; `template_xlsx/OKR_Workshop.xlsx` là template cấp xưởng.
 - Sheet `data` còn một số block chưa chắc mapping KR; trước mắt không coi các block chưa xác nhận là blocker. Ưu tiên lấy dữ liệu từ report đội/tổ và Dashboard.
@@ -737,7 +737,7 @@ Import chia theo 3 nhóm dữ liệu:
 - Upsert vào `historical_snapshots` table (dedup by source_file_hash + team + month + year + source_range)
 
 **Bước 2: Import Team Reports** (4 sheets × 1 file)
-- T1-T3: đọc team report từ workbook tháng tương ứng trong `KHMT_T1_T2_T3_T4/`.
+- T1-T3: đọc team report từ workbook tháng tương ứng trong `KHMT_Monthly/`.
 - T4: ưu tiên đọc team report từ file template đã chuẩn hóa trong `template_xlsx/`.
 - Với mỗi team (`TBHTĐK`, `TBCH`, `TBĐL`, `TCĐK`):
   - Gọi `parse_team_report(path, team=team_code, month=report_month, year=2026)`.
@@ -824,7 +824,7 @@ User mở Dashboard
 5. **Add discipline import fields** cho T4 `TBĐL` và `TBCH`.
 6. **Upsert `team_monthly_summaries`** từ `team_reports.team_level` + discipline override theo `(team, month, year)`.
 7. **Viết import script** (`scripts/import_historical.py`) với nguồn:
-   - T1-T3: raw workbooks trong `KHMT_T1_T2_T3_T4/`
+   - T1-T3: raw workbooks trong `KHMT_Monthly/`
    - T4 team reports: ưu tiên `template_xlsx/`
 8. **Chạy import** từng tháng T1 → T4.
 9. **Verify** dashboard hiển thị đúng T4 và có giải thích kỷ luật.

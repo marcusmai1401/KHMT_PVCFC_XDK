@@ -221,7 +221,6 @@ def resolve_kr_mapping(workspace_dir: Path | None = None) -> dict[str, KRMapping
     candidates = [
         root / "template_xlsx" / "OKR_Workshop.xlsx",
         root / "KHMT_Monthly" / "OKR tháng 04-2026 - X.ĐK.xlsx",
-        root / "KHMT_T1_T2_T3_T4" / "OKR tháng 04-2026 - X.ĐK.xlsx",
     ]
     for candidate in candidates:
         if not candidate.exists():

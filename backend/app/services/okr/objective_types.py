@@ -15,6 +15,7 @@ VisualKind = Literal[
     "narrative_card",
     "progress_card",
     "kpi_badges",
+    "sap_compliance",
 ]
 
 
@@ -32,6 +33,7 @@ VALID_VISUAL_KINDS: tuple[VisualKind, ...] = (
     "narrative_card",
     "progress_card",
     "kpi_badges",
+    "sap_compliance",
 )
 
 REQUIRED_VISUAL_KINDS_BY_OBJECTIVE: dict[ObjectiveCode, tuple[VisualKind, ...]] = {

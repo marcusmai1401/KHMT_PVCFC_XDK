@@ -111,7 +111,7 @@ def test_reset_demo_data_preserves_verified_historical_imports(db_session, tmp_p
             source_sheet="Dashboard",
             source_range="A1:B2",
             team="TBCH",
-            month=5,
+            month=7,
             year=2026,
             imported_by="admin",
         )

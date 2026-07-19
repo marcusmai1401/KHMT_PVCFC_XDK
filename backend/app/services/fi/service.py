@@ -732,6 +732,7 @@ def build_fi_report_export_filters(
     registration_months: str | None = None,
     decisions: str | None = None,
     khmt: str | None = None,
+    khmt_periods: str | None = None,
     completion: str | None = None,
     authors: str | None = None,
     submitters: str | None = None,
@@ -741,6 +742,7 @@ def build_fi_report_export_filters(
         "registration_months": _parse_month_values(registration_months),
         "decisions": _parse_allowed_values(decisions, FI_EXPORT_DECISIONS, "decisions"),
         "khmt": _parse_allowed_values(khmt, FI_EXPORT_KHMT_FILTERS, "khmt"),
+        "khmt_periods": _parse_khmt_period_values(khmt_periods),
         "completion": _parse_allowed_values(completion, FI_EXPORT_COMPLETION_FILTERS, "completion"),
         "authors": _parse_csv_values(authors),
         "submitters": _parse_csv_values(submitters),
@@ -773,17 +775,32 @@ def _parse_csv_values(value: str | None) -> set[str]:
     return {item.strip() for item in value.split(",") if item.strip()}
 
 
-def _parse_month_values(value: str | None) -> set[int]:
+def _parse_month_values(value: str | None, field: str = "registration_months") -> set[int]:
     months: set[int] = set()
     for item in _parse_csv_values(value):
         try:
             month = int(item)
         except ValueError as exc:
-            raise ValueError("registration_months chỉ nhận giá trị tháng 1-12") from exc
+            raise ValueError(f"{field} chỉ nhận giá trị tháng 1-12") from exc
         if month < 1 or month > 12:
-            raise ValueError("registration_months chỉ nhận giá trị tháng 1-12")
+            raise ValueError(f"{field} chỉ nhận giá trị tháng 1-12")
         months.add(month)
     return months
+
+
+def _parse_khmt_period_values(value: str | None) -> set[str]:
+    periods: set[str] = set()
+    for item in _parse_csv_values(value):
+        try:
+            year_text, month_text = item.split("-", maxsplit=1)
+            year = int(year_text)
+            month = int(month_text)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("khmt_periods chỉ nhận giá trị dạng YYYY-M") from exc
+        if year < 2020 or year > 2100 or month < 1 or month > 12:
+            raise ValueError("khmt_periods chỉ nhận giá trị dạng YYYY-M")
+        periods.add(f"{year}-{month}")
+    return periods
 
 
 def _parse_allowed_values(value: str | None, allowed: set[str], field: str) -> set[str]:
@@ -808,6 +825,7 @@ def _fi_export_record_matches(record: SKCTKTModel, filters: dict[str, set[Any]],
     months = filters.get("registration_months") or set()
     decisions = filters.get("decisions") or set()
     khmt = filters.get("khmt") or set()
+    khmt_periods = filters.get("khmt_periods") or set()
     completion = filters.get("completion") or set()
     authors = filters.get("authors") or set()
     submitters = filters.get("submitters") or set()
@@ -819,6 +837,12 @@ def _fi_export_record_matches(record: SKCTKTModel, filters: dict[str, set[Any]],
         return False
     if khmt and _fi_khmt_filter(record) not in khmt:
         return False
+    if khmt_periods:
+        if _fi_khmt_filter(record) == "in":
+            if f"{record.khmt_year}-{record.khmt_month}" not in khmt_periods:
+                return False
+        elif "out" not in khmt:
+            return False
     if completion and _fi_completion_filter(record) not in completion:
         return False
     author_id = effective_author_user_id(record, db) or record.author_user_id
@@ -990,6 +1014,7 @@ def _write_fi_export_summary(
         ("Tháng đăng ký", _filter_value_text(filters.get("registration_months"), {}, prefix="T")),
         ("Kết luận LĐX", _filter_value_text(filters.get("decisions"), FI_DECISION_LABELS)),
         ("KHMT", _filter_value_text(filters.get("khmt"), FI_KHMT_LABELS)),
+        ("Kỳ KHMT", _khmt_period_filter_text(filters.get("khmt_periods"))),
         ("Hoàn thành", _filter_value_text(filters.get("completion"), FI_COMPLETION_LABELS)),
     ]
     sheet.merge_cells("A9:B9")
@@ -1044,6 +1069,16 @@ def _write_fi_export_summary(
         "Hoàn thành",
         Counter(FI_COMPLETION_LABELS[_fi_completion_filter(record)] for record in records),
     )
+
+
+def _khmt_period_filter_text(values: set[Any] | None) -> str:
+    if not values:
+        return "Tất cả"
+    periods = []
+    for value in values:
+        year_text, month_text = str(value).split("-", maxsplit=1)
+        periods.append((int(year_text), int(month_text)))
+    return ", ".join(f"T{month:02d}/{year}" for year, month in sorted(periods))
 
 
 def _filter_value_text(values: set[Any] | None, labels: dict[str, str], *, prefix: str = "") -> str:

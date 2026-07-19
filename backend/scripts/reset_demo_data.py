@@ -41,7 +41,7 @@ from app.services.cache import cache_delete_prefix
 
 HISTORICAL_SOURCE_TYPE = "historical_import"
 VERIFIED_HISTORICAL_YEAR = 2026
-VERIFIED_HISTORICAL_MONTHS = {0, 1, 2, 3, 4}
+VERIFIED_HISTORICAL_MONTHS = {0, 1, 2, 3, 4, 5, 6}
 SK_CODE_PATTERN = re.compile(r"^(?P<prefix>.+)-(?P<number>\d{4})$")
 
 

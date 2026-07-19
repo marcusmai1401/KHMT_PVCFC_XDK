@@ -741,11 +741,13 @@ def test_fi_history_export_uses_history_filters(client, admin_headers):
         "FI/06/2026-TCĐK-01",
     }
     assert exported_codes(
-        "?teams=TBĐL&registration_months=6&decisions=approved&khmt=in&completion=done"
+        "?teams=TBĐL&registration_months=6&decisions=approved&khmt=in&khmt_periods=2026-6&completion=done"
     ) == ["FI/06/2026-TBĐL-01"]
 
     invalid = client.get("/api/v1/fi/reports/export?registration_months=13", headers=admin_headers)
     assert invalid.status_code == 400
+    invalid_khmt_period = client.get("/api/v1/fi/reports/export?khmt_periods=2026-13", headers=admin_headers)
+    assert invalid_khmt_period.status_code == 400
 
 
 def test_okr_duplicate_requires_confirmation_and_export_is_valid_xlsx(client, admin_headers):

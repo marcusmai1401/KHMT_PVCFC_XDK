@@ -594,6 +594,29 @@ def _visual_from_chart_block(
     )
 
 
+def _sap_compliance_visual(
+    snapshot_blocks: dict[str, list[dict[str, Any]]],
+    *,
+    month: int,
+    year: int,
+) -> VisualBlock | None:
+    payloads = snapshot_blocks.get("sap_compliance") or []
+    if not payloads:
+        return None
+    payload = dict(payloads[0])
+    period = payload.get("period") or {}
+    if int(period.get("month") or 0) != month or int(period.get("year") or 0) != year:
+        return None
+    return _visual(
+        visual_id="o6_sap_compliance",
+        kind="sap_compliance",
+        title=str(payload.get("title") or "Tuân thủ nghiệp vụ SAP"),
+        data_state="ready",
+        source="dashboard_snapshot",
+        payload=payload,
+    )
+
+
 def _kr_items_for_objective(
     summaries: list[dict[str, Any]],
     matrix: dict[str, Any],
@@ -1040,23 +1063,27 @@ def build_objective_sections(
         ),
         headcounts,
     )
+    o6_visuals = [
+        running_visual,
+        sports_visual,
+        _narrative_from_objective(
+            "O6",
+            "Chia sẻ văn hóa và hoạt động chung",
+            minor_okr_summary,
+            matrix,
+            has_locked_data,
+            has_period_data,
+            visual_id="o6_culture",
+        ),
+    ]
+    sap_visual = _sap_compliance_visual(snapshot_blocks, month=month, year=year)
+    if sap_visual is not None:
+        o6_visuals.append(sap_visual)
     sections.append(
         _section(
             "O6",
             status=_objective_status(matrix, "O6", has_period_data),
-            visuals=[
-                running_visual,
-                sports_visual,
-                _narrative_from_objective(
-                    "O6",
-                    "Chia sẻ văn hóa và hoạt động chung",
-                    minor_okr_summary,
-                    matrix,
-                    has_locked_data,
-                    has_period_data,
-                    visual_id="o6_culture",
-                ),
-            ],
+            visuals=o6_visuals,
             conclusion="Theo dõi mức độ tham gia hoạt động VHDN, chạy bộ và hội thao trong kỳ.",
         )
     )

@@ -6,6 +6,7 @@ import {
   hasKhmtPendingChange,
   isKhmtConsidered,
   khmtLabel,
+  matchesHistoryKhmtFilters,
   recordSubmitterId,
   visibleActionsForSk,
 } from "./FIWorkspace";
@@ -199,6 +200,21 @@ describe("FI KHMT display", () => {
     expect(khmtLabel(staleApproved)).toBe("Chưa vào KHMT");
     expect(isKhmtConsidered(deferred)).toBe(false);
     expect(khmtLabel(deferred)).toBe("Chưa vào KHMT");
+  });
+
+  it("refines Đã vào KHMT by the selected KHMT months", () => {
+    const january = { consider_for_khmt: true, khmt_month: 1 };
+    const june = { consider_for_khmt: true, khmt_month: 6 };
+    const outside = { consider_for_khmt: false, khmt_month: null };
+
+    const january2026 = { ...january, khmt_year: 2026 };
+    const june2026 = { ...june, khmt_year: 2026 };
+
+    expect(matchesHistoryKhmtFilters(january2026, ["in"], ["2026-1", "2026-6"])).toBe(true);
+    expect(matchesHistoryKhmtFilters(june2026, ["in"], ["2026-1"])).toBe(false);
+    expect(matchesHistoryKhmtFilters({ ...january, khmt_year: 2027 }, ["in"], ["2026-1"])).toBe(false);
+    expect(matchesHistoryKhmtFilters(outside, ["in"], ["2026-1"])).toBe(false);
+    expect(matchesHistoryKhmtFilters(outside, ["in", "out"], ["2026-1"])).toBe(true);
   });
 });
 

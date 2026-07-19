@@ -34,7 +34,7 @@ def test_remote_deploy_verifies_archive_and_never_resets_existing_passwords():
     assert "trap 'rm -f -- /tmp/okr-deploy-random.tar.gz' EXIT" in command
     historical_import = (
         "python scripts/import_historical.py /app/KHMT_Monthly "
-        "--months 5 --imported-by deploy-import"
+        "--months 5 6 --imported-by deploy-import"
     )
     assert historical_import in command
     assert command.index("alembic upgrade head") < command.index(historical_import)

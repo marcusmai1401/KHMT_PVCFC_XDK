@@ -1,5 +1,7 @@
 from datetime import datetime
+import hashlib
 from io import BytesIO
+from zipfile import ZipFile
 
 from openpyxl import Workbook
 from sqlalchemy import select
@@ -14,7 +16,7 @@ from app.services.okr.historical_import import (
     upsert_team_monthly_summary,
     upsert_team_report,
 )
-from app.services.okr.historical_snapshot import import_historical_snapshot
+from app.services.okr.historical_snapshot import extract_sap_compliance_payload, import_historical_snapshot
 from app.services.okr.kr_mapping import KRMapping
 from app.services.okr.workbook import get_report_columns_for_month, parse_team_report
 
@@ -45,6 +47,64 @@ def test_discovery_filters_months_and_ignores_excel_lock_files(tmp_path):
     assert [(item.month, item.file_name) for item in discovered] == [
         (5, "OKR tháng 05-2026 - X.ĐK.xlsx")
     ]
+    assert [(item.month, item.file_name) for item in discover_source_files(tmp_path, months=(6,))] == [
+        (6, "OKR tháng 06-2026 - X.ĐK.xlsx")
+    ]
+
+
+def test_extract_sap_compliance_payload_requires_audited_embedded_image_and_reconciles_totals():
+    source_image = b"audited SAP compliance image"
+    source_hash = hashlib.sha256(source_image).hexdigest()
+    workbook = BytesIO()
+    with ZipFile(workbook, "w") as archive:
+        archive.writestr("xl/media/sap.png", source_image)
+    manifest = {
+        "2026-06": {
+            "title": "Tuân thủ nghiệp vụ SAP",
+            "source_image_sha256": source_hash,
+            "source_image_size_bytes": len(source_image),
+            "backlog_total": 10,
+            "totals": {"overdue_wo": 2, "unconfirmed_wo": 3, "violating_wo": 5},
+            "rates": {"overdue_share": 0.2, "unconfirmed_share": 0.3, "violation_share": 0.5},
+            "supervisors": [
+                {"name": "Ca A", "overdue_wo": 2, "unconfirmed_wo": 1, "violating_wo": 3},
+                {"name": "Ca B", "overdue_wo": 0, "unconfirmed_wo": 2, "violating_wo": 2},
+            ],
+        }
+    }
+
+    payload = extract_sap_compliance_payload(workbook.getvalue(), month=6, year=2026, manifest=manifest)
+
+    assert payload is not None
+    assert payload["block_type"] == "sap_compliance"
+    assert payload["source_image_file"] == "xl/media/sap.png"
+    assert payload["totals"]["violating_wo"] == 5
+
+
+def test_extract_sap_compliance_payload_rejects_unreconciled_supervisor_totals():
+    source_image = b"audited SAP compliance image"
+    source_hash = hashlib.sha256(source_image).hexdigest()
+    workbook = BytesIO()
+    with ZipFile(workbook, "w") as archive:
+        archive.writestr("xl/media/sap.png", source_image)
+    manifest = {
+        "2026-06": {
+            "source_image_sha256": source_hash,
+            "backlog_total": 10,
+            "totals": {"overdue_wo": 2, "unconfirmed_wo": 3, "violating_wo": 5},
+            "rates": {"overdue_share": 0.2, "unconfirmed_share": 0.3, "violation_share": 0.5},
+            "supervisors": [
+                {"name": "Ca A", "overdue_wo": 2, "unconfirmed_wo": 2, "violating_wo": 4}
+            ],
+        }
+    }
+
+    try:
+        extract_sap_compliance_payload(workbook.getvalue(), month=6, year=2026, manifest=manifest)
+    except ValueError as exc:
+        assert "supervisor totals" in str(exc)
+    else:
+        raise AssertionError("Expected unreconciled SAP supervisor totals to fail validation")
 
 
 def test_parser_selects_requested_month_column_group_for_tbch(tmp_path):

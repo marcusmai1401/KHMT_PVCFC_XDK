@@ -251,12 +251,13 @@ describe("api client auth contract", () => {
       registration_months: [6, 5],
       decisions: ["approved"],
       khmt: ["in"],
+      khmt_periods: ["2026-6", "2026-5"],
       completion: ["done"]
     });
 
     expect(result).toBe(workbook);
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/v1/fi/reports/export?teams=TBCH%2CTB%C4%90L&registration_months=6%2C5&decisions=approved&khmt=in&completion=done",
+      "/api/v1/fi/reports/export?teams=TBCH%2CTB%C4%90L&registration_months=6%2C5&decisions=approved&khmt=in&khmt_periods=2026-6%2C2026-5&completion=done",
       expect.any(Object)
     );
     const init = fetchMock.mock.calls[0][1] as RequestInit;

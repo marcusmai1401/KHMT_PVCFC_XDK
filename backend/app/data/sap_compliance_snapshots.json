@@ -1,0 +1,46 @@
+{
+  "2026-06": {
+    "title": "Báo cáo tình hình thực hiện tuân thủ nghiệp vụ SAP",
+    "period_label": "T6/2026",
+    "source_reference": "Dashboard - Báo cáo tình hình thực hiện tuân thủ nghiệp vụ SAP",
+    "source_image_sha256": "f8ceea13ea142779eb7e719955b9fd4504be654afeb62d5eef77f04f29e7b3ff",
+    "source_image_size_bytes": 636546,
+    "backlog_total": 169,
+    "totals": {
+      "overdue_wo": 50,
+      "unconfirmed_wo": 70,
+      "violating_wo": 120
+    },
+    "rates": {
+      "overdue_share": 0.296,
+      "unconfirmed_share": 0.414,
+      "violation_share": 0.71
+    },
+    "supervisors": [
+      {
+        "name": "Trực ca điều khiển",
+        "overdue_wo": 27,
+        "unconfirmed_wo": 60,
+        "violating_wo": 87
+      },
+      {
+        "name": "Võ Quang Minh",
+        "overdue_wo": 0,
+        "unconfirmed_wo": 0,
+        "violating_wo": 0
+      },
+      {
+        "name": "Lý Ngọc Linh",
+        "overdue_wo": 0,
+        "unconfirmed_wo": 0,
+        "violating_wo": 0
+      },
+      {
+        "name": "Nguyễn Thanh Hải",
+        "overdue_wo": 23,
+        "unconfirmed_wo": 10,
+        "violating_wo": 33
+      }
+    ]
+  }
+}

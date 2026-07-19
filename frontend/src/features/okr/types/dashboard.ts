@@ -52,7 +52,8 @@ export type VisualKind =
   | "radar_chart"
   | "narrative_card"
   | "progress_card"
-  | "kpi_badges";
+  | "kpi_badges"
+  | "sap_compliance";
 
 export interface DashboardPeriod {
   month: number;

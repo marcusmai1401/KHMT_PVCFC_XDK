@@ -14,6 +14,7 @@ type FiReportExportFilters = {
   registration_months?: number[];
   decisions?: string[];
   khmt?: string[];
+  khmt_periods?: string[];
   completion?: string[];
   authors?: string[];
   submitters?: string[];
@@ -229,6 +230,7 @@ export const api = {
         registration_months: filters.registration_months?.join(","),
         decisions: filters.decisions?.join(","),
         khmt: filters.khmt?.join(","),
+        khmt_periods: filters.khmt_periods?.join(","),
         completion: filters.completion?.join(","),
         authors: filters.authors?.join(","),
         submitters: filters.submitters?.join(","),

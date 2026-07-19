@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from io import BytesIO
 import hashlib
+import json
+from pathlib import Path
 import re
 import unicodedata
 from typing import Any
@@ -50,6 +52,8 @@ UNCONFIRMED_WARNING_BLOCKS = [
         "reason": "BDĐK NPK block is preserved as an import warning until business mapping is confirmed.",
     },
 ]
+
+SAP_COMPLIANCE_MANIFEST_PATH = Path(__file__).resolve().parents[2] / "data" / "sap_compliance_snapshots.json"
 
 DRAWING_NAMESPACES = {
     "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
@@ -118,6 +122,103 @@ def _source_month(workbook: Any) -> int | None:
         if match:
             return int(match.group(1))
     return None
+
+
+def _validate_sap_compliance_payload(payload: dict[str, Any]) -> None:
+    backlog_total = int(payload.get("backlog_total") or 0)
+    totals = payload.get("totals") or {}
+    rates = payload.get("rates") or {}
+    supervisors = payload.get("supervisors") or []
+    if backlog_total <= 0:
+        raise ValueError("SAP backlog_total must be greater than zero")
+    if not isinstance(supervisors, list) or not supervisors:
+        raise ValueError("SAP supervisor breakdown is missing")
+
+    total_keys = ("overdue_wo", "unconfirmed_wo", "violating_wo")
+    normalized_totals = {key: int(totals.get(key) or 0) for key in total_keys}
+    if any(value < 0 for value in normalized_totals.values()):
+        raise ValueError("SAP WO totals cannot be negative")
+    if normalized_totals["overdue_wo"] + normalized_totals["unconfirmed_wo"] != normalized_totals["violating_wo"]:
+        raise ValueError("SAP violating WO total must equal overdue plus unconfirmed WO")
+    if normalized_totals["violating_wo"] > backlog_total:
+        raise ValueError("SAP violating WO total cannot exceed total backlog")
+
+    supervisor_totals = {key: 0 for key in total_keys}
+    names: set[str] = set()
+    for supervisor in supervisors:
+        name = str(supervisor.get("name") or "").strip()
+        if not name:
+            raise ValueError("SAP supervisor name is required")
+        if name in names:
+            raise ValueError(f"Duplicate SAP supervisor: {name}")
+        names.add(name)
+        overdue = int(supervisor.get("overdue_wo") or 0)
+        unconfirmed = int(supervisor.get("unconfirmed_wo") or 0)
+        violating = int(supervisor.get("violating_wo") or 0)
+        if min(overdue, unconfirmed, violating) < 0:
+            raise ValueError(f"SAP WO counts cannot be negative for supervisor {name}")
+        if overdue + unconfirmed != violating:
+            raise ValueError(f"SAP WO subtotal is inconsistent for supervisor {name}")
+        supervisor_totals["overdue_wo"] += overdue
+        supervisor_totals["unconfirmed_wo"] += unconfirmed
+        supervisor_totals["violating_wo"] += violating
+    if supervisor_totals != normalized_totals:
+        raise ValueError("SAP supervisor totals do not reconcile with report totals")
+
+    rate_pairs = {
+        "overdue_share": normalized_totals["overdue_wo"],
+        "unconfirmed_share": normalized_totals["unconfirmed_wo"],
+        "violation_share": normalized_totals["violating_wo"],
+    }
+    for key, numerator in rate_pairs.items():
+        rate = float(rates.get(key))
+        if abs(rate - (numerator / backlog_total)) > 0.0006:
+            raise ValueError(f"SAP rate {key} does not reconcile with total backlog")
+
+
+def extract_sap_compliance_payload(
+    workbook_bytes: bytes,
+    *,
+    month: int,
+    year: int,
+    manifest: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    registry = manifest
+    if registry is None:
+        registry = json.loads(SAP_COMPLIANCE_MANIFEST_PATH.read_text(encoding="utf-8"))
+    period_key = f"{year:04d}-{month:02d}"
+    configured = registry.get(period_key)
+    if configured is None:
+        return None
+    payload = dict(configured)
+    expected_hash = str(payload.get("source_image_sha256") or "").lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", expected_hash):
+        raise ValueError(f"SAP manifest {period_key} has an invalid source image SHA-256")
+
+    matched_media_name: str | None = None
+    matched_size = 0
+    with ZipFile(BytesIO(workbook_bytes)) as archive:
+        for media_name in archive.namelist():
+            if not media_name.startswith("xl/media/"):
+                continue
+            media_bytes = archive.read(media_name)
+            if hashlib.sha256(media_bytes).hexdigest() == expected_hash:
+                matched_media_name = media_name
+                matched_size = len(media_bytes)
+                break
+    if matched_media_name is None:
+        raise ValueError(f"SAP source image for {period_key} is not present or does not match the audited image")
+    expected_size = int(payload.get("source_image_size_bytes") or 0)
+    if expected_size and matched_size != expected_size:
+        raise ValueError(f"SAP source image size for {period_key} does not match the audited image")
+
+    _validate_sap_compliance_payload(payload)
+    return {
+        "block_type": "sap_compliance",
+        **payload,
+        "period": {"month": month, "year": year, "label": payload.get("period_label") or f"T{month}/{year}"},
+        "source_image_file": matched_media_name,
+    }
 
 
 def _dashboard_month_columns() -> list[tuple[int, int]]:
@@ -621,6 +722,48 @@ def _parse_data_blocks(
         )
 
 
+def _parse_sap_compliance(
+    db: Session,
+    workbook: Any,
+    workbook_bytes: bytes,
+    result: HistoricalSnapshotImportResult,
+    *,
+    source_file_name: str,
+    imported_by: str,
+) -> None:
+    source_month = _source_month(workbook)
+    if source_month is None:
+        return
+    year = _source_year(workbook)
+    try:
+        payload = extract_sap_compliance_payload(workbook_bytes, month=source_month, year=year)
+    except Exception as exc:
+        result.warnings.append(
+            _warning(
+                f"Cannot import SAP compliance report: {exc}",
+                "Dashboard!SAP_COMPLIANCE",
+                "HIGH",
+            )
+        )
+        return
+    if payload is None:
+        return
+    _upsert_snapshot(
+        db,
+        result,
+        source_file_name=source_file_name,
+        source_sheet="Dashboard",
+        source_range="Dashboard!SAP_COMPLIANCE",
+        source_label=str(payload.get("title") or "SAP compliance"),
+        team="__CHARTS__",
+        month=0,
+        year=year,
+        chart_payload=payload,
+        warnings=[],
+        imported_by=imported_by,
+    )
+
+
 def import_historical_snapshot(
     db: Session,
     workbook_bytes: bytes,
@@ -645,6 +788,14 @@ def import_historical_snapshot(
         source_file_name=source_file_name,
         imported_by=imported_by,
         note_blocks=_extract_dashboard_note_blocks(workbook_bytes),
+    )
+    _parse_sap_compliance(
+        db,
+        workbook,
+        workbook_bytes,
+        result,
+        source_file_name=source_file_name,
+        imported_by=imported_by,
     )
     try:
         narratives = extract_dashboard_narratives(workbook_bytes)

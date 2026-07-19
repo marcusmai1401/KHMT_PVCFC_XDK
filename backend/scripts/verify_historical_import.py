@@ -23,7 +23,7 @@ from app.services.okr.rules import normalize_assessment
 from app.services.okr.team_normalizer import normalize_team_label
 
 
-MONTHS = [1, 2, 3, 4, 5]
+MONTHS = [1, 2, 3, 4, 5, 6]
 YEAR = 2026
 SOURCE_DIR = settings.workspace_dir / "KHMT_Monthly"
 TEMPLATE_DIR = settings.workspace_dir / "template_xlsx"
@@ -34,6 +34,7 @@ SOURCE_FILES = {
     3: SOURCE_DIR / "OKR tháng 03-2026 - X.ĐK.xlsx",
     4: SOURCE_DIR / "OKR tháng 04-2026 - X.ĐK.xlsx",
     5: SOURCE_DIR / "OKR tháng 05-2026 - X.ĐK.xlsx",
+    6: SOURCE_DIR / "OKR tháng 06-2026 - X.ĐK.xlsx",
 }
 
 TEMPLATE_FILES = {
@@ -49,9 +50,10 @@ TEAM_ROW_RANGES = {
     3: range(22, 28),
     4: range(20, 26),
     5: range(20, 27),
+    6: range(22, 26),
 }
 
-DASHBOARD_MONTH_COLS = {1: 6, 2: 8, 3: 10, 4: 12, 5: 14}
+DASHBOARD_MONTH_COLS = {1: 6, 2: 8, 3: 10, 4: 12, 5: 14, 6: 16}
 
 
 def read_dashboard_cell(file_path: Path, month: int) -> dict[str, str]:

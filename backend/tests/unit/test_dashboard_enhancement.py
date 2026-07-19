@@ -328,6 +328,51 @@ def test_dashboard_view_preserves_historical_o5_status_when_fi_counts_are_empty(
     assert tbch["kr_statuses"]["O5.KR13"] == "OK"
 
 
+def test_dashboard_view_adds_month_six_sap_compliance_visual_only_for_matching_period():
+    sap_snapshot = {
+        "source_file_name": "OKR tháng 06-2026 - X.ĐK.xlsx",
+        "team": "__CHARTS__",
+        "month": 0,
+        "year": 2026,
+        "chart_payload": {
+            "block_type": "sap_compliance",
+            "title": "Báo cáo tình hình thực hiện tuân thủ nghiệp vụ SAP",
+            "period": {"month": 6, "year": 2026, "label": "T6/2026"},
+            "backlog_total": 169,
+            "totals": {"overdue_wo": 50, "unconfirmed_wo": 70, "violating_wo": 120},
+            "rates": {"overdue_share": 0.296, "unconfirmed_share": 0.414, "violation_share": 0.71},
+            "supervisors": [
+                {
+                    "name": "Trực ca điều khiển",
+                    "overdue_wo": 27,
+                    "unconfirmed_wo": 60,
+                    "violating_wo": 87,
+                }
+            ],
+        },
+        "warnings": [],
+    }
+    period_snapshot = {
+        "source_file_name": "OKR tháng 06-2026 - X.ĐK.xlsx",
+        "team": "TCĐK",
+        "month": 6,
+        "year": 2026,
+        "monthly_assessment": "HT tốt",
+        "chart_payload": {},
+        "warnings": [],
+    }
+
+    june = build_dashboard_view(6, 2026, [], history_reports=[], historical_snapshots=[period_snapshot, sap_snapshot])
+    may = build_dashboard_view(5, 2026, [], history_reports=[], historical_snapshots=[period_snapshot, sap_snapshot])
+    june_o6 = next(section for section in june["objective_sections"] if section["objective_code"] == "O6")
+    may_o6 = next(section for section in may["objective_sections"] if section["objective_code"] == "O6")
+
+    sap_visual = next(visual for visual in june_o6["visuals"] if visual["id"] == "o6_sap_compliance")
+    assert sap_visual["kind"] == "sap_compliance"
+    assert sap_visual["payload"]["totals"]["violating_wo"] == 120
+    assert all(visual["id"] != "o6_sap_compliance" for visual in may_o6["visuals"])
+
+
 def test_historical_snapshot_import_is_idempotent(db_session):
     workbook = Workbook()
     dashboard = workbook.active

@@ -6,6 +6,7 @@ from app.services.fi.service import (
     _fi_export_record_matches,
     _fi_person_filter_matches,
     assign_khmt,
+    build_fi_report_export_filters,
     can_view_sk,
     clear_khmt,
     count_for_okr,
@@ -74,6 +75,31 @@ def test_fi_export_person_filters_match_resolved_legacy_author(db_session):
 
     assert _fi_export_record_matches(record, {"authors": {"id:trunghd"}}, db_session)
     assert _fi_export_record_matches(record, {"submitters": {"id:trunghd"}}, db_session)
+
+
+def test_fi_export_filters_refine_in_khmt_by_assignment_month(db_session):
+    record = SKCTKTModel(
+        id="sk-khmt-month-export",
+        title="KHMT month export",
+        author_name="Author",
+        author_user_id="author",
+        team="TBCH",
+        content_description="Content",
+        completion_plan="T9/2026",
+        status="Approved",
+        status_history=[],
+        consider_for_khmt=True,
+        khmt_month=6,
+        khmt_year=2026,
+    )
+
+    june_filters = build_fi_report_export_filters(khmt="in", khmt_periods="2026-6")
+    may_filters = build_fi_report_export_filters(khmt="in", khmt_periods="2026-5")
+    next_year_filters = build_fi_report_export_filters(khmt="in", khmt_periods="2027-6")
+
+    assert _fi_export_record_matches(record, june_filters, db_session)
+    assert not _fi_export_record_matches(record, may_filters, db_session)
+    assert not _fi_export_record_matches(record, next_year_filters, db_session)
 
 
 def test_sk_code_unique_per_team_month(db_session):

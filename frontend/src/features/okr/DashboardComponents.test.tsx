@@ -262,6 +262,36 @@ describe("OKR dashboard components", () => {
     expect(html).not.toContain(">800%<");
   });
 
+  it("renders the structured month-six SAP compliance report", () => {
+    const html = renderToStaticMarkup(
+      <VisualBlockRenderer
+        block={{
+          id: "o6_sap_compliance",
+          kind: "sap_compliance",
+          title: "Báo cáo tình hình thực hiện tuân thủ nghiệp vụ SAP",
+          data_state: "ready",
+          payload: {
+            backlog_total: 169,
+            totals: { overdue_wo: 50, unconfirmed_wo: 70, violating_wo: 120 },
+            rates: { overdue_share: 0.296, unconfirmed_share: 0.414, violation_share: 0.71 },
+            supervisors: [
+              { name: "Trực ca điều khiển", overdue_wo: 27, unconfirmed_wo: 60, violating_wo: 87 },
+              { name: "Nguyễn Thanh Hải", overdue_wo: 23, unconfirmed_wo: 10, violating_wo: 33 },
+            ],
+          },
+        }}
+      />,
+    );
+
+    expect(html).toContain("WO quá hạn");
+    expect(html).toContain("WO chưa confirm");
+    expect(html).toContain("120");
+    expect(html).toContain("71,0%");
+    expect(html).toContain("Trực ca điều khiển");
+    expect(html).toContain("Nguyễn Thanh Hải");
+    expect(html).toContain("Tổng backlog");
+  });
+
   it("renders compact metric tables with imported Excel notes", () => {
     const metricTable = renderToStaticMarkup(
       <VisualBlockRenderer

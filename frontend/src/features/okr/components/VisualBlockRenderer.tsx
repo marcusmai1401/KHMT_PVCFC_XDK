@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, BarChart3, CalendarDays, CheckCircle2, ClipboardList, Flag, LineChart, Radar, ShieldCheck, Target, TrendingUp, XCircle } from "lucide-react";
+import { Activity, AlertTriangle, BarChart3, CalendarDays, CheckCircle2, ClipboardList, Clock3, Flag, LineChart, Radar, ShieldCheck, Target, TrendingUp, XCircle } from "lucide-react";
 import React from "react";
 import type { ChartDataset, VisualBlock } from "../types/dashboard";
 import { vn } from "../i18n";
@@ -1197,6 +1197,83 @@ function OrgCountNote({ orgCount }: { orgCount?: { actual?: unknown; target?: un
   );
 }
 
+function formatSapPercent(value: unknown) {
+  const numeric = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
+  if (!Number.isFinite(numeric)) return "-";
+  return new Intl.NumberFormat("vi-VN", {
+    style: "percent",
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(numeric);
+}
+
+function SapCompliancePanel({ title, payload, visualId, kind }: { title: string; payload?: Record<string, any>; visualId?: string; kind?: string }) {
+  const totals = payload?.totals && typeof payload.totals === "object" ? payload.totals : {};
+  const rates = payload?.rates && typeof payload.rates === "object" ? payload.rates : {};
+  const supervisors = Array.isArray(payload?.supervisors) ? payload.supervisors : [];
+  const cards = [
+    { key: "overdue", label: "WO quá hạn", value: totals.overdue_wo, rate: rates.overdue_share, tone: "danger", icon: <Clock3 size={22} /> },
+    { key: "unconfirmed", label: "WO chưa confirm", value: totals.unconfirmed_wo, rate: rates.unconfirmed_share, tone: "warning", icon: <ClipboardList size={22} /> },
+    { key: "violating", label: "Tổng WO vi phạm", value: totals.violating_wo, rate: rates.violation_share, tone: "critical", icon: <AlertTriangle size={22} /> },
+  ];
+
+  return (
+    <ChartShell title={title} icon={<AlertTriangle size={17} />} kind={kind} visualId={visualId}>
+      <div className="sap-compliance-layout">
+        <div className="sap-compliance-kpis">
+          {cards.map((card) => (
+            <div className={`sap-compliance-kpi tone-${card.tone}`} key={card.key}>
+              <span className="sap-compliance-kpi-icon">{card.icon}</span>
+              <span>{card.label}</span>
+              <strong>{formatValue(card.value)} <small>WO</small></strong>
+              <em>{formatSapPercent(card.rate)} tổng backlog</em>
+            </div>
+          ))}
+        </div>
+        <div className="sap-compliance-table-wrap">
+          <div className="sap-compliance-table-heading">
+            <div>
+              <strong>Phân bổ vi phạm theo Supervisor</strong>
+              <span>Đối chiếu trực tiếp từ ảnh báo cáo SAP đính kèm workbook</span>
+            </div>
+            <span className="sap-backlog-total">Tổng backlog <b>{formatValue(payload?.backlog_total)} WO</b></span>
+          </div>
+          <table className="sap-compliance-table">
+            <thead>
+              <tr>
+                <th>STT</th>
+                <th>Supervisor</th>
+                <th>WO quá hạn</th>
+                <th>WO chưa confirm</th>
+                <th>Tổng WO vi phạm</th>
+              </tr>
+            </thead>
+            <tbody>
+              {supervisors.map((supervisor: any, index: number) => (
+                <tr key={`${String(supervisor?.name || "supervisor")}-${index}`}>
+                  <td>{index + 1}</td>
+                  <td>{formatValue(supervisor?.name)}</td>
+                  <td>{formatValue(supervisor?.overdue_wo)}</td>
+                  <td>{formatValue(supervisor?.unconfirmed_wo)}</td>
+                  <td><strong>{formatValue(supervisor?.violating_wo)}</strong></td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <th colSpan={2}>Tổng cộng</th>
+                <th>{formatValue(totals.overdue_wo)}</th>
+                <th>{formatValue(totals.unconfirmed_wo)}</th>
+                <th>{formatValue(totals.violating_wo)}</th>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </ChartShell>
+  );
+}
+
 function SportsParticipationInline({ title, payload, visualId, kind }: { title: string; payload?: Record<string, any>; visualId?: string; kind?: string }) {
   const items = Array.isArray(payload?.items) ? payload.items : [];
   const targetRate = typeof payload?.participation_target === "number" ? payload.participation_target : 0.5;
@@ -1669,6 +1746,8 @@ export function VisualBlockRenderer({ block }: { block: VisualBlock }) {
         return <InitiativesFiDashboard title={block.title} payload={payload} visualId={block.id} kind={block.kind} />;
       }
       return <KpiBadges title={block.title} payload={payload} visualId={block.id} kind={block.kind} />;
+    case "sap_compliance":
+      return <SapCompliancePanel title={block.title} payload={payload} visualId={block.id} kind={block.kind} />;
     case "narrative_card":
     default:
       return <NarrativeCard title={block.title} payload={payload} visualId={block.id} kind={block.kind} />;

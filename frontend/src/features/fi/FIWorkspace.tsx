@@ -152,6 +152,18 @@ function khmtFilterForItem(item: any): HistoryKhmtFilter {
   return isKhmtConsidered(item) ? "in" : "out";
 }
 
+export function matchesHistoryKhmtFilters(
+  item: any,
+  statuses: HistoryKhmtFilter[],
+  periods: string[],
+) {
+  const status = khmtFilterForItem(item);
+  if (statuses.length > 0 && !statuses.includes(status)) return false;
+  if (periods.length === 0) return true;
+  if (status === "out") return statuses.includes("out");
+  return periods.includes(`${Number(item?.khmt_year)}-${Number(item?.khmt_month)}`);
+}
+
 // Single source of truth for the LĐX decision badge in the history view, so the
 // per-item pill and the filter chip always speak the same language
 // (Đồng ý / Không đồng ý / Xem xét sau / Chưa duyệt) regardless of whether the
@@ -1136,6 +1148,8 @@ function FilterChip<T extends string | number>({
   emptyLabel = "Tất cả",
   single = false,
   prominent = false,
+  summary,
+  footer,
 }: {
   label: string;
   icon?: React.ReactNode;
@@ -1145,6 +1159,8 @@ function FilterChip<T extends string | number>({
   emptyLabel?: string;
   single?: boolean;
   prominent?: boolean;
+  summary?: string;
+  footer?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1180,11 +1196,11 @@ function FilterChip<T extends string | number>({
   };
 
   const selectedOptions = options.filter((option) => selected.includes(option.value));
-  const summaryText = selectedOptions.length === 0
+  const summaryText = summary ?? (selectedOptions.length === 0
     ? emptyLabel
     : selectedOptions.length === 1
       ? selectedOptions[0].label
-      : `${selectedOptions.length} mục`;
+      : `${selectedOptions.length} mục`);
 
   // In single mode the chip is always "active" because there's always exactly one value;
   // we keep the visual neutral so it looks like a primary selector rather than an active filter.
@@ -1213,7 +1229,7 @@ function FilterChip<T extends string | number>({
       </button>
       {open && (
         <div
-          className={`fi-filter-popover ${single ? "single" : ""}`}
+          className={`fi-filter-popover ${single ? "single" : ""} ${footer ? "has-footer" : ""}`}
           role="listbox"
           aria-multiselectable={!single}
           aria-label={label}
@@ -1259,6 +1275,7 @@ function FilterChip<T extends string | number>({
               );
             })}
           </div>
+          {footer}
         </div>
       )}
     </div>
@@ -1446,6 +1463,7 @@ export function FIWorkspace({
   const [historyMonths, setHistoryMonths] = useState<number[]>([]);
   const [historyDecisions, setHistoryDecisions] = useState<HistoryDecisionFilter[]>([]);
   const [historyKhmt, setHistoryKhmt] = useState<HistoryKhmtFilter[]>([]);
+  const [historyKhmtPeriods, setHistoryKhmtPeriods] = useState<string[]>([]);
   const [historyCompletion, setHistoryCompletion] = useState<HistoryCompletionFilter[]>([]);
   const [historyAuthors, setHistoryAuthors] = useState<string[]>([]);
   const [historySubmitters, setHistorySubmitters] = useState<string[]>([]);
@@ -1752,6 +1770,7 @@ export function FIWorkspace({
     setHistoryMonths([]);
     setHistoryDecisions([]);
     setHistoryKhmt([]);
+    setHistoryKhmtPeriods([]);
     setHistoryCompletion([]);
     setHistoryAuthors([]);
     setHistorySubmitters([]);
@@ -1770,6 +1789,12 @@ export function FIWorkspace({
 
   const changeHistoryKhmt = (next: HistoryKhmtFilter[]) => {
     setHistoryKhmt(next);
+    if (!next.includes("in")) setHistoryKhmtPeriods([]);
+    setSelectedItem(null);
+  };
+
+  const changeHistoryKhmtPeriods = (next: string[]) => {
+    setHistoryKhmtPeriods([...next].sort());
     setSelectedItem(null);
   };
 
@@ -1793,6 +1818,7 @@ export function FIWorkspace({
     setHistoryMonths([]);
     setHistoryDecisions([]);
     setHistoryKhmt([]);
+    setHistoryKhmtPeriods([]);
     setHistoryCompletion([]);
     setHistoryAuthors([]);
     setHistorySubmitters([]);
@@ -2139,7 +2165,6 @@ export function FIWorkspace({
   const historyMonthOptions = Array.from(historyMonthCounts.entries()).sort((a, b) => b[0] - a[0]);
   const selectedHistoryMonthSet = new Set(historyMonths);
   const selectedHistoryDecisionSet = new Set(historyDecisions);
-  const selectedHistoryKhmtSet = new Set(historyKhmt);
   const selectedHistoryCompletionSet = new Set(historyCompletion);
   const historyAuthorOptions = useMemo(
     () => buildPersonFilterOptions(historyItems, authorOptions, "author", userLabelById),
@@ -2192,6 +2217,19 @@ export function FIWorkspace({
     },
     { in: 0, out: 0 },
   );
+  const historyKhmtPeriodCounts = historyItems.reduce<Map<string, { month: number; year: number; count: number }>>((periodCounts, item) => {
+    const month = Number(item?.khmt_month);
+    const year = Number(item?.khmt_year);
+    if (isKhmtConsidered(item) && Number.isInteger(month) && month >= 1 && month <= 12 && Number.isInteger(year)) {
+      const key = `${year}-${month}`;
+      const current = periodCounts.get(key);
+      periodCounts.set(key, { month, year, count: (current?.count ?? 0) + 1 });
+    }
+    return periodCounts;
+  }, new Map<string, { month: number; year: number; count: number }>());
+  const historyKhmtPeriodOptions = Array.from(historyKhmtPeriodCounts.entries()).sort(
+    ([, a], [, b]) => a.year - b.year || a.month - b.month,
+  );
   const historyCompletionCounts = historyItems.reduce<Record<HistoryCompletionFilter, number>>(
     (acc, item) => {
       acc[completionFilterForItem(item)] += 1;
@@ -2204,13 +2242,14 @@ export function FIWorkspace({
     historyMonths.length +
     historyDecisions.length +
     historyKhmt.length +
+    historyKhmtPeriods.length +
     historyCompletion.length +
     historyAuthors.length +
     historySubmitters.length;
   const filteredHistoryItems = historyItems
     .filter((item) => historyMonths.length === 0 || selectedHistoryMonthSet.has(registrationMonthValue(item) ?? -1))
     .filter((item) => historyDecisions.length === 0 || selectedHistoryDecisionSet.has(decisionFilterForItem(item)))
-    .filter((item) => historyKhmt.length === 0 || selectedHistoryKhmtSet.has(khmtFilterForItem(item)))
+    .filter((item) => matchesHistoryKhmtFilters(item, historyKhmt, historyKhmtPeriods))
     .filter((item) => historyCompletion.length === 0 || selectedHistoryCompletionSet.has(completionFilterForItem(item)))
     .filter((item) => historyItemMatchesPerson(item, historyAuthors, historyAuthorOptionByKey, "author"))
     .filter((item) => historyItemMatchesPerson(item, historySubmitters, historySubmitterOptionByKey, "submitter"))
@@ -2273,6 +2312,7 @@ export function FIWorkspace({
       registration_months: historyMonths,
       decisions: historyDecisions,
       khmt: historyKhmt,
+      khmt_periods: historyKhmtPeriods,
       completion: historyCompletion,
       authors: expandPersonFilterKeys(historyAuthors, historyAuthorOptionByKey),
       submitters: expandPersonFilterKeys(historySubmitters, historySubmitterOptionByKey),
@@ -3672,6 +3712,44 @@ export function FIWorkspace({
               selected={historyKhmt}
               onChange={changeHistoryKhmt}
               emptyLabel="Tất cả"
+              summary={historyKhmtPeriods.length > 0
+                ? `${historyKhmt.length === 1 ? "Đã vào KHMT" : `${historyKhmt.length} mục`} · ${historyKhmtPeriods.length} kỳ`
+                : undefined}
+              footer={historyKhmt.includes("in") ? (
+                <div className="fi-filter-subsection">
+                  <div className="fi-filter-subsection-head">
+                    <span>Kỳ vào KHMT</span>
+                    {historyKhmtPeriods.length > 0 && (
+                      <button type="button" onClick={() => changeHistoryKhmtPeriods([])}>Bỏ chọn kỳ</button>
+                    )}
+                  </div>
+                  {historyKhmtPeriodOptions.length > 0 ? (
+                    <div className="fi-filter-month-grid" role="group" aria-label="Kỳ vào KHMT">
+                      {historyKhmtPeriodOptions.map(([period, { month, year, count }]) => {
+                        const checked = historyKhmtPeriods.includes(period);
+                        return (
+                          <button
+                            type="button"
+                            className={checked ? "checked" : ""}
+                            aria-pressed={checked}
+                            key={period}
+                            onClick={() => changeHistoryKhmtPeriods(
+                              checked
+                                ? historyKhmtPeriods.filter((value) => value !== period)
+                                : [...historyKhmtPeriods, period],
+                            )}
+                          >
+                            <span>{`T${String(month).padStart(2, "0")}/${year}`}</span>
+                            <small>{count}</small>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="fi-filter-subsection-empty">Chưa có kỳ KHMT trong dữ liệu.</p>
+                  )}
+                </div>
+              ) : undefined}
             />
             <FilterChip<HistoryCompletionFilter>
               label="Hoàn thành"

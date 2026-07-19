@@ -33,7 +33,7 @@ from app.services.repositories import json_safe, make_id, warning_from_dict
 
 SOURCE_FILE_PATTERN = re.compile(r"OKR tháng (\d{2})-(\d{4})", re.IGNORECASE)
 HISTORICAL_YEAR = 2026
-HISTORICAL_MONTHS = (1, 2, 3, 4, 5)
+HISTORICAL_MONTHS = (1, 2, 3, 4, 5, 6)
 TEMPLATE_FILES = {
     "TBHTĐK": "TBHTĐK.xlsx",
     "TBCH": "TBCH.xlsx",
@@ -926,7 +926,7 @@ def run_historical_import(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Import historical KHMT/OKR data for T1-T5 2026")
+    parser = argparse.ArgumentParser(description="Import historical KHMT/OKR data for T1-T6 2026")
     parser.add_argument(
         "source_directory",
         nargs="?",
@@ -939,7 +939,7 @@ def main(argv: list[str] | None = None) -> int:
         nargs="+",
         type=int,
         default=list(HISTORICAL_MONTHS),
-        help="Only import the selected month numbers (for example: --months 5)",
+        help="Only import the selected month numbers (for example: --months 6)",
     )
     parser.add_argument(
         "--no-commit",

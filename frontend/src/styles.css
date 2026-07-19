@@ -5291,6 +5291,10 @@ th {
   z-index: 50;
 }
 
+.fi-filter-popover.has-footer {
+  min-width: 292px;
+}
+
 @keyframes fi-filter-popover-in {
   from {
     opacity: 0;
@@ -5478,6 +5482,92 @@ th {
 .fi-filter-option.tone-danger .fi-filter-option-mark { border-color: #fca5a5; }
 .fi-filter-option.tone-warning .fi-filter-option-mark { border-color: #fcd34d; }
 .fi-filter-option.tone-neutral .fi-filter-option-mark { border-color: #cbd5e1; }
+
+.fi-filter-subsection {
+  border-top: 1px solid #e2e8f0;
+  margin-top: 4px;
+  padding: 8px 6px 2px;
+}
+
+.fi-filter-subsection-head {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  margin-bottom: 7px;
+}
+
+.fi-filter-subsection-head > span {
+  color: #607087;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.fi-filter-subsection-head > button {
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px;
+}
+
+.fi-filter-month-grid {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.fi-filter-month-grid > button {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #dbe3ee;
+  border-radius: 6px;
+  color: #334155;
+  cursor: pointer;
+  display: flex;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 4px;
+  justify-content: space-between;
+  padding: 6px 7px;
+}
+
+.fi-filter-month-grid > button:hover {
+  background: #f1f5f9;
+  border-color: #b8c5d6;
+}
+
+.fi-filter-month-grid > button.checked {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+  color: #047857;
+}
+
+.fi-filter-month-grid > button small {
+  background: #e2e8f0;
+  border-radius: 999px;
+  color: #64748b;
+  font-size: 10px;
+  min-width: 18px;
+  padding: 1px 5px;
+  text-align: center;
+}
+
+.fi-filter-month-grid > button.checked small {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.fi-filter-subsection-empty {
+  color: #94a3b8;
+  font-size: 12px;
+  margin: 0;
+  padding: 4px 2px;
+}
 
 /* Reset button */
 .fi-history-filter-reset {
@@ -11639,6 +11729,225 @@ pre {
   font-size: 12.5px;
   color: #292524;
   font-weight: 500;
+}
+
+/* O6 SAP compliance report — full-width structured import from the embedded audited image. */
+[data-objective-code="O6"] .objective-visual-grid > .visual-id-o6_sap_compliance {
+  grid-column: 1 / -1;
+}
+
+.visual-id-o6_sap_compliance {
+  background: linear-gradient(180deg, #fff 0%, #fffafa 100%);
+  border-color: #fecaca;
+}
+
+.visual-id-o6_sap_compliance .objective-visual-icon {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.visual-id-o6_sap_compliance .objective-visual-header {
+  border-color: #fee2e2;
+}
+
+.sap-compliance-layout {
+  display: grid;
+  gap: 18px;
+}
+
+.sap-compliance-kpis {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.sap-compliance-kpi {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #fecaca;
+  border-radius: 14px;
+  display: grid;
+  gap: 5px;
+  grid-template-columns: auto 1fr;
+  padding: 16px;
+}
+
+.sap-compliance-kpi-icon {
+  align-items: center;
+  background: #fef2f2;
+  border-radius: 10px;
+  color: #b91c1c;
+  display: inline-flex;
+  grid-row: span 3;
+  justify-content: center;
+  padding: 10px;
+}
+
+.sap-compliance-kpi > span:not(.sap-compliance-kpi-icon) {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.sap-compliance-kpi strong {
+  color: #b91c1c;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.sap-compliance-kpi strong small {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sap-compliance-kpi em {
+  color: #64748b;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.sap-compliance-kpi.tone-warning {
+  border-color: #fed7aa;
+}
+
+.sap-compliance-kpi.tone-warning .sap-compliance-kpi-icon {
+  background: #fff7ed;
+  color: #ea580c;
+}
+
+.sap-compliance-kpi.tone-warning strong {
+  color: #ea580c;
+}
+
+.sap-compliance-kpi.tone-critical {
+  background: linear-gradient(135deg, #fff7ed 0%, #fff 100%);
+  border-color: #fca5a5;
+}
+
+.sap-compliance-table-wrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  overflow-x: auto;
+}
+
+.sap-compliance-table-heading {
+  align-items: center;
+  background: #f8fafc;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  min-width: 0;
+  padding: 14px 16px;
+}
+
+.sap-compliance-table-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.sap-compliance-table-heading strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.sap-compliance-table-heading span {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.sap-backlog-total {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
+.sap-backlog-total b {
+  color: #b91c1c;
+}
+
+.sap-compliance-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  min-width: 0;
+  width: 100%;
+}
+
+.sap-compliance-table th,
+.sap-compliance-table td {
+  border-top: 1px solid #e2e8f0;
+  overflow-wrap: anywhere;
+  padding: 10px 6px;
+  text-align: right;
+  white-space: normal;
+}
+
+.sap-compliance-table th:nth-child(1),
+.sap-compliance-table td:nth-child(1) {
+  text-align: center;
+  width: 9%;
+}
+
+.sap-compliance-table th:nth-child(2),
+.sap-compliance-table td:nth-child(2) {
+  text-align: left;
+  width: 34%;
+}
+
+.sap-compliance-table th:nth-child(n + 3),
+.sap-compliance-table td:nth-child(n + 3) {
+  width: 19%;
+}
+
+.sap-compliance-table thead th {
+  color: #475569;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.sap-compliance-table tbody td {
+  color: #334155;
+  font-size: 12px;
+}
+
+.sap-compliance-table tbody td:nth-child(n + 3),
+.sap-compliance-table tfoot th:nth-child(n + 2) {
+  color: #b91c1c;
+  font-weight: 800;
+}
+
+.sap-compliance-table tfoot {
+  background: #fef2f2;
+}
+
+@media (max-width: 700px) {
+  .sap-compliance-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .sap-compliance-table-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .sap-compliance-table th,
+  .sap-compliance-table td {
+    padding: 8px 4px;
+  }
+
+  .sap-compliance-table thead th {
+    font-size: 9px;
+  }
+
+  .sap-compliance-table tbody td {
+    font-size: 11px;
+  }
 }
 
 /* O6 polish — soft success pill + headline overviews */

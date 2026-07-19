@@ -1,0 +1,46 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - img "PVCFC" [ref=e8]
+        - generic [ref=e9]:
+          - strong [ref=e10]: Tổng Công Ty Phân Bón Dầu Khí Cà Mau
+          - generic [ref=e11]: Nhà máy Đạm Cà Mau
+          - generic [ref=e12]: Xưởng Điều khiển
+      - paragraph [ref=e13]: Chung một niềm tin - Vươn mình phát triển
+      - list [ref=e14]:
+        - listitem [ref=e15]:
+          - generic [ref=e19]:
+            - strong [ref=e20]: OKR theo tháng
+            - generic [ref=e21]: Theo dõi tiến độ, cảnh báo lệch chỉ tiêu, tổng hợp tự động.
+        - listitem [ref=e22]:
+          - generic [ref=e26]:
+            - strong [ref=e27]: Sáng kiến – CTKT
+            - generic [ref=e28]: Đăng ký, xét duyệt và lưu vết toàn bộ vòng đời cải tiến.
+        - listitem [ref=e29]:
+          - generic [ref=e35]:
+            - strong [ref=e36]: Năng lực ET
+            - generic [ref=e37]: Khung năng lực, đánh giá định kỳ và lộ trình học tập cá nhân hoá.
+    - generic [ref=e38]:
+      - generic [ref=e40]:
+        - generic [ref=e41]: Hệ thống nội bộ
+        - heading "Đăng nhập" [level=1] [ref=e45]
+      - generic [ref=e46]:
+        - generic [ref=e47]:
+          - generic [ref=e48]: Tài khoản
+          - textbox "Tài khoản" [ref=e50]:
+            - /placeholder: "ví dụ: baomt"
+        - generic [ref=e51]:
+          - generic [ref=e52]: Mật khẩu
+          - generic [ref=e53]:
+            - textbox "Mật khẩu Hiện mật khẩu" [ref=e54]:
+              - /placeholder: Nhập mật khẩu
+            - button "Hiện mật khẩu" [ref=e55] [cursor=pointer]
+        - generic [ref=e60] [cursor=pointer]:
+          - checkbox "Duy trì đăng nhập trên thiết bị này" [ref=e61]
+          - generic [ref=e63]: Duy trì đăng nhập trên thiết bị này
+        - button "Đăng nhập" [ref=e64] [cursor=pointer]
+      - paragraph [ref=e69]:
+        - text: "Quên mật khẩu? Vui lòng liên hệ Zalo:"
+        - link "0945569945" [ref=e70] [cursor=pointer]:
+          - /url: https://zalo.me/0945569945

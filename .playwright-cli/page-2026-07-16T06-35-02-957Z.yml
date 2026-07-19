@@ -1,0 +1,145 @@
+- main [ref=f1e3]:
+  - complementary [ref=f1e4]:
+    - generic [ref=f1e5]:
+      - generic [ref=f1e6]:
+        - img "PVCFC Logo" [ref=f1e8]
+        - generic [ref=f1e9]:
+          - generic [ref=f1e10]: Website Quản Lý Chung
+          - heading "Xưởng Điều khiển" [level=2] [ref=f1e11]
+      - button "Thu gọn thanh điều hướng" [ref=f1e12] [cursor=pointer]
+    - navigation [ref=f1e16]:
+      - button "OKR" [ref=f1e17] [cursor=pointer]
+      - button "Năng lực ET" [ref=f1e21] [cursor=pointer]
+      - button "FI (SK-CTKT)" [ref=f1e27] [cursor=pointer]
+      - button "Quản trị" [ref=f1e31] [cursor=pointer]
+    - generic [ref=f1e38]:
+      - generic [ref=f1e39]:
+        - generic [ref=f1e40]: DA
+        - generic [ref=f1e41]:
+          - strong [ref=f1e42]: Demo Admin
+          - generic "Quản trị" [ref=f1e44]
+      - generic [ref=f1e45]:
+        - button "Đổi mật khẩu" [ref=f1e46] [cursor=pointer]
+        - button "Kiểm thử" [ref=f1e51] [cursor=pointer]
+        - button "Đăng xuất" [ref=f1e55] [cursor=pointer]
+  - generic [ref=f1e60]:
+    - generic [ref=f1e61]:
+      - generic [ref=f1e62]:
+        - heading "OKR" [level=1] [ref=f1e63]
+        - paragraph [ref=f1e64]: "Vai trò: Quản trị"
+      - tablist "OKR" [ref=f1e66]:
+        - tab "OKR dashboard" [selected] [ref=f1e67] [cursor=pointer]
+        - tab "Nhập liệu OKR" [ref=f1e71] [cursor=pointer]
+        - tab "Tiêu chí đánh giá" [ref=f1e75] [cursor=pointer]
+        - tab "Nguyên tắc đánh giá" [ref=f1e80] [cursor=pointer]
+      - generic [ref=f1e85]:
+        - 'button "Chỉnh sửa: Tắt" [ref=f1e86] [cursor=pointer]'
+        - button "Tải PNG" [ref=f1e93] [cursor=pointer]
+        - button "Thông báo" [ref=f1e101] [cursor=pointer]: "0"
+    - generic [ref=f1e107]:
+      - generic [ref=f1e108]:
+        - paragraph [ref=f1e109]: CHUNG MỘT NIỀM TIN - VƯƠN MÌNH PHÁT TRIỂN
+        - heading "BÁO CÁO KẾ HOẠCH MỤC TIÊU XƯỞNG ĐIỀU KHIỂN THÁNG 07 VÀ LŨY KẾ NĂM 2026" [level=1] [ref=f1e110]
+        - paragraph [ref=f1e111]: (Dữ liệu được cập nhật vào ngày 25 hàng tháng)
+      - generic [ref=f1e112]:
+        - generic [ref=f1e113]:
+          - generic [ref=f1e114]:
+            - heading "Ma trận đánh giá" [level=2] [ref=f1e115]
+            - paragraph [ref=f1e116]: Kỳ T7/2026
+          - generic [ref=f1e117]:
+            - generic [ref=f1e118]:
+              - generic [ref=f1e119]: T7/2026
+              - combobox "Tháng dashboard" [ref=f1e122] [cursor=pointer]:
+                - option "T1"
+                - option "T2"
+                - option "T3"
+                - option "T4"
+                - option "T5"
+                - option "T6"
+                - option "T7" [selected]
+                - option "T8"
+                - option "T9"
+                - option "T10"
+                - option "T11"
+                - option "T12"
+              - spinbutton "Năm dashboard" [ref=f1e123]: "2026"
+            - button "Tải PNG snapshot" [disabled] [ref=f1e124]
+        - generic "Ma trận đánh giá OKR" [ref=f1e130]:
+          - region "Ma trận tổng hợp OKR" [ref=f1e131]:
+            - generic [ref=f1e132]:
+              - strong [ref=f1e134]: Ma trận tổng hợp
+              - generic "Chú giải trạng thái" [ref=f1e135]:
+                - generic [ref=f1e136]: Đạt
+                - generic [ref=f1e137]: Không Đạt
+                - generic [ref=f1e138]: N/A
+            - generic [ref=f1e139]:
+              - generic [ref=f1e140]:
+                - generic [ref=f1e141]:
+                  - strong [ref=f1e142]: "0"
+                  - generic [ref=f1e143]: Đội/tổ cần chú ý
+                - generic [ref=f1e144]:
+                  - strong [ref=f1e145]: "0"
+                  - generic [ref=f1e146]: Mục tiêu Không Đạt
+                - generic [ref=f1e147]:
+                  - strong [ref=f1e148]: "0"
+                  - generic [ref=f1e149]: Chưa có dữ liệu
+              - generic [ref=f1e151]:
+                - strong [ref=f1e152]: Xét A1/A2
+                - generic [ref=f1e153]: Điều chỉnh phân bổ Đội/Tổ trưởng
+            - table "Bảng tổng hợp trạng thái theo đội tổ và mục tiêu" [ref=f1e156]:
+              - row [ref=f1e157]:
+                - columnheader "Đội/Tổ" [ref=f1e158]
+                - columnheader "Đánh giá tháng" [ref=f1e159]
+                - columnheader "Quy định" [ref=f1e160]
+        - generic "Vi phạm quy định của Nhà máy/Công ty" [ref=f1e161]:
+          - heading "⚠ VI PHẠM QUY ĐỊNH CỦA NHÀ MÁY/ CÔNG TY" [level=3] [ref=f1e162]
+          - paragraph [ref=f1e163]: Không ghi nhận vi phạm quy định của Nhà máy/Công ty trong kỳ T7/2026.
+      - region "Dashboard theo mục tiêu" [ref=f1e164]:
+        - generic [ref=f1e165]:
+          - generic [ref=f1e166]:
+            - generic [ref=f1e171]:
+              - paragraph [ref=f1e172]: O1
+              - heading [level=2]
+            - generic [ref=f1e173]: Chưa có dữ liệu
+            - button "KR liên quan" [ref=f1e174] [cursor=pointer]
+          - generic [ref=f1e177]: Chưa có dữ liệu
+        - generic [ref=f1e182]:
+          - generic [ref=f1e183]:
+            - generic [ref=f1e187]:
+              - paragraph [ref=f1e188]: O2
+              - heading [level=2]
+            - generic [ref=f1e189]: Chưa có dữ liệu
+            - button "KR liên quan" [ref=f1e190] [cursor=pointer]
+          - generic [ref=f1e193]: Chưa có dữ liệu
+        - generic [ref=f1e198]:
+          - generic [ref=f1e199]:
+            - generic [ref=f1e204]:
+              - paragraph [ref=f1e205]: O3
+              - heading [level=2]
+            - generic [ref=f1e206]: Chưa có dữ liệu
+            - button "KR liên quan" [ref=f1e207] [cursor=pointer]
+          - generic [ref=f1e210]: Chưa có dữ liệu
+        - generic [ref=f1e215]:
+          - generic [ref=f1e216]:
+            - generic [ref=f1e220]:
+              - paragraph [ref=f1e221]: O4
+              - heading [level=2]
+            - generic [ref=f1e222]: Chưa có dữ liệu
+            - button "KR liên quan" [ref=f1e223] [cursor=pointer]
+          - generic [ref=f1e226]: Chưa có dữ liệu
+        - generic [ref=f1e231]:
+          - generic [ref=f1e232]:
+            - generic [ref=f1e237]:
+              - paragraph [ref=f1e238]: O5
+              - heading [level=2]
+            - generic [ref=f1e239]: Chưa có dữ liệu
+            - button "KR liên quan" [ref=f1e240] [cursor=pointer]
+          - generic [ref=f1e243]: Chưa có dữ liệu
+        - generic [ref=f1e248]:
+          - generic [ref=f1e249]:
+            - generic [ref=f1e257]:
+              - paragraph [ref=f1e258]: O6
+              - heading [level=2]
+            - generic [ref=f1e259]: Chưa có dữ liệu
+            - button "KR liên quan" [ref=f1e260] [cursor=pointer]
+          - generic [ref=f1e263]: Chưa có dữ liệu

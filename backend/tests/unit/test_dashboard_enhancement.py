@@ -8,7 +8,7 @@ from app.services.okr.chart_blocks import build_chart_blocks
 from app.services.okr.dashboard import build_dashboard_view, export_dashboard_workbook
 from app.services.okr.evaluation_rules import classify_dashboard_assessment, source_references
 from app.services.okr.historical_snapshot import _extract_dashboard_note_blocks, import_historical_snapshot
-from app.services.okr.objective_sections import resolve_indicator_value
+from app.services.okr.objective_sections import _apply_dashboard_narratives, resolve_indicator_value
 from app.services.okr.period_resolver import resolve_default_period
 from app.services.okr.team_normalizer import normalize_team_label
 
@@ -72,6 +72,50 @@ def test_chart_blocks_keep_null_distinct_from_zero():
     assert items[0]["participation_rate"] == 0
     assert items[1]["actual"] is None
     assert blocks["training"]["labels"][-1] == "T11"
+
+
+def test_o6_report_backfills_chart_only_kr_details():
+    report = {
+        "krs": [
+            {"code": "O6.KR1", "title": "KR1 RÈN LUYỆN CHẠY BỘ", "lines": []},
+            {"code": "O6.KR2", "title": "KR2 HỘI THAO", "lines": ["Giữ nguyên diễn giải"]},
+        ],
+        "notes": [],
+    }
+    visuals = [
+        {
+            "id": "o6_running",
+            "payload": {
+                "items": [
+                    {
+                        "team": "TBHTĐK",
+                        "team_name": "Đội thiết bị hệ thống điều khiển",
+                        "actual": 5,
+                        "total": 9,
+                        "participation_rate": 5 / 9,
+                    }
+                ],
+            },
+        },
+        {"id": "o6_sports", "payload": {"items": []}},
+    ]
+
+    sections = [{"objective_code": "O6", "visuals": visuals}]
+    _apply_dashboard_narratives(
+        sections,
+        {
+            "report": {"O6": report},
+            "o6_counts": {"running": {"actual": "6", "target": "20"}},
+        },
+    )
+    enriched = sections[0]["report"]
+
+    assert enriched["krs"][0]["lines"] == [
+        "Đội thiết bị hệ thống điều khiển: 5/9 người tham gia, đạt 56%",
+        "Số lần tổ chức (lũy kế): 6/20 (mục tiêu năm)",
+    ]
+    assert enriched["krs"][1]["lines"] == ["Giữ nguyên diễn giải"]
+    assert report["krs"][0]["lines"] == []
 
 
 def test_export_writes_hidden_mapping_warning_sheet(tmp_path):

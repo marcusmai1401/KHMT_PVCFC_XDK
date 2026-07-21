@@ -1,4 +1,5 @@
 import { ClipboardList, StickyNote } from "lucide-react";
+import { useLayoutEffect, useRef } from "react";
 import type { ObjectiveReport as ObjectiveReportData } from "../types/dashboard";
 
 // Trailing progress states the Excel writes inline in a KR heading, e.g.
@@ -28,9 +29,42 @@ function splitStatus(title: string): { name: string; status: string | null } {
   return { name: title, status: null };
 }
 
+function useDenseReportGrid() {
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const grid = gridRef.current;
+    if (!grid || typeof ResizeObserver === "undefined") return;
+
+    const resizeCards = () => {
+      const styles = window.getComputedStyle(grid);
+      const rowHeight = Number.parseFloat(styles.gridAutoRows) || 4;
+      const rowGap = Number.parseFloat(styles.rowGap) || 10;
+      grid.querySelectorAll<HTMLElement>("[data-report-card]").forEach((card) => {
+        const span = Math.ceil((card.getBoundingClientRect().height + rowGap) / (rowHeight + rowGap));
+        const rowEnd = `span ${Math.max(span, 1)}`;
+        if (card.style.gridRowEnd !== rowEnd) card.style.gridRowEnd = rowEnd;
+      });
+    };
+
+    grid.classList.add("is-masonry-ready");
+    const observer = new ResizeObserver(resizeCards);
+    observer.observe(grid);
+    grid.querySelectorAll<HTMLElement>("[data-report-card]").forEach((card) => observer.observe(card));
+    resizeCards();
+    return () => {
+      observer.disconnect();
+      grid.classList.remove("is-masonry-ready");
+    };
+  }, []);
+
+  return gridRef;
+}
+
 export function ObjectiveReport({ report }: { report: ObjectiveReportData }) {
   const krs = Array.isArray(report.krs) ? report.krs : [];
   const notes = Array.isArray(report.notes) ? report.notes : [];
+  const gridRef = useDenseReportGrid();
   if (!krs.length && !notes.length) return null;
 
   return (
@@ -43,11 +77,11 @@ export function ObjectiveReport({ report }: { report: ObjectiveReportData }) {
       </header>
 
       {krs.length ? (
-        <div className="objective-report-grid">
+        <div className="objective-report-grid" ref={gridRef}>
           {krs.map((kr) => {
             const { name, status } = splitStatus(stripKrPrefix(kr.title));
             return (
-              <article className="objective-report-kr" key={kr.code}>
+              <article className="objective-report-kr" data-report-card key={kr.code}>
                 <div className="objective-report-kr-head">
                   <span className="objective-report-kr-code">{shortCode(kr.code)}</span>
                   <p className="objective-report-kr-title">{name}</p>
@@ -59,7 +93,9 @@ export function ObjectiveReport({ report }: { report: ObjectiveReportData }) {
                       <li key={index}>{stripBullet(line)}</li>
                     ))}
                   </ul>
-                ) : null}
+                ) : (
+                  <p className="objective-report-empty">Chưa có diễn giải chi tiết trong tệp nguồn.</p>
+                )}
               </article>
             );
           })}

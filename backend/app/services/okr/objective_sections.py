@@ -839,6 +839,68 @@ def _section(
     }
 
 
+def _display_report_value(value: Any) -> str:
+    if value is None:
+        return "-"
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def _participation_report_lines(visual: VisualBlock) -> list[str]:
+    """Build readable O6 report detail from the same data used by its chart.
+
+    In the Dashboard worksheet, O6.KR1 and O6.KR2 are headings whose details live
+    in charts instead of drawing text.  The verbatim report extractor therefore
+    returns title-only cards even though participation data exists.  Reusing the
+    visual payload keeps the report truthful and prevents those cards looking
+    like missing data.
+    """
+    payload = visual.get("payload") or {}
+    lines: list[str] = []
+    for item in payload.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        actual = item.get("actual", item.get("value"))
+        total = item.get("total")
+        if actual is None and total is None:
+            continue
+        team = item.get("team_name") or item.get("team") or item.get("label") or "Đội/Tổ"
+        participation = f"{_display_report_value(actual)}/{_display_report_value(total)} người tham gia"
+        rate = item.get("participation_rate")
+        if isinstance(rate, (int, float)):
+            participation += f", đạt {round(float(rate) * 100)}%"
+        lines.append(f"{team}: {participation}")
+
+    org_count = payload.get("org_count")
+    if isinstance(org_count, dict) and (org_count.get("actual") is not None or org_count.get("target") is not None):
+        lines.append(
+            "Số lần tổ chức (lũy kế): "
+            f"{_display_report_value(org_count.get('actual'))}/{_display_report_value(org_count.get('target'))} "
+            "(mục tiêu năm)"
+        )
+    return lines
+
+
+def _enrich_objective_report(section_report: dict[str, Any], visuals: list[VisualBlock]) -> dict[str, Any]:
+    visual_by_kr = {
+        "O6.KR1": next((visual for visual in visuals if visual.get("id") == "o6_running"), None),
+        "O6.KR2": next((visual for visual in visuals if visual.get("id") == "o6_sports"), None),
+    }
+    enriched_krs: list[dict[str, Any]] = []
+    for kr in section_report.get("krs") or []:
+        enriched = {**kr, "lines": list(kr.get("lines") or [])}
+        visual = visual_by_kr.get(str(kr.get("code")))
+        if not enriched["lines"] and visual is not None:
+            enriched["lines"] = _participation_report_lines(visual)
+        enriched_krs.append(enriched)
+    return {
+        **section_report,
+        "krs": enriched_krs,
+        "notes": list(section_report.get("notes") or []),
+    }
+
+
 def _apply_dashboard_narratives(sections: list[ObjectiveSection], narratives: dict[str, Any]) -> None:
     """Enrich built sections with the free-text content extracted from the Dashboard sheet.
 
@@ -859,8 +921,6 @@ def _apply_dashboard_narratives(sections: list[ObjectiveSection], narratives: di
         code = section.get("objective_code")
         obj = objectives.get(str(code)) or {}
         section_report = report.get(str(code))
-        if section_report and (section_report.get("krs") or section_report.get("notes")):
-            section["report"] = section_report
         if obj.get("target") is not None:
             section["target"] = obj.get("target")
         if obj.get("result") is not None:
@@ -891,6 +951,8 @@ def _apply_dashboard_narratives(sections: list[ObjectiveSection], narratives: di
                     if str(item.get("workshop_kr_code")) == "O6.KR3":
                         item["org_count"] = o6_counts["culture"]
             visual["payload"] = payload
+        if section_report and (section_report.get("krs") or section_report.get("notes")):
+            section["report"] = _enrich_objective_report(section_report, section.get("visuals") or [])
 
 
 def build_objective_sections(

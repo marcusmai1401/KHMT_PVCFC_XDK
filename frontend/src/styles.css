@@ -11543,8 +11543,22 @@ pre {
 
 /* === Objective O6 Corporate Culture Premium Styling === */
 [data-objective-code="O6"] .objective-visual-grid {
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-auto-flow: dense;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 20px;
+}
+
+[data-objective-code="O6"] .objective-visual-grid > .visual-id-o6_running,
+[data-objective-code="O6"] .objective-visual-grid > .visual-id-o6_sports,
+[data-objective-code="O6"] .objective-visual-grid > .visual-id-o6_culture {
+  grid-column: span 4;
+  width: auto;
+}
+
+[data-objective-code="O6"] .objective-visual,
+[data-objective-code="O6"] .objective-visual > *,
+[data-objective-code="O6"] .objective-visual-header h3 {
+  min-width: 0;
 }
 
 /* O6 Running Card Styling */
@@ -14008,8 +14022,13 @@ pre {
 .objective-report-grid {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-auto-flow: dense;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: start;
+}
+
+.objective-report-grid.is-masonry-ready {
+  grid-auto-rows: 4px;
 }
 
 .objective-report-kr {
@@ -14082,6 +14101,17 @@ pre {
   overflow-wrap: anywhere;
 }
 
+.objective-report-empty {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: var(--bg-main);
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-style: italic;
+  line-height: 1.4;
+}
+
 .objective-report-notes {
   display: grid;
   gap: 6px;
@@ -14108,6 +14138,38 @@ pre {
 
 .app-shell.mobile-view .objective-report-grid {
   grid-template-columns: 1fr;
+  grid-auto-rows: auto;
+}
+
+.app-shell.mobile-view .objective-report-kr {
+  grid-row-end: auto !important;
+}
+
+@media (max-width: 1540px) {
+  [data-objective-code="O6"] .objective-visual-grid > .visual-id-o6_running,
+  [data-objective-code="O6"] .objective-visual-grid > .visual-id-o6_sports {
+    grid-column: span 6;
+  }
+
+  [data-objective-code="O6"] .objective-visual-grid > .visual-id-o6_culture {
+    grid-column: 1 / -1;
+  }
+
+  .objective-report-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1180px) {
+  [data-objective-code="O6"] .objective-visual-grid > .visual-id-o6_running,
+  [data-objective-code="O6"] .objective-visual-grid > .visual-id-o6_sports,
+  [data-objective-code="O6"] .objective-visual-grid > .visual-id-o6_culture {
+    grid-column: 1 / -1;
+  }
+
+  .objective-report-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* O5 training / competency footnotes */

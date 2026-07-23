@@ -193,6 +193,28 @@ def test_team_account_can_register_on_behalf_of_other(client, admin_headers):
     minh_list = client.get("/api/v1/fi/sk-ctkt", headers=minh_headers)
     assert proxy.json()["id"] in {item["id"] for item in minh_list.json()}
 
+    outsider = client.post(
+        "/api/v1/fi/sk-ctkt",
+        headers=minh_headers,
+        json={
+            "title": "Phiếu riêng của tác giả",
+            "content_description": "Nội dung",
+            "completion_plan": "T7/2026",
+        },
+    )
+    assert outsider.status_code == 200, outsider.text
+
+    submitter_ownership = client.get("/api/v1/fi/sk-ctkt?mine_only=true", headers=team_headers)
+    assert submitter_ownership.status_code == 200, submitter_ownership.text
+    submitter_ids = {item["id"] for item in submitter_ownership.json()}
+    assert proxy.json()["id"] in submitter_ids
+    assert outsider.json()["id"] not in submitter_ids
+
+    author_ownership = client.get("/api/v1/fi/sk-ctkt?mine_only=true", headers=minh_headers)
+    assert {proxy.json()["id"], outsider.json()["id"]}.issubset(
+        {item["id"] for item in author_ownership.json()}
+    )
+
     assert client.delete(f"/api/v1/fi/sk-ctkt/{proxy.json()['id']}", headers=team_headers).status_code == 200
 
     proxy_for_author_delete = client.post(

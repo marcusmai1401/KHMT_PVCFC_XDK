@@ -235,6 +235,9 @@ describe("api client auth contract", () => {
     await api.listSk({ include_historical: true, team: "TBĐL" });
     expect(fetchMock).toHaveBeenCalledWith("/api/v1/fi/sk-ctkt?include_historical=true&team=TB%C4%90L", expect.any(Object));
 
+    await api.listSk({ mine_only: true });
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/v1/fi/sk-ctkt?mine_only=true", expect.any(Object));
+
     await api.publicSk({ historical: true, team: "TCĐK" });
     expect(fetchMock).toHaveBeenLastCalledWith("/api/v1/fi/sk-ctkt/public?historical=true&team=TC%C4%90K", expect.any(Object));
   });

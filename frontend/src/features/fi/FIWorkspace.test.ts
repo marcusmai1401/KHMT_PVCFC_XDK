@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildOwnershipSections,
   buildPersonFilterOptions,
   canSelectKhmtMonth,
   displayTeam,
@@ -7,9 +8,50 @@ import {
   isKhmtConsidered,
   khmtLabel,
   matchesHistoryKhmtFilters,
+  ownershipBucketForItem,
   recordSubmitterId,
   visibleActionsForSk,
 } from "./FIWorkspace";
+
+describe("FI ownership lists", () => {
+  it("keeps only actionable statuses in the pending bucket", () => {
+    expect(ownershipBucketForItem({ status: "Draft" })).toBe("pending");
+    expect(ownershipBucketForItem({ status: "Submitted" })).toBe("pending");
+    expect(ownershipBucketForItem({ status: "NeedMoreInfo" })).toBe("pending");
+    expect(ownershipBucketForItem({ status: "Approved" })).toBe("implementation");
+    expect(ownershipBucketForItem({ status: "Rejected" })).toBe("history");
+    expect(ownershipBucketForItem({ status: "Deferred" })).toBe("history");
+    expect(ownershipBucketForItem({ status: "Completed" })).toBe("history");
+  });
+
+  it("keeps approved initiatives visible for their author but archives proxy submissions", () => {
+    const rows = [
+      { id: "submitted", status: "Submitted", updated_at: "2026-07-01T00:00:00Z" },
+      { id: "approved", status: "Approved", updated_at: "2026-07-03T00:00:00Z" },
+      { id: "rejected", status: "Rejected", updated_at: "2026-07-02T00:00:00Z" },
+    ];
+
+    const mine = buildOwnershipSections(rows, "mine");
+    expect(mine.pending.map((item) => item.id)).toEqual(["submitted"]);
+    expect(mine.implementation.map((item) => item.id)).toEqual(["approved"]);
+    expect(mine.history.map((item) => item.id)).toEqual(["rejected"]);
+
+    const sent = buildOwnershipSections(rows, "sent");
+    expect(sent.pending.map((item) => item.id)).toEqual(["submitted"]);
+    expect(sent.implementation).toEqual([]);
+    expect(sent.history.map((item) => item.id)).toEqual(["approved", "rejected"]);
+  });
+
+  it("sorts each ownership section by the most recent activity without mutating input", () => {
+    const rows = [
+      { id: "older", status: "Submitted", updated_at: "2026-07-01T00:00:00Z" },
+      { id: "newer", status: "Submitted", updated_at: "2026-07-05T00:00:00Z" },
+    ];
+
+    expect(buildOwnershipSections(rows, "mine").pending.map((item) => item.id)).toEqual(["newer", "older"]);
+    expect(rows.map((item) => item.id)).toEqual(["older", "newer"]);
+  });
+});
 
 describe("FI person filters", () => {
   it("merges historical author rows into the matching employee account option", () => {

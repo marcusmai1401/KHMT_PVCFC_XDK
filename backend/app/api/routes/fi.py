@@ -3,7 +3,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -171,6 +171,7 @@ def list_sk(
     status: str | None = None,
     q: str | None = None,
     include_historical: bool = False,
+    mine_only: bool = False,
     principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
@@ -185,6 +186,14 @@ def list_sk(
         query = query.where(SKCTKTModel.khmt_year == khmt_year)
     if status:
         query = query.where(SKCTKTModel.status == status)
+    if mine_only:
+        actor = principal["user_id"]
+        submitted_by = SKCTKTModel.status_history[0]["comments"]["submitted_by"].as_string()
+        query = query.where(or_(SKCTKTModel.author_user_id == actor, submitted_by == actor))
+    query = query.order_by(
+        func.coalesce(SKCTKTModel.updated_at, SKCTKTModel.submitted_at, SKCTKTModel.created_at).desc(),
+        SKCTKTModel.id.desc(),
+    )
     records = db.execute(query).scalars().all()
     filtered = []
     for record in records:

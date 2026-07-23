@@ -60,6 +60,8 @@ const AUTHOR_EDITABLE_STATUSES = [
   "Deferred",
 ];
 const OWNER_DELETABLE_STATUSES = ["Draft", "Submitted", "NeedMoreInfo"];
+const OWNERSHIP_PREVIEW_LIMIT = 5;
+const OWNERSHIP_PENDING_STATUSES = new Set(["Draft", "Submitted", "NeedMoreInfo"]);
 const KHMT_MONTHS = Array.from({ length: 12 }, (_, index) => index + 1);
 const KHMT_ASSIGNABLE_STATUSES = ["Approved", "Completed"];
 
@@ -100,6 +102,9 @@ const fiSnapshotNames: Record<FITab, string> = {
   history: "fi-lich-su",
 };
 type ReviewQueueFilter = "pending" | "reviewed" | "all";
+type OwnershipBucket = "pending" | "implementation" | "history";
+type OwnershipMode = "mine" | "sent";
+type OwnershipListKey = "minePending" | "mineImplementation" | "sentPending";
 type HistoryMonthGroup = { key: string; month: number | null; year: number; items: any[] };
 type ReviewDecision = "approve" | "defer" | "reject";
 
@@ -225,6 +230,42 @@ function addMonths(date: Date, months: number) {
   const copy = new Date(date);
   copy.setMonth(copy.getMonth() + months);
   return copy;
+}
+
+function ownershipTimestamp(item: any) {
+  for (const value of [item?.updated_at, item?.submitted_at, item?.created_at]) {
+    if (!value) continue;
+    const timestamp = new Date(value).getTime();
+    if (Number.isFinite(timestamp)) return timestamp;
+  }
+  return 0;
+}
+
+export function ownershipBucketForItem(item: any): OwnershipBucket {
+  if (OWNERSHIP_PENDING_STATUSES.has(item?.status)) return "pending";
+  if (item?.status === "Approved") return "implementation";
+  return "history";
+}
+
+export function buildOwnershipSections(rows: any[], mode: OwnershipMode) {
+  const sections = {
+    pending: [] as any[],
+    implementation: [] as any[],
+    history: [] as any[],
+  };
+  const sortedRows = [...rows].sort(
+    (a, b) => ownershipTimestamp(b) - ownershipTimestamp(a) || String(b?.id || "").localeCompare(String(a?.id || "")),
+  );
+
+  sortedRows.forEach((item) => {
+    const bucket = ownershipBucketForItem(item);
+    if (bucket === "implementation" && mode === "sent") {
+      sections.history.push(item);
+      return;
+    }
+    sections[bucket].push(item);
+  });
+  return sections;
 }
 
 // Chuẩn hoá chuỗi để tìm tác giả không phân biệt dấu/hoa-thường: gõ "Vo", "Võ",
@@ -1470,6 +1511,11 @@ export function FIWorkspace({
   const [exportingHistoryExcel, setExportingHistoryExcel] = useState(false);
   const [activeTab, setActiveTab] = useState<FITab>(defaultTab);
   const [reviewFilter, setReviewFilter] = useState<ReviewQueueFilter>("pending");
+  const [expandedOwnershipLists, setExpandedOwnershipLists] = useState<Record<OwnershipListKey, boolean>>({
+    minePending: false,
+    mineImplementation: false,
+    sentPending: false,
+  });
   const [form, setForm] = useState(() => {
     const today = new Date();
     return {
@@ -1518,10 +1564,12 @@ export function FIWorkspace({
 
   const reload = () => {
     setDashboardLoading(true);
-    Promise.all([api.listSk(), api.publicSk(), api.fiDashboard()])
+    const listFilters = canReview ? {} : { mine_only: true };
+    const historyRequest = activeTab === "history" ? api.publicSk() : Promise.resolve(null);
+    Promise.all([api.listSk(listFilters), historyRequest, api.fiDashboard()])
       .then(([privateList, historyList, dashboardData]) => {
         setItems(privateList.filter((item) => !item.is_historical_import));
-        setAllHistoryItems(historyList);
+        if (historyList) setAllHistoryItems(historyList);
         setDashboard(dashboardData);
         setError("");
       })
@@ -1532,6 +1580,10 @@ export function FIWorkspace({
   useEffect(() => {
     reload();
   }, [role]);
+
+  useEffect(() => {
+    if (activeTab === "history") reload();
+  }, [activeTab]);
 
   useEffect(() => {
     if (!canUseAuthorPicker) return;
@@ -1825,6 +1877,22 @@ export function FIWorkspace({
     setSelectedItem(null);
   };
 
+  const openOwnershipHistory = (mode: OwnershipMode) => {
+    const currentUserKey = personFilterKey(
+      currentUserId,
+      mode === "mine" ? accountAuthorName : registrarName,
+    );
+    selectTab("history");
+    setHistoryTeams([]);
+    setHistoryMonths([]);
+    setHistoryDecisions([]);
+    setHistoryKhmt([]);
+    setHistoryKhmtPeriods([]);
+    setHistoryCompletion([]);
+    setHistoryAuthors(mode === "mine" && currentUserKey ? [currentUserKey] : []);
+    setHistorySubmitters(mode === "sent" && currentUserKey ? [currentUserKey] : []);
+  };
+
   // Quick-filter from the summary stat cards: clicking a card applies that single
   // facet (and toggles off when it is already the only active value).
   const isOnlyHistoryDecision = (value: HistoryDecisionFilter) =>
@@ -2103,6 +2171,8 @@ export function FIWorkspace({
   // "Sáng kiến của tôi" bám theo tác giả/người đứng tên; "Phiếu tôi đã gửi" bám theo người tạo phiếu.
   const myItems = items.filter((item) => recordAuthorId(item) === currentUserId);
   const sentItems = items.filter((item) => recordSubmitterId(item) === currentUserId && recordAuthorId(item) !== currentUserId);
+  const myOwnershipSections = buildOwnershipSections(myItems, "mine");
+  const sentOwnershipSections = buildOwnershipSections(sentItems, "sent");
   const userLabelById = useMemo(() => {
     const map = new Map<string, string>();
     authorOptions.forEach((row) => {
@@ -2473,9 +2543,22 @@ export function FIWorkspace({
     );
   };
 
-  const renderOwnershipItems = (rows: any[], emptyText: string, mode: "mine" | "sent") => (
-    <div className="list">
-      {rows.map((item) => {
+  const toggleOwnershipList = (listKey: OwnershipListKey) => {
+    setExpandedOwnershipLists((current) => ({ ...current, [listKey]: !current[listKey] }));
+  };
+
+  const renderOwnershipItems = (
+    rows: any[],
+    emptyText: string,
+    mode: OwnershipMode,
+    listKey: OwnershipListKey,
+  ) => {
+    const expanded = expandedOwnershipLists[listKey];
+    const visibleRows = expanded ? rows : rows.slice(0, OWNERSHIP_PREVIEW_LIMIT);
+    const hiddenCount = rows.length - visibleRows.length;
+    return (
+      <div className="list">
+      {visibleRows.map((item) => {
         const actions = visibleActionsForSk(role, currentUserId, item, editMode);
         const editedAfterSubmit = item.status !== "Draft" && AUTHOR_EDITABLE_STATUSES.includes(item.status);
         const submitterId = recordSubmitterId(item);
@@ -2525,8 +2608,20 @@ export function FIWorkspace({
         );
       })}
       {rows.length === 0 && renderEmptyState(emptyText)}
-    </div>
-  );
+      {rows.length > OWNERSHIP_PREVIEW_LIMIT && (
+        <button
+          aria-expanded={expanded}
+          className="fi-ownership-expand"
+          onClick={() => toggleOwnershipList(listKey)}
+          type="button"
+        >
+          {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+          {expanded ? "Thu gọn danh sách" : `Xem thêm ${hiddenCount} hồ sơ`}
+        </button>
+      )}
+      </div>
+    );
+  };
 
   const fiSnapshotName = fiSnapshotNames[activeTab];
   return (
@@ -3065,24 +3160,81 @@ export function FIWorkspace({
           </button>
         </div>
         <p className="muted" style={{ marginTop: -4, marginBottom: 10 }}>
-          Danh sách SK-CTKT mà bạn là tác giả/người đứng tên. Sau khi đăng ký xét duyệt, bạn vẫn được sửa nội dung;
-          khi sửa, đầu mối FI và Quản trị sẽ nhận thông báo để xem xét lại.
+          Chỉ hiển thị hồ sơ đang chờ xử lý và sáng kiến đã duyệt chưa hoàn tất. Các hồ sơ đã có kết quả khác vẫn được lưu đầy đủ trong Lịch sử FI.
         </p>
         {error && <p className="error">{error}</p>}
         <div className="fi-list-block">
-          {renderOwnershipItems(myItems, "Bạn chưa đứng tên SK-CTKT nào. Hãy điền form bên trái để đăng ký xét duyệt.", "mine")}
+          <div className="fi-list-block-head fi-ownership-group-head">
+            <h3>
+              <Clock3 size={16} />
+              Đang chờ xử lý
+              <span className="fi-ownership-count">{myOwnershipSections.pending.length}</span>
+            </h3>
+          </div>
+          {renderOwnershipItems(
+            myOwnershipSections.pending,
+            "Bạn không có sáng kiến nào đang chờ xử lý.",
+            "mine",
+            "minePending",
+          )}
         </div>
+        {myOwnershipSections.implementation.length > 0 && (
+          <div className="fi-list-block fi-implementation-block">
+            <div className="fi-list-block-head fi-ownership-group-head">
+              <div>
+                <h3>
+                  <CheckCircle2 size={16} />
+                  Đã duyệt – đang thực hiện
+                  <span className="fi-ownership-count success">{myOwnershipSections.implementation.length}</span>
+                </h3>
+                <p className="muted">Theo dõi đến khi sáng kiến được ghi nhận hoàn tất.</p>
+              </div>
+            </div>
+            {renderOwnershipItems(
+              myOwnershipSections.implementation,
+              "Bạn chưa có sáng kiến nào đang thực hiện.",
+              "mine",
+              "mineImplementation",
+            )}
+          </div>
+        )}
+        {myOwnershipSections.history.length > 0 && (
+          <button className="fi-ownership-history-link" onClick={() => openOwnershipHistory("mine")} type="button">
+            <History size={16} />
+            <span>
+              <strong>{myOwnershipSections.history.length} hồ sơ đã có kết quả</strong>
+              <small>Xem toàn bộ hồ sơ của tôi trong Lịch sử FI</small>
+            </span>
+            <ChevronRight size={16} />
+          </button>
+        )}
         <div className="fi-list-block fi-sent-block">
-          <div className="fi-list-block-head">
+          <div className="fi-list-block-head fi-ownership-group-head">
             <div>
               <h3>
                 <Send size={16} />
                 Phiếu tôi đã gửi
+                <span className="fi-ownership-count">{sentOwnershipSections.pending.length}</span>
               </h3>
-              <p className="muted">Các phiếu bạn trình giúp người khác. Phiếu vẫn thuộc về người đứng tên.</p>
+              <p className="muted">Chỉ hiện phiếu đăng ký hộ đang chờ xử lý hoặc cần bổ sung.</p>
             </div>
           </div>
-          {renderOwnershipItems(sentItems, "Bạn chưa có phiếu đăng ký hộ nào.", "sent")}
+          {renderOwnershipItems(
+            sentOwnershipSections.pending,
+            "Bạn không có phiếu đăng ký hộ nào đang chờ xử lý.",
+            "sent",
+            "sentPending",
+          )}
+          {sentOwnershipSections.history.length > 0 && (
+            <button className="fi-ownership-history-link compact" onClick={() => openOwnershipHistory("sent")} type="button">
+              <History size={16} />
+              <span>
+                <strong>{sentOwnershipSections.history.length} phiếu đã có kết quả</strong>
+                <small>Xem toàn bộ phiếu tôi đã gửi trong Lịch sử FI</small>
+              </span>
+              <ChevronRight size={16} />
+            </button>
+          )}
         </div>
       </section>
       </div>

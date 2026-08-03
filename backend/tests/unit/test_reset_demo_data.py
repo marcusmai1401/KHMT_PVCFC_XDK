@@ -6,6 +6,7 @@ from app.core.config import settings
 from app.db.session import create_session
 from app.models.domain import (
     AuditLogModel,
+    FIMonthlyAllocationModel,
     HistoricalSnapshotModel,
     NotificationModel,
     SKCTKTModel,
@@ -62,6 +63,42 @@ def test_reset_demo_data_preserves_verified_historical_imports(db_session, tmp_p
 
     db_session.add(_report("report-historical", "historical_import", 1, str(historical_file)))
     db_session.add(_report("report-demo", "web_input", 5, str(demo_upload)))
+    db_session.add(
+        FIMonthlyAllocationModel(
+            id="allocation-historical",
+            team="TBCH",
+            month=1,
+            year=2026,
+            assessment="Hoàn thành nhiệm vụ",
+            required_count=1,
+            allocated_count=0,
+            available_count=0,
+            selected_sk_ids=[],
+            released_sk_ids=[],
+            report_id="report-historical",
+            report_version=1,
+            finalized_by="admin",
+            finalized_at=datetime.now(timezone.utc),
+        )
+    )
+    db_session.add(
+        FIMonthlyAllocationModel(
+            id="allocation-demo",
+            team="TBCH",
+            month=5,
+            year=2026,
+            assessment="Hoàn thành nhiệm vụ",
+            required_count=1,
+            allocated_count=0,
+            available_count=0,
+            selected_sk_ids=[],
+            released_sk_ids=[],
+            report_id="report-demo",
+            report_version=1,
+            finalized_by="admin",
+            finalized_at=datetime.now(timezone.utc),
+        )
+    )
     db_session.add(
         WarningModel(
             id="warn-historical",
@@ -172,6 +209,8 @@ def test_reset_demo_data_preserves_verified_historical_imports(db_session, tmp_p
     with create_session() as db:
         assert db.get(TeamReportModel, "report-historical") is not None
         assert db.get(TeamReportModel, "report-demo") is None
+        assert db.get(FIMonthlyAllocationModel, "allocation-historical") is not None
+        assert db.get(FIMonthlyAllocationModel, "allocation-demo") is None
         assert db.get(WarningModel, "warn-historical") is not None
         assert db.get(WarningModel, "warn-demo") is None
         assert db.get(TeamMonthlySummaryModel, "summary-historical") is not None
@@ -189,4 +228,5 @@ def test_reset_demo_data_preserves_verified_historical_imports(db_session, tmp_p
     assert not demo_image.exists()
     assert not demo_export.exists()
     assert counts["okr_team_reports"] == 1
+    assert counts["okr_fi_monthly_allocations"] == 1
     assert counts["okr_warnings"] == 1

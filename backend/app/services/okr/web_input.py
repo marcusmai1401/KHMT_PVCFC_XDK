@@ -12,6 +12,14 @@ from app.core.security import Role
 from app.models.domain import TeamReportModel
 from app.schemas.web_input import MonthlyConclusionInput, WebInputPayload
 from app.services.cache import cache_delete_prefix
+from app.services.fi.monthly_allocation import (
+    FIAllocationError,
+    allocation_record_for_period,
+    allocation_record_to_dict,
+    finalize_monthly_fi_allocation,
+    mark_monthly_fi_allocation_reopened,
+    preview_monthly_fi_allocation,
+)
 from app.services.okr.constants import TEAMS
 from app.services.okr.email_report import generate_email_report, write_email_report_file
 from app.services.okr.extraction import extract_metrics
@@ -388,13 +396,43 @@ def lock_report(db: Session, team: str, month: int, year: int, reason: str, prin
     report = current_submitted_report(db, team, month, year) or _current_draft(db, team, month, year)
     if report is None:
         raise _error(404, "REPORT_NOT_FOUND", "Không tìm thấy báo cáo để chốt")
-    before = model_to_dict(report)
-    report.report_status = "locked"
-    report.locked_at = _now()
-    report.locked_by = principal["user_id"]
-    report.lock_reason = reason
-    audit(db, principal["user_id"], "TeamReport", report.id, "lock", {"before": before, "reason": reason})
-    db.commit()
+    try:
+        # Serialize finalization for one report. This also protects quota-zero
+        # periods where there may be no FI candidate rows available to lock.
+        report = db.execute(
+            select(TeamReportModel)
+            .where(TeamReportModel.id == report.id)
+            .with_for_update()
+        ).scalar_one()
+        allocation = finalize_monthly_fi_allocation(db, report, principal["user_id"])
+        before = model_to_dict(report)
+        report.report_status = "locked"
+        report.locked_at = _now()
+        report.locked_by = principal["user_id"]
+        report.lock_reason = reason
+        audit(
+            db,
+            principal["user_id"],
+            "TeamReport",
+            report.id,
+            "lock",
+            {
+                "before": before,
+                "reason": reason,
+                "fi_allocation_id": allocation["allocation"]["id"],
+                "fi_required_count": allocation["required_count"],
+                "fi_selected_sk_ids": allocation["selected_sk_ids"],
+            },
+        )
+        db.commit()
+    except FIAllocationError as exc:
+        db.rollback()
+        status_code = 409 if exc.code == "FI_ALLOCATION_SHORTAGE" else 400
+        raise _error(status_code, exc.code, str(exc), exc.details) from exc
+    except Exception:
+        db.rollback()
+        raise
+    cache_delete_prefix("fi:public_sk")
     cache_delete_prefix("okr:dashboard")
     db.refresh(report)
     return report
@@ -411,11 +449,41 @@ def unlock_report(db: Session, team: str, month: int, year: int, reason: str, pr
     report.locked_at = None
     report.locked_by = None
     report.lock_reason = None
+    mark_monthly_fi_allocation_reopened(
+        db,
+        team=team,
+        month=month,
+        year=year,
+        actor=principal["user_id"],
+        reason=reason,
+    )
     audit(db, principal["user_id"], "TeamReport", report.id, "unlock", {"before": before, "reason": reason})
     db.commit()
     cache_delete_prefix("okr:dashboard")
     db.refresh(report)
     return report
+
+
+def preview_fi_allocation(
+    db: Session,
+    team: str,
+    month: int,
+    year: int,
+    principal: dict[str, str],
+) -> dict[str, Any]:
+    if principal["role"] != Role.ADMIN.value:
+        raise _error(403, "FORBIDDEN", "Chỉ Admin được xem trước phân bổ FI")
+    report = current_submitted_report(db, team, month, year) or _current_draft(db, team, month, year)
+    if report is None:
+        raise _error(404, "REPORT_NOT_FOUND", "Không tìm thấy báo cáo để phân bổ FI")
+    try:
+        return preview_monthly_fi_allocation(db, report)
+    except FIAllocationError as exc:
+        raise _error(400, exc.code, str(exc), exc.details) from exc
+
+
+def fi_allocation_for_period(db: Session, team: str, month: int, year: int) -> dict[str, Any] | None:
+    return allocation_record_to_dict(allocation_record_for_period(db, team, month, year))
 
 
 def statuses_for_period(db: Session, month: int, year: int, principal: dict[str, str]) -> list[dict[str, Any]]:

@@ -14,7 +14,9 @@ from app.services.okr.report_template import generate_excel_from_web_input
 from app.services.okr.web_input import (
     assert_team_access,
     get_current_input_report,
+    fi_allocation_for_period,
     lock_report,
+    preview_fi_allocation,
     preview_for_report,
     save_draft,
     serialize_web_input,
@@ -131,7 +133,20 @@ def post_web_input_lock(
     db: Session = Depends(get_db),
 ):
     report = lock_report(db, team, month, year, payload.reason, principal)
-    return serialize_web_input(report, team, month, year)
+    result = serialize_web_input(report, team, month, year)
+    result["fi_allocation"] = fi_allocation_for_period(db, team, month, year)
+    return result
+
+
+@router.get("/{team}/{month}/{year}/fi-allocation-preview")
+def get_fi_allocation_preview(
+    team: str,
+    month: int,
+    year: int,
+    principal: dict = Depends(require_role(Role.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    return preview_fi_allocation(db, team, month, year, principal)
 
 
 @router.post("/{team}/{month}/{year}/unlock")

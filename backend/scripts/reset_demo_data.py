@@ -12,6 +12,7 @@ from app.db.session import create_session
 from app.models import et_domain  # noqa: F401 - register ET tables with SQLAlchemy metadata
 from app.models.domain import (
     AuditLogModel,
+    FIMonthlyAllocationModel,
     HistoricalSnapshotModel,
     NotificationModel,
     SKCTKTModel,
@@ -151,12 +152,18 @@ def _delete_demo_reports_and_warnings(db: Session) -> dict[str, int]:
     all_report_ids = set(db.scalars(select(TeamReportModel.id)).all())
     demo_report_ids = all_report_ids - preserved_ids
     counts = {
+        "fi_monthly_allocations": 0,
         "warnings": 0,
         "team_reports": 0,
         "team_monthly_summaries": 0,
         "historical_snapshots": 0,
     }
     if demo_report_ids:
+        counts["fi_monthly_allocations"] += _delete_statement(
+            db,
+            FIMonthlyAllocationModel,
+            FIMonthlyAllocationModel.report_id.in_(demo_report_ids),
+        )
         counts["warnings"] += _delete_statement(db, WarningModel, WarningModel.team_report_id.in_(demo_report_ids))
         counts["team_reports"] += _delete_statement(db, TeamReportModel, TeamReportModel.id.in_(demo_report_ids))
     counts["warnings"] += _delete_statement(db, WarningModel, WarningModel.team_report_id.is_(None))
@@ -170,6 +177,14 @@ def _delete_demo_reports_and_warnings(db: Session) -> dict[str, int]:
         )
     else:
         counts["warnings"] += _delete_statement(db, WarningModel, WarningModel.team_report_id.is_not(None))
+    if remaining_report_ids:
+        counts["fi_monthly_allocations"] += _delete_statement(
+            db,
+            FIMonthlyAllocationModel,
+            FIMonthlyAllocationModel.report_id.not_in(remaining_report_ids),
+        )
+    else:
+        counts["fi_monthly_allocations"] += _delete_statement(db, FIMonthlyAllocationModel)
     counts["team_monthly_summaries"] += _delete_non_historical_summaries(db)
     counts["historical_snapshots"] += _delete_non_verified_snapshots(db)
     return counts

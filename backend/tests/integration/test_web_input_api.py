@@ -1,6 +1,10 @@
 from io import BytesIO
+from datetime import datetime, timezone
 
 from openpyxl import load_workbook
+
+from app.db.session import create_session
+from app.models.domain import FIMonthlyAllocationModel, SKCTKTModel, TeamReportModel
 
 
 def _login(client, user_id: str, password: str) -> dict[str, str]:
@@ -31,6 +35,28 @@ def _valid_payload(client, headers):
         },
         "objective_overrides": {"O1": "Hoàn thành tốt nhiệm vụ"},
     }
+
+
+def _approved_fi(record_id: str, *, team: str, approved_at: datetime) -> SKCTKTModel:
+    return SKCTKTModel(
+        id=record_id,
+        sk_code=f"FI/04/2026-{team}-{record_id[-2:]}",
+        title=f"FI hợp lệ {record_id}",
+        author_name="Nhân sự kiểm thử",
+        author_user_id="staff-test",
+        team=team,
+        content_description="Nội dung FI kiểm thử",
+        completion_plan="Kế hoạch hoàn thành",
+        status="Approved",
+        status_history=[],
+        consider_for_khmt=False,
+        is_public=True,
+        is_counted_for_okr=False,
+        is_historical_import=False,
+        created_at=approved_at,
+        submitted_at=approved_at,
+        approved_at=approved_at,
+    )
 
 
 def test_web_input_draft_submit_lock_export_flow(client):
@@ -100,6 +126,24 @@ def test_web_input_draft_submit_lock_export_flow(client):
     assert manager_reports_after_submit.status_code == 200
     assert [report["report_status"] for report in manager_reports_after_submit.json()] == ["submitted"]
 
+    with create_session() as db:
+        db.add(
+            _approved_fi(
+                "sk-web-lock-01",
+                team="TBCH",
+                approved_at=datetime(2026, 4, 20, tzinfo=timezone.utc),
+            )
+        )
+        db.commit()
+
+    allocation_preview = client.get(
+        "/api/v1/okr/web-input/TBCH/4/2026/fi-allocation-preview",
+        headers=admin_headers,
+    )
+    assert allocation_preview.status_code == 200, allocation_preview.text
+    assert allocation_preview.json()["required_count"] == 1
+    assert allocation_preview.json()["selected_sk_ids"] == ["sk-web-lock-01"]
+
     locked = client.post(
         "/api/v1/okr/web-input/TBCH/4/2026/lock",
         headers=admin_headers,
@@ -107,6 +151,8 @@ def test_web_input_draft_submit_lock_export_flow(client):
     )
     assert locked.status_code == 200, locked.text
     assert locked.json()["status"] == "Đã chốt"
+    assert locked.json()["fi_allocation"]["allocated_count"] == 1
+    assert locked.json()["fi_allocation"]["selected_sk_ids"] == ["sk-web-lock-01"]
 
     blocked = client.put(
         "/api/v1/okr/web-input/TBCH/4/2026/draft",
@@ -122,6 +168,65 @@ def test_web_input_draft_submit_lock_export_flow(client):
     )
     assert unlocked.status_code == 200, unlocked.text
     assert unlocked.json()["status"] == "Đã gửi"
+
+    with create_session() as db:
+        plan = db.query(FIMonthlyAllocationModel).filter_by(team="TBCH", month=4, year=2026).one()
+        selected = db.get(SKCTKTModel, "sk-web-lock-01")
+        assert plan.status == "reopened"
+        assert selected is not None and selected.consider_for_khmt is True
+
+
+def test_fi_shortage_blocks_lock_and_preserves_submitted_report(client):
+    headers = _login(client, "admin", "admin-pass")
+    payload = _valid_payload(client, headers)
+    payload["monthly_conclusion"]["overall_assessment"] = "Hoàn thành tốt nhiệm vụ"
+
+    submitted = client.post(
+        "/api/v1/okr/web-input/TBĐL/7/2026/submit",
+        headers=headers,
+        json={"data": payload},
+    )
+    assert submitted.status_code == 200, submitted.text
+
+    with create_session() as db:
+        db.add(
+            _approved_fi(
+                "sk-shortage-01",
+                team="TBĐL",
+                approved_at=datetime(2026, 6, 20, tzinfo=timezone.utc),
+            )
+        )
+        db.commit()
+
+    preview = client.get(
+        "/api/v1/okr/web-input/TBĐL/7/2026/fi-allocation-preview",
+        headers=headers,
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["required_count"] == 3
+    assert preview.json()["available_count"] == 1
+    assert preview.json()["shortage_count"] == 2
+    assert preview.json()["can_finalize"] is False
+
+    locked = client.post(
+        "/api/v1/okr/web-input/TBĐL/7/2026/lock",
+        headers=headers,
+        json={"reason": "Không được khóa khi thiếu FI"},
+    )
+    assert locked.status_code == 409, locked.text
+    assert locked.json()["detail"]["error_code"] == "FI_ALLOCATION_SHORTAGE"
+
+    with create_session() as db:
+        report = db.query(TeamReportModel).filter_by(
+            team="TBĐL",
+            report_month=7,
+            report_year=2026,
+            is_current_version=True,
+        ).one()
+        fi_record = db.get(SKCTKTModel, "sk-shortage-01")
+        assert report.report_status == "submitted"
+        assert fi_record is not None and fi_record.consider_for_khmt is False
+        assert db.query(FIMonthlyAllocationModel).count() == 0
 
 
 def test_team_account_cannot_access_other_team_web_input(client):

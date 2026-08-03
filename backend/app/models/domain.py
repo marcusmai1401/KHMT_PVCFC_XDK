@@ -184,6 +184,41 @@ class SKCTKTModel(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class FIMonthlyAllocationModel(Base):
+    __tablename__ = "fi_monthly_allocations"
+    __table_args__ = (UniqueConstraint("team", "month", "year", name="uq_fi_allocation_team_period"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    team: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    month: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    assessment: Mapped[str] = mapped_column(String, nullable=False)
+    required_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    allocated_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    available_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    selected_sk_ids: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    released_sk_ids: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    allocation_strategy: Mapped[str] = mapped_column(
+        String,
+        default="oldest_approved_first",
+        server_default="oldest_approved_first",
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(
+        String,
+        default="finalized",
+        server_default="finalized",
+        nullable=False,
+        index=True,
+    )
+    report_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    report_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    finalized_by: Mapped[str] = mapped_column(String, nullable=False)
+    finalized_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), onupdate=func.now())
+
+
 class SKImageModel(Base):
     __tablename__ = "sk_images"
 

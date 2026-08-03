@@ -174,6 +174,21 @@ describe("api client auth contract", () => {
     expect(fetchMock).toHaveBeenLastCalledWith("/api/v1/okr/web-input/TBCH/4/2026/unlock", expect.any(Object));
   });
 
+  it("loads the monthly FI allocation preview before locking", async () => {
+    setToken("signed-token");
+    fetchMock.mockResolvedValue(okJson({ required_count: 3, can_finalize: true }));
+
+    await api.previewMonthlyFiAllocation("TBHTĐK", 7, 2026);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/okr/web-input/TBHT%C4%90K/7/2026/fi-allocation-preview",
+      expect.any(Object)
+    );
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(init.method).toBeUndefined();
+    expect((init.headers as Headers).get("Authorization")).toBe("Bearer signed-token");
+  });
+
   it("uses ET assessment update and submit endpoints", async () => {
     setToken("signed-token");
     fetchMock.mockResolvedValue(okJson({ id: "a1" }));

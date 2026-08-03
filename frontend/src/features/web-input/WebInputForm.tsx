@@ -99,6 +99,33 @@ type ValidationError = {
   kr_code?: string | null;
 };
 
+type FIAllocationCandidate = {
+  id: string;
+  sk_code: string;
+  title: string;
+  author_name: string;
+  status: string;
+  approved_at: string | null;
+  already_assigned: boolean;
+};
+
+type FIAllocationPreview = {
+  team: string;
+  month: number;
+  year: number;
+  assessment: string;
+  required_count: number;
+  currently_assigned_count: number;
+  unassigned_pool_count: number;
+  available_count: number;
+  shortage_count: number;
+  can_finalize: boolean;
+  selected_records: FIAllocationCandidate[];
+  to_assign_sk_ids: string[];
+  to_release_sk_ids: string[];
+  invalid_current_records: FIAllocationCandidate[];
+};
+
 function krSortKey(code: string): [number, number, string] {
   const match = /^O(\d+)\.KR(\d+)$/i.exec(code || "");
   if (!match) return [999, 999, code || ""];
@@ -268,6 +295,9 @@ export function WebInputForm({
   const [violatorPickerOpen, setViolatorPickerOpen] = useState(false);
   const [violatorSearch, setViolatorSearch] = useState("");
   const [hasSavedDraft, setHasSavedDraft] = useState(false);
+  const [fiAllocationPreview, setFiAllocationPreview] = useState<FIAllocationPreview | null>(null);
+  const [fiAllocationReason, setFiAllocationReason] = useState("");
+  const [fiAllocationLoading, setFiAllocationLoading] = useState(false);
   const autosaveTimer = useRef<number | null>(null);
 
   const canWrite = role === "Admin" && editMode;
@@ -349,6 +379,8 @@ export function WebInputForm({
   // so user has to confirm again before submitting.
   useEffect(() => {
     setHasSavedDraft(false);
+    setFiAllocationPreview(null);
+    setFiAllocationReason("");
   }, [team, month, year]);
 
   useEffect(() => {
@@ -480,15 +512,56 @@ export function WebInputForm({
     setShowPreview(true);
   }
 
-  function toggleLock(nextLocked: boolean) {
-    const reason = window.prompt(nextLocked ? "Lý do chốt báo cáo" : "Lý do mở chốt báo cáo");
-    if (!reason) return;
-    const request = nextLocked ? api.lockWebInput(team, month, year, reason) : api.unlockWebInput(team, month, year, reason);
-    request.then((response) => {
-      setStatus(response.status);
-      setLocked(Boolean(response.locked));
-      setError(nextLocked ? "Đã chốt báo cáo." : "Đã mở chốt báo cáo.");
-    }).catch((err) => setError(err.message));
+  function openFiAllocationPreview() {
+    if (unsaved) {
+      setError("Cần lưu thay đổi trước khi xem trước và chốt phân bổ FI.");
+      return;
+    }
+    if (version === null) {
+      setError("Chưa có báo cáo tháng để chốt phân bổ FI.");
+      return;
+    }
+    setFiAllocationLoading(true);
+    setError("");
+    api.previewMonthlyFiAllocation(team, month, year)
+      .then((preview) => {
+        setFiAllocationPreview(preview);
+        setFiAllocationReason(`Chốt KHMT tháng ${month}/${year}`);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setFiAllocationLoading(false));
+  }
+
+  function confirmFiAllocation() {
+    if (!fiAllocationPreview?.can_finalize || !fiAllocationReason.trim() || fiAllocationLoading) return;
+    setFiAllocationLoading(true);
+    setError("");
+    api.lockWebInput(team, month, year, fiAllocationReason.trim())
+      .then((response) => {
+        const allocated = Number(response.fi_allocation?.allocated_count ?? fiAllocationPreview.required_count);
+        setStatus(response.status);
+        setLocked(Boolean(response.locked));
+        setVersion(response.version ?? version);
+        setFiAllocationPreview(null);
+        setFiAllocationReason("");
+        setError(`Đã chốt báo cáo và tự phân bổ ${allocated} FI vào KHMT T${month}/${year}.`);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setFiAllocationLoading(false));
+  }
+
+  function unlockMonthlyReport() {
+    const reason = window.prompt("Lý do mở chốt báo cáo");
+    if (!reason?.trim()) return;
+    setFiAllocationLoading(true);
+    api.unlockWebInput(team, month, year, reason.trim())
+      .then((response) => {
+        setStatus(response.status);
+        setLocked(Boolean(response.locked));
+        setError("Đã mở chốt báo cáo. Phân bổ FI hiện tại được giữ cho đến lần chốt lại.");
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setFiAllocationLoading(false));
   }
 
   const saveLabel = saving ? "Đang lưu" : unsaved ? "Chưa lưu" : savedAt ? `Đã lưu ${new Date(savedAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}` : "Chưa có dữ liệu";
@@ -548,7 +621,21 @@ export function WebInputForm({
             </button>
           )}
           {role === "Admin" && editMode && (
-            <button type="button" onClick={() => toggleLock(!locked)}>{locked ? <Unlock size={17} /> : <Lock size={17} />}{locked ? "Mở chốt" : "Chốt"}</button>
+            <button
+              type="button"
+              onClick={locked ? unlockMonthlyReport : openFiAllocationPreview}
+              disabled={saving || fiAllocationLoading || (!locked && (unsaved || version === null))}
+              title={
+                locked
+                  ? "Mở chốt để điều chỉnh báo cáo"
+                  : unsaved
+                  ? "Cần lưu thay đổi trước khi chốt"
+                  : "Xem trước và tự phân bổ FI trước khi chốt"
+              }
+            >
+              {locked ? <Unlock size={17} /> : <Lock size={17} />}
+              {locked ? "Mở chốt" : fiAllocationLoading ? "Đang kiểm tra FI" : "Chốt & phân bổ FI"}
+            </button>
           )}
         </div>
         <div className="progress-line" aria-label="Tiến độ hoàn thành">
@@ -562,6 +649,141 @@ export function WebInputForm({
           </p>
         )}
       </section>
+
+      {fiAllocationPreview && (
+        <div className="fi-allocation-backdrop" role="presentation">
+          <section
+            aria-labelledby="fi-allocation-title"
+            aria-modal="true"
+            className="fi-allocation-modal"
+            role="dialog"
+          >
+            <header className="fi-allocation-modal-head">
+              <div>
+                <span className="fi-allocation-kicker">Chốt KHMT tháng {fiAllocationPreview.month}/{fiAllocationPreview.year}</span>
+                <h2 id="fi-allocation-title">Tự phân bổ FI · {fiAllocationPreview.team}</h2>
+                <p>{fiAllocationPreview.assessment}</p>
+              </div>
+              <button
+                aria-label="Đóng xem trước phân bổ FI"
+                className="fi-allocation-close"
+                disabled={fiAllocationLoading}
+                onClick={() => setFiAllocationPreview(null)}
+                type="button"
+              >
+                <X size={19} />
+              </button>
+            </header>
+
+            <div className="fi-allocation-modal-body">
+              <div className="fi-allocation-stats">
+                <div>
+                  <span>Định mức</span>
+                  <strong>{fiAllocationPreview.required_count} FI</strong>
+                </div>
+                <div>
+                  <span>Đã gán kỳ này</span>
+                  <strong>{fiAllocationPreview.currently_assigned_count}</strong>
+                </div>
+                <div>
+                  <span>Kho chưa phân bổ</span>
+                  <strong>{fiAllocationPreview.unassigned_pool_count}</strong>
+                </div>
+                <div className={fiAllocationPreview.can_finalize ? "is-ready" : "is-shortage"}>
+                  <span>Khả dụng</span>
+                  <strong>{fiAllocationPreview.available_count}/{fiAllocationPreview.required_count}</strong>
+                </div>
+              </div>
+
+              {!fiAllocationPreview.can_finalize && (
+                <div className="fi-allocation-alert is-danger" role="alert">
+                  <AlertTriangle size={18} />
+                  <div>
+                    <strong>Không đủ FI để chốt mức đánh giá này</strong>
+                    <p>
+                      Còn thiếu {fiAllocationPreview.shortage_count} FI đã duyệt. Hãy bổ sung FI hợp lệ hoặc điều chỉnh mức đánh giá tháng.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {fiAllocationPreview.invalid_current_records.length > 0 && (
+                <div className="fi-allocation-alert is-warning">
+                  <AlertTriangle size={18} />
+                  <div>
+                    <strong>Có phân bổ hiện tại không còn hợp lệ</strong>
+                    <p>{fiAllocationPreview.invalid_current_records.length} FI sẽ được trả về trạng thái chưa phân bổ khi chốt lại.</p>
+                  </div>
+                </div>
+              )}
+
+              <section className="fi-allocation-selection">
+                <div className="panel-header">
+                  <div>
+                    <h3>FI hệ thống sẽ ghi nhận</h3>
+                    <p className="panel-sub">Ưu tiên FI được duyệt cũ nhất và chưa tính ở tháng khác.</p>
+                  </div>
+                  <span className="status-badge">{fiAllocationPreview.selected_records.length}/{fiAllocationPreview.required_count}</span>
+                </div>
+                {fiAllocationPreview.selected_records.length > 0 ? (
+                  <div className="fi-allocation-list">
+                    {fiAllocationPreview.selected_records.map((item, index) => (
+                      <article key={item.id}>
+                        <span className="fi-allocation-order">{index + 1}</span>
+                        <div>
+                          <strong>{item.sk_code}</strong>
+                          <p>{item.title}</p>
+                          <small>
+                            {item.author_name}
+                            {item.approved_at ? ` · Duyệt ${new Date(item.approved_at).toLocaleDateString("vi-VN")}` : ""}
+                            {item.already_assigned ? " · Đang được gán kỳ này" : ""}
+                          </small>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="fi-allocation-empty">
+                    <CheckCircle2 size={20} />
+                    <span>Mức đánh giá này không yêu cầu ghi nhận FI.</span>
+                  </div>
+                )}
+              </section>
+
+              {fiAllocationPreview.to_release_sk_ids.length > 0 && (
+                <p className="fi-allocation-release-note">
+                  {fiAllocationPreview.to_release_sk_ids.length} FI vượt định mức hoặc không hợp lệ sẽ được trả về kho chưa phân bổ.
+                </p>
+              )}
+
+              <label className="fi-allocation-reason">
+                <span>Lý do chốt báo cáo</span>
+                <textarea
+                  maxLength={2000}
+                  onChange={(event) => setFiAllocationReason(event.target.value)}
+                  rows={2}
+                  value={fiAllocationReason}
+                />
+              </label>
+            </div>
+
+            <footer className="fi-allocation-modal-actions">
+              <button
+                className="btn-primary"
+                disabled={!fiAllocationPreview.can_finalize || !fiAllocationReason.trim() || fiAllocationLoading}
+                onClick={confirmFiAllocation}
+                type="button"
+              >
+                {fiAllocationLoading ? <Loader2 className="icon-spin" size={17} /> : <Lock size={17} />}
+                {fiAllocationLoading ? "Đang chốt..." : "Xác nhận chốt và phân bổ FI"}
+              </button>
+              <button disabled={fiAllocationLoading} onClick={() => setFiAllocationPreview(null)} type="button">
+                Quay lại điều chỉnh
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
 
       <section className="panel wide kr-input-panel">
         <div className="panel-header">

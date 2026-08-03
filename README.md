@@ -104,6 +104,23 @@ LĐX phê duyệt
     └── Hoãn/Lưu → Ghi rõ lý do
 ```
 
+### Chốt và tự phân bổ FI vào KHMT tháng
+
+Khi Admin chốt báo cáo tháng của một đội/tổ, hệ thống hiển thị trước danh sách FI sẽ được ghi nhận và phân bổ đúng theo mức đánh giá chung:
+
+| Mức đánh giá tháng | Số FI ghi nhận |
+|---|---:|
+| Không hoàn thành nhiệm vụ | 0 |
+| Hoàn thành nhiệm vụ | 1 |
+| Hoàn thành tốt nhiệm vụ | 3 |
+| Hoàn thành xuất sắc nhiệm vụ | 3 |
+
+- Chỉ dùng FI của đúng đội/tổ, đã được duyệt hoặc hoàn thành không muộn hơn ngày cuối kỳ và chưa phân bổ cho tháng khác.
+- Ưu tiên FI được duyệt cũ nhất; FI đã gán hợp lệ cho kỳ hiện tại được giữ lại trước.
+- Nếu không đủ định mức, hệ thống không khóa báo cáo và không thay đổi phân bổ hiện tại.
+- Chốt lại cùng mức không cộng trùng. Nếu hạ mức, FI vượt định mức được trả về kho chưa phân bổ.
+- Mở chốt giữ nguyên phân bổ hiện tại; lần chốt lại sẽ đồng bộ theo mức đánh giá mới trong một giao dịch.
+
 ---
 
 ## Cấu trúc thư mục

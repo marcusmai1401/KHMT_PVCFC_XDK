@@ -193,6 +193,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ reason })
     }),
+  previewMonthlyFiAllocation: (team: string, month: number, year: number) =>
+    request<any>(`/okr/web-input/${encodeURIComponent(team)}/${month}/${year}/fi-allocation-preview`),
   unlockWebInput: (team: string, month: number, year: number, reason: string) =>
     request<any>(`/okr/web-input/${encodeURIComponent(team)}/${month}/${year}/unlock`, {
       method: "POST",

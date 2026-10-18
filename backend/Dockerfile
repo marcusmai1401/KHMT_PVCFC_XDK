@@ -25,4 +25,7 @@ RUN mkdir -p /app/storage/uploads /app/storage/exports /app/storage/templates /a
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Caddy -> nginx -> backend: trust X-Forwarded-For so per-client limits see the
+# real visitor instead of the nginx container. The backend port is never
+# published outside the compose network.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]

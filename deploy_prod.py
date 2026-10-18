@@ -18,6 +18,7 @@ import paramiko
 
 DEFAULT_PORT = 22
 DEFAULT_REMOTE_DIR = "/opt/okr-system"
+BACKUP_KEEP = 20
 
 EXCLUDE_DIRS = {
     ".git",
@@ -151,6 +152,7 @@ def remote_deploy_command(
     # imports and seed data are explicit, separately audited operations.
     del seed_users, seed_et_data
     compose = "docker compose --env-file .env.production -f docker-compose.prod.yml"
+    backup_keep_plus_one = BACKUP_KEEP + 1
     return f"""
 set -euo pipefail
 log() {{ printf '[%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }}
@@ -187,21 +189,30 @@ POSTGRES_DB_VALUE=${{POSTGRES_DB_VALUE:-okr_automation}}
 if {compose} ps postgres >/dev/null 2>&1; then
   log "Backing up PostgreSQL"
   {compose} exec -T postgres pg_dump -U "${{POSTGRES_USER_VALUE}}" "${{POSTGRES_DB_VALUE}}" | gzip > "/backup/okr/okr_${{stamp}}.sql.gz"
+  gzip -t "/backup/okr/okr_${{stamp}}.sql.gz"
 fi
 if [ -d storage ]; then
   log "Backing up storage"
   tar -czf "/backup/okr/storage_${{stamp}}.tar.gz" storage
 fi
+log "Pruning old backups (keeping the newest {BACKUP_KEEP} of each kind)"
+for pattern in 'okr_*.sql.gz' 'storage_*.tar.gz'; do
+  find /backup/okr -maxdepth 1 -type f -name "$pattern" -printf '%T@ %p\\n' | sort -rn | tail -n +{backup_keep_plus_one} | cut -d' ' -f2- | xargs -r rm -f --
+done
 log "Cleaning old source files"
 find . -mindepth 1 -maxdepth 1 ! -name '.env.production' ! -name 'storage' -exec rm -rf -- {{}} +
 log "Extracting verified source archive"
 tar -xzf {shlex.quote(remote_archive)} -C {shlex.quote(remote_dir)}
 rm -f {shlex.quote(remote_archive)}
 mkdir -p storage/uploads storage/exports storage/templates storage/backups
-log "Rebuilding containers"
-{compose} up -d --build
-log "Running migrations"
-{compose} exec -T backend alembic upgrade head
+chmod 755 {shlex.quote(remote_dir)}
+log "Building images"
+{compose} build
+log "Running migrations before switching traffic to the new code"
+{compose} up -d postgres redis
+{compose} run --rm -T backend alembic upgrade head
+log "Starting containers"
+{compose} up -d
 log "Checking services"
 {compose} ps
 curl -fsS http://127.0.0.1/health

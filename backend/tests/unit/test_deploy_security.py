@@ -48,3 +48,29 @@ def test_workflow_is_main_only_key_based_and_fail_closed_on_host_identity():
     assert "VPS_PASSWORD" not in workflow
     assert "ssh-keyscan" not in workflow
     assert "persist-credentials: false" in workflow
+
+
+def test_remote_deploy_migrates_before_starting_new_code_and_prunes_backups():
+    command = remote_deploy_command(
+        "/opt/okr-system",
+        "/tmp/okr-deploy-random.tar.gz",
+        "b" * 64,
+        seed_users=False,
+        seed_et_data=False,
+    )
+
+    migrate = command.index("run --rm -T backend alembic upgrade head")
+    start = command.index("docker-compose.prod.yml up -d\n")
+    assert command.index("docker-compose.prod.yml build") < migrate < start
+    assert "up -d --build" not in command
+    assert "exec -T backend alembic" not in command
+    assert 'gzip -t "/backup/okr/okr_${stamp}.sql.gz"' in command
+    assert "tail -n +21" in command
+    assert "-printf '%T@ %p\\n'" in command
+
+
+def test_backend_trusts_proxy_headers_for_client_ip():
+    dockerfile = (ROOT / "backend" / "Dockerfile").read_text(encoding="utf-8")
+
+    assert '"--proxy-headers"' in dockerfile
+    assert '"--forwarded-allow-ips", "*"' in dockerfile

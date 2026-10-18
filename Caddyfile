@@ -1,3 +1,20 @@
 xdk-pvcfc.com {
+    encode zstd gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()"
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+        -Server
+    }
+
     reverse_proxy frontend:80
+}
+
+# Opening the bare IP used to redirect to https://<ip>, which has no certificate.
+http://103.200.20.225 {
+    redir https://xdk-pvcfc.com{uri} permanent
 }

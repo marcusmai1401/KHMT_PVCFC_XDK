@@ -167,12 +167,16 @@ def test_framework_import_and_assessment_dashboard_flow(client, admin_headers):
                 if item["required_score"] <= 5
             ],
             "notes": "Đạt yêu cầu",
+            "expected_revision": assessment["server_revision"],
         },
     )
     assert update_response.status_code == 200, update_response.text
     assert update_response.json()["overall_result"] == "Đạt"
 
-    submit_response = client.post(f"/api/v1/et/assessments/{assessment['id']}/submit", headers=admin_headers)
+    submit_response = client.post(
+        f"/api/v1/et/assessments/{assessment['id']}/submit?expected_revision={update_response.json()['server_revision']}",
+        headers=admin_headers,
+    )
     assert submit_response.status_code == 200, submit_response.text
     submitted = submit_response.json()
     assert submitted["status"] == "submitted"
@@ -269,7 +273,7 @@ def test_personnel_can_include_backend_users(client, admin_headers):
     assert response.status_code == 200
     rows = response.json()
     admin_row = next(row for row in rows if row["user_id"] == "admin")
-    assert admin_row["full_name"] == "Demo Admin"
+    assert admin_row["full_name"] == "Test Admin"
     assert admin_row["role"] == "Admin"
     assert admin_row["team"] == ""
     assert admin_row["employee_code"] == ""

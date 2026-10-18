@@ -27,11 +27,15 @@ jobs:
           set -euo pipefail
           npm test
           npm run build
+          npx playwright install --with-deps chromium
+          npm run test:e2e
 
   backend:
     name: Backend checks
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The full isolated PostgreSQL suite already took 20 minutes locally before
+    # the legacy and HTTP performance rehearsals were added.
+    timeout-minutes: 40
     services:
       postgres:
         image: postgres:16-alpine
@@ -58,7 +62,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
       - working-directory: backend
-        env:
-          OKR_DATABASE_URL: postgresql+psycopg://okr:ci-only-password@localhost:5432/okr_automation_test
-          OKR_JWT_SECRET: ci-only-jwt-secret-not-used-in-production
-        run: python -m pytest -q
+        run: |
+          python scripts/test_isolation_guard.py
+          python scripts/run_isolated_checks.py --suite postgres-ci

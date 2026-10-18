@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   Bell,
@@ -22,12 +22,16 @@ import {
   Undo2,
 } from "lucide-react";
 import { api, decodeToken, setToken, type LoginResponse } from "../api/client";
-import { AdminPanel } from "../features/admin/AdminPanel";
 import { ChangePasswordForm } from "../features/auth/ChangePasswordForm";
-import { ETModule } from "../features/et/ETModule";
-import { FIWorkspace, displayTeam } from "../features/fi/FIWorkspace";
-import { OKRModule } from "../features/okr/OKRModule";
+import { useNavigationGuard } from "../shared/editing/NavigationGuardProvider";
+import { ReauthDialog } from "../shared/editing/ReauthDialog";
+import { FeedbackDialog } from "../shared/feedback/FeedbackDialog";
 import { captureElementAsPng, findActiveSnapshotTarget, snapshotFilename } from "../utils/pngSnapshot";
+
+const LazyAdminPanel = lazy(() => import("../features/admin/AdminPanel").then(({ AdminPanel }) => ({ default: AdminPanel })));
+const LazyETModule = lazy(() => import("../features/et/ETModule").then(({ ETModule }) => ({ default: ETModule })));
+const LazyFIWorkspace = lazy(() => import("../features/fi/FIWorkspace").then(({ FIWorkspace }) => ({ default: FIWorkspace })));
+const LazyOKRModule = lazy(() => import("../features/okr/OKRModule").then(({ OKRModule }) => ({ default: OKRModule })));
 
 type Tab = "okr" | "et" | "fi" | "admin";
 
@@ -37,6 +41,11 @@ const tabTitles: Record<Tab, string> = {
   fi: "Luồng SK-CTKT",
   admin: "Quản trị hệ thống",
 };
+
+function displayTeam(value: string | null | undefined) {
+  if (!value) return "";
+  return value === "Workshop_Staff" ? "Xưởng quản lí" : value;
+}
 
 const tabSnapshotNames: Record<Tab, string> = {
   okr: "okr",
@@ -114,7 +123,7 @@ function friendlyError(message: string) {
 
 function canAccessTab(role: string, candidate: Tab) {
   if (candidate === "admin") return role === "Admin";
-  if (candidate === "et") return ["Admin", "Workshop_Leader", "FI_Coordinator", "Team_Account", "Staff"].includes(role);
+  if (candidate === "et") return ["Admin", "Workshop_Leader", "FI_Coordinator", "Team_Account"].includes(role);
   return true;
 }
 
@@ -159,6 +168,7 @@ function isMobileViewport() {
 }
 
 export function App() {
+  const { requestNavigation } = useNavigationGuard();
   const [tab, setTab] = useState<Tab>(() => initialTabFromPath());
   const [role, setRole] = useState("");
   const [userId, setUserId] = useState(() => {
@@ -190,12 +200,21 @@ export function App() {
   const [sandboxIdentities, setSandboxIdentities] = useState<SandboxIdentity[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [capabilityMap, setCapabilityMap] = useState<Record<string, unknown>>({});
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [resettingSandbox, setResettingSandbox] = useState(false);
   const [exportingPng, setExportingPng] = useState(false);
   const [workspaceVersion, setWorkspaceVersion] = useState(0);
   const [adminEditMode, setAdminEditMode] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [reauthDismissed, setReauthDismissed] = useState(false);
+  useEffect(() => {
+    const expired = () => { setSessionExpired(true); setReauthDismissed(false); };
+    window.addEventListener("okr:session-expired", expired);
+    return () => window.removeEventListener("okr:session-expired", expired);
+  }, []);
   const [mobileView, setMobileView] = useState(() => isMobileViewport());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -235,6 +254,8 @@ export function App() {
     setCurrentTeam(response.team ?? payload.team ?? null);
     setMustChangePassword(Boolean(response.must_change_password));
     setSandbox(Boolean(payload.sandbox));
+    setCapabilityMap({});
+    void api.capabilities().then((data: any) => setCapabilityMap(data?.capabilities ?? {})).catch(() => undefined);
     setVoluntaryChange(false);
     setError("");
     if (typeof window !== "undefined" && response.access_token && !payload.sandbox) {
@@ -250,9 +271,13 @@ export function App() {
   };
 
   const navigateToTab = useCallback((nextTab: Tab, replace = false) => {
-    setTab(nextTab);
-    updateBrowserPath(nextTab, replace);
-  }, []);
+    if (nextTab === tab) return;
+    void requestNavigation(`chuyển sang ${tabTitles[nextTab]}`).then((allowed) => {
+      if (!allowed) return;
+      setTab(nextTab);
+      updateBrowserPath(nextTab, replace);
+    });
+  }, [requestNavigation, tab]);
 
   const logout = () => {
     const clearSession = () => {
@@ -267,6 +292,8 @@ export function App() {
       setHasRealSession(false);
       setNotifications([]);
       setSandboxIdentities([]);
+      setCapabilityMap({});
+      setFeedbackOpen(false);
       if (typeof window !== "undefined") {
         const stillRemember = window.localStorage.getItem(REMEMBER_FLAG_KEY) === "true";
         setUserId(stillRemember ? (window.localStorage.getItem(REMEMBERED_USER_KEY) ?? "") : "");
@@ -280,11 +307,27 @@ export function App() {
       setNotice("");
     };
 
-    if (sandbox) {
-      api.sandboxReset().catch(() => {}).finally(clearSession);
-      return;
-    }
-    clearSession();
+    void requestNavigation("đăng xuất").then((allowed) => {
+      if (!allowed) return;
+      if (sandbox) {
+        api.sandboxReset().catch(() => {}).finally(clearSession);
+        return;
+      }
+      clearSession();
+    });
+  };
+
+  const revokeAllSessions = () => {
+    if (sandbox || !confirm("Đăng xuất tất cả thiết bị? Bạn sẽ cần đăng nhập lại.")) return;
+    void requestNavigation("đăng xuất tất cả thiết bị").then((allowed) => {
+      if (!allowed) return;
+      api.revokeAllSessions()
+        .then((response) => {
+          setNotice(response.message);
+          logout();
+        })
+        .catch((err) => setError(friendlyError(err.message)));
+    });
   };
 
   const login = (event?: React.FormEvent) => {
@@ -439,10 +482,17 @@ export function App() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const onPopState = () => setTab(tabFromPath(window.location.pathname));
+    const onPopState = () => {
+      const nextTab = tabFromPath(window.location.pathname);
+      if (nextTab === tab) return;
+      void requestNavigation(`quay lại ${tabTitles[nextTab]}`).then((allowed) => {
+        if (allowed) setTab(nextTab);
+        else updateBrowserPath(tab, true);
+      });
+    };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, []);
+  }, [requestNavigation, tab]);
 
   useEffect(() => {
     if (role) loadNotifications();
@@ -708,10 +758,17 @@ export function App() {
   const isAdminProd = role === "Admin" && !sandbox;
 
   const effectiveEditMode = role === "Admin" ? adminEditMode : true;
-  const unreadNotificationCount = notifications.filter((item) => !item.read).length;
+  const unreadNotificationCount = notifications.filter((item) => item.read_status === "unread" || (!item.read_status && !item.read)).length;
+  const canReadEt = capabilityMap["et.read"] !== false && canAccessTab(role, "et");
 
   return (
     <main className={`app-shell ${mobileView ? "mobile-view" : ""} ${sidebarCollapsed ? "sidebar-collapsed" : ""} ${role === "Admin" && adminEditMode ? "edit-mode-on" : "edit-mode-off"}`}>
+      {sessionExpired && !reauthDismissed && <ReauthDialog userId={currentUserId} onDismiss={() => setReauthDismissed(true)} onLogin={async (password) => {
+        const response = await api.login(currentUserId, password);
+        applySession(response, currentUserId);
+        setSessionExpired(false);
+        setWorkspaceVersion((value) => value + 1);
+      }} />}
       {!mobileView && (
         <aside className="sidebar">
           <div className="sidebar-head">
@@ -739,7 +796,7 @@ export function App() {
               <BarChart3 size={18} />
               <span>OKR</span>
             </button>
-            {canAccessTab(role, "et") && (
+            {canReadEt && (
               <button className={tab === "et" ? "active" : ""} onClick={() => navigateToTab("et")} title="Năng lực ET">
                 <ClipboardCheck size={18} />
                 <span>Năng lực ET</span>
@@ -821,6 +878,15 @@ export function App() {
                 </div>
               </div>
               <div className="account-actions">
+                <button
+                  className="account-action"
+                  onClick={() => setFeedbackOpen(true)}
+                  title="Gửi phản hồi nội bộ"
+                  type="button"
+                >
+                  <Lightbulb size={14} />
+                  <span>Báo vấn đề</span>
+                </button>
                 {!sandbox && (
                   <button
                     className="account-action"
@@ -854,6 +920,17 @@ export function App() {
                     <span>Thoát kiểm thử</span>
                   </button>
                 )}
+                {!sandbox && (
+                  <button
+                    className="account-action"
+                    onClick={revokeAllSessions}
+                    title="Đăng xuất tất cả thiết bị"
+                    type="button"
+                  >
+                    <LogOut size={14} />
+                    <span>Đăng xuất mọi thiết bị</span>
+                  </button>
+                )}
                 <button
                   className="account-action logout-btn"
                   onClick={logout}
@@ -882,6 +959,15 @@ export function App() {
           )}
           <div className="topbar-tools">
             <div className="mobile-account-actions" aria-label="Thao tác tài khoản trên mobile">
+              <button
+                aria-label="Báo vấn đề"
+                className="mobile-account-button"
+                onClick={() => setFeedbackOpen(true)}
+                title="Báo vấn đề"
+                type="button"
+              >
+                <Lightbulb size={16} />
+              </button>
               {!sandbox && (
                 <button
                   aria-label="Đổi mật khẩu"
@@ -915,6 +1001,17 @@ export function App() {
                   <Undo2 size={16} />
                 </button>
               )}
+              {!sandbox && (
+                <button
+                  aria-label="Đăng xuất tất cả thiết bị"
+                  className="mobile-account-button"
+                  onClick={revokeAllSessions}
+                  title="Đăng xuất tất cả thiết bị"
+                  type="button"
+                >
+                  <LogOut size={16} />
+                </button>
+              )}
               <button
                 aria-label="Đăng xuất"
                 className="mobile-account-button"
@@ -930,7 +1027,7 @@ export function App() {
                 aria-pressed={adminEditMode}
                 className={`edit-mode-toggle ${adminEditMode ? "is-on" : ""}`}
                 data-export-exclude="true"
-                onClick={() => setAdminEditMode((current) => !current)}
+                onClick={() => { void requestNavigation("đổi chế độ chỉnh sửa").then((allowed) => { if (allowed) setAdminEditMode((current) => !current); }); }}
                 title={adminEditMode ? "Tắt chế độ chỉnh sửa" : "Bật chế độ chỉnh sửa"}
                 type="button"
               >
@@ -988,12 +1085,15 @@ export function App() {
         <div
           data-snapshot-fallback="true"
           data-snapshot-name={tabSnapshotNames[tab]}
-          key={workspaceVersion}
+          key={`${workspaceVersion}:${currentUserId}:${sandbox}`}
         >
-          {tab === "okr" && <OKRModule role={role} currentUserId={currentUserId} currentTeam={currentTeam} editMode={effectiveEditMode} tabsHost={topbarTabsHost} />}
-          {tab === "et" && <ETModule role={role} currentUserId={currentUserId} editMode={effectiveEditMode} tabsHost={topbarTabsHost} />}
-          {tab === "fi" && <FIWorkspace role={role} currentUserId={currentUserId} currentTeam={currentTeam} displayName={currentDisplayName} editMode={effectiveEditMode} tabsHost={topbarTabsHost} />}
-          {tab === "admin" && <AdminPanel />}
+          {sessionExpired && reauthDismissed && <div role="alert" className="panel">Phiên đã hết hạn. Chưa thể gửi thay đổi.<button onClick={() => setReauthDismissed(false)}>Đăng nhập lại</button></div>}
+          <Suspense fallback={<div className="module-loading" aria-busy="true">Đang tải phân hệ…</div>}>
+            {tab === "okr" && <LazyOKRModule role={role} currentUserId={currentUserId} currentTeam={currentTeam} editMode={effectiveEditMode} tabsHost={topbarTabsHost} />}
+            {tab === "et" && <LazyETModule role={role} currentUserId={currentUserId} editMode={effectiveEditMode} tabsHost={topbarTabsHost} />}
+            {tab === "fi" && <LazyFIWorkspace role={role} currentUserId={currentUserId} currentTeam={currentTeam} displayName={currentDisplayName} editMode={effectiveEditMode} tabsHost={topbarTabsHost} />}
+            {tab === "admin" && <LazyAdminPanel />}
+          </Suspense>
         </div>
       </section>
       <nav className="mobile-bottom-nav" aria-label="Điều hướng chính">
@@ -1007,7 +1107,7 @@ export function App() {
           <BarChart3 size={19} />
           <span>OKR</span>
         </button>
-        {canAccessTab(role, "et") && (
+        {canReadEt && (
           <button
             aria-current={tab === "et" ? "page" : undefined}
             className={tab === "et" ? "active" : ""}
@@ -1042,6 +1142,15 @@ export function App() {
           </button>
         )}
       </nav>
+      {feedbackOpen && (
+        <FeedbackDialog
+          route={tabPaths[tab]}
+          module={tabTitles[tab]}
+          onClose={() => setFeedbackOpen(false)}
+          onReceived={(message) => { setNotice(message); setFeedbackOpen(false); }}
+          onError={(message) => setError(friendlyError(message))}
+        />
+      )}
     </main>
   );
 }

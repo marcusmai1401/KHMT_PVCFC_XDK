@@ -81,6 +81,37 @@ describe("OKR dashboard components", () => {
     expect(html).toContain(">0 / 10<");
   });
 
+  it("keeps STOP percentage labels exact while clamping only the bar", () => {
+    const html = renderToStaticMarkup(
+      <VisualBlockRenderer
+        block={{
+          id: "o3_stop_by_team",
+          kind: "bar_line_chart",
+          title: "STOP",
+          data_state: "ready",
+          payload: {
+            labels: ["TBCH", "TBĐL", "TCĐK", "TBHTĐK", "Thiếu mẫu"],
+            datasets: [
+              { label: "Số thẻ ghi nhận", data: [15, 11, 12, 6, 4] },
+              { label: "Tổng nhân sự", data: [7, 6, 8, 5, 0] },
+              { label: "Ghi nhận (%)", data: [2.14, 1.83, 1.5, 1.2, null] },
+              { label: "Chỉ tiêu (%)", data: [0.5, 0.5, 0.5, 0.5, 0.5] },
+            ],
+          },
+        }}
+      />,
+    );
+
+    expect(html).toContain(">214%<");
+    expect(html).toContain(">183%<");
+    expect(html).toContain(">150%<");
+    expect(html).toContain(">120%<");
+    expect(html).toContain("Số thẻ / số nhân sự");
+    expect(html).toContain("Chưa đủ dữ liệu mẫu số");
+    expect(html).not.toContain("Infinity");
+    expect(html).not.toContain("NaN");
+  });
+
   it("renders drill-down statuses without numeric metric", () => {
     const row: KRSummary = {
       workshop_kr_code: "O6.KR4",

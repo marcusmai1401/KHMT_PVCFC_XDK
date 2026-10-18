@@ -2,10 +2,10 @@
 
 Run inside the backend container:
 
-    python scripts/seed_users_xuong_dk.py [--reset-passwords] [--default-password PWD]
+    python scripts/seed_users_xuong_dk.py [--default-password PWD]
 
-Idempotent by default: existing users keep their current password unless
---reset-passwords is given. Newly-created users always start with
+Idempotent by default: existing users are skipped and retain all managed
+fields. Newly-created users always start with
 ``must_change_password = True`` so the first login forces a password reset.
 """
 
@@ -144,7 +144,7 @@ def _admin_display_name() -> str:
     return ADMIN_DISPLAY_NAME
 
 
-def seed(default_password: str, reset_passwords: bool) -> dict[str, int]:
+def seed(default_password: str) -> dict[str, int]:
     create_schema()
     password_hash = hash_password(default_password)
     counts = {"created": 0, "updated": 0, "passwords_reset": 0, "skipped": 0}
@@ -167,15 +167,7 @@ def seed(default_password: str, reset_passwords: bool) -> dict[str, int]:
             audit(db, "system", "Account", ADMIN_USER.id, "seed_admin", {"role": Role.ADMIN.value})
             counts["created"] += 1
         else:
-            admin.display_name = _admin_display_name()
-            admin.full_name = _admin_display_name()
-            admin.role = Role.ADMIN.value
-            admin.is_active = True
-            if reset_passwords:
-                admin.password_hash = password_hash
-                admin.must_change_password = True
-                counts["passwords_reset"] += 1
-            counts["updated"] += 1
+            counts["skipped"] += 1
 
         # 55 users
         for user_seed in SEED_USERS:
@@ -203,27 +195,17 @@ def seed(default_password: str, reset_passwords: bool) -> dict[str, int]:
                 )
                 counts["created"] += 1
             else:
-                existing.display_name = user_seed.display_name
-                existing.full_name = user_seed.full_name
-                existing.role = user_seed.role.value
-                existing.team = user_seed.team
-                existing.is_active = True
-                if reset_passwords:
-                    existing.password_hash = password_hash
-                    existing.must_change_password = True
-                    counts["passwords_reset"] += 1
-                counts["updated"] += 1
+                counts["skipped"] += 1
         db.commit()
     return counts
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--reset-passwords", action="store_true", help="Reset all passwords to default and force change on next login")
     parser.add_argument("--default-password", default=DEFAULT_PASSWORD, help=f"Default password to assign (default: {DEFAULT_PASSWORD})")
     args = parser.parse_args()
 
-    result = seed(args.default_password, args.reset_passwords)
+    result = seed(args.default_password)
     print(
         f"Seed complete: created={result['created']}, updated={result['updated']}, "
         f"passwords_reset={result['passwords_reset']}, skipped={result['skipped']}"

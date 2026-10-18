@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.models.domain import (
     AuditLogModel,
+    IdempotencyKeyModel,
     NotificationModel,
     SKImageModel,
     TeamReportModel,
@@ -79,6 +80,61 @@ def notify(
     return notification
 
 
+def idempotency_replay(
+    db: Session,
+    *,
+    actor: str,
+    scope: str,
+    key: str,
+    request_hash: str,
+) -> dict[str, Any] | None:
+    existing = db.execute(
+        select(IdempotencyKeyModel).where(
+            IdempotencyKeyModel.actor == actor,
+            IdempotencyKeyModel.scope == scope,
+            IdempotencyKeyModel.key == key,
+        )
+    ).scalar_one_or_none()
+    if existing is None:
+        return None
+    if existing.request_hash != request_hash:
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "IDEMPOTENCY_CONFLICT",
+                "error_code": "IDEMPOTENCY_CONFLICT",
+                "message": "Idempotency-Key đã được dùng cho payload khác",
+                "request_id": make_id("request"),
+            },
+        )
+    return existing.response
+
+
+def remember_idempotency(
+    db: Session,
+    *,
+    actor: str,
+    scope: str,
+    key: str,
+    request_hash: str,
+    response: dict[str, Any],
+    status_code: int = 200,
+) -> None:
+    db.add(
+        IdempotencyKeyModel(
+            id=make_id("idem"),
+            actor=actor,
+            scope=scope,
+            key=key,
+            request_hash=request_hash,
+            response=json_safe(response),
+            status_code=status_code,
+        )
+    )
+
+
 def warning_from_dict(db: Session, team_report_id: str | None, warning: dict[str, Any]) -> WarningModel:
     record = WarningModel(
         id=warning.get("id") or make_id("warn"),
@@ -109,4 +165,11 @@ def current_report_for(db: Session, team: str | None, month: int | None, year: i
 
 
 def sk_image_to_dict(image: SKImageModel) -> dict[str, Any]:
-    return model_to_dict(image)
+    return public_report_dict(image)
+
+
+def public_report_dict(model: Any) -> dict[str, Any]:
+    """API metadata; filesystem locations remain internal."""
+    data = model_to_dict(model)
+    data.pop("file_path", None)
+    return data

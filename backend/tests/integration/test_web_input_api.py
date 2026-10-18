@@ -66,7 +66,7 @@ def test_web_input_draft_submit_lock_export_flow(client):
     draft = client.put(
         "/api/v1/okr/web-input/TBCH/4/2026/draft",
         headers=headers,
-        json={"data": {**payload, "kr_assessments": payload["kr_assessments"][:2]}, "expected_version": None},
+        json={"data": {**payload, "kr_assessments": payload["kr_assessments"][:2]}, "expected_revision": 0},
     )
     assert draft.status_code == 200, draft.text
     assert draft.json()["status"] == "Đang nhập"
@@ -83,14 +83,14 @@ def test_web_input_draft_submit_lock_export_flow(client):
     conflict = client.put(
         "/api/v1/okr/web-input/TBCH/4/2026/draft",
         headers=headers,
-        json={"data": payload, "expected_version": 999},
+        json={"data": payload, "expected_revision": 999},
     )
     assert conflict.status_code == 409
 
     submitted = client.post(
         "/api/v1/okr/web-input/TBCH/4/2026/submit",
         headers=headers,
-        json={"data": payload},
+        json={"data": payload, "expected_revision": draft.json()["server_revision"]},
     )
     assert submitted.status_code == 200, submitted.text
     assert submitted.json()["status"] == "Đã gửi"
@@ -147,7 +147,12 @@ def test_web_input_draft_submit_lock_export_flow(client):
     locked = client.post(
         "/api/v1/okr/web-input/TBCH/4/2026/lock",
         headers=admin_headers,
-        json={"reason": "Chốt tháng"},
+        json={
+            "reason": "Chốt tháng",
+            "expected_revision": submitted.json()["server_revision"],
+            "expected_fi_team_revision": allocation_preview.json()["fi_team_revision"],
+            "expected_plan_hash": allocation_preview.json()["plan_hash"],
+        },
     )
     assert locked.status_code == 200, locked.text
     assert locked.json()["status"] == "Đã chốt"
@@ -157,14 +162,14 @@ def test_web_input_draft_submit_lock_export_flow(client):
     blocked = client.put(
         "/api/v1/okr/web-input/TBCH/4/2026/draft",
         headers=headers,
-        json={"data": payload, "expected_version": None},
+        json={"data": payload, "expected_revision": locked.json()["server_revision"]},
     )
     assert blocked.status_code == 409
 
     unlocked = client.post(
         "/api/v1/okr/web-input/TBCH/4/2026/unlock",
         headers=admin_headers,
-        json={"reason": "Mở để chỉnh sửa"},
+        json={"reason": "Mở để chỉnh sửa", "expected_revision": locked.json()["server_revision"]},
     )
     assert unlocked.status_code == 200, unlocked.text
     assert unlocked.json()["status"] == "Đã gửi"
@@ -184,7 +189,7 @@ def test_fi_shortage_blocks_lock_and_preserves_submitted_report(client):
     submitted = client.post(
         "/api/v1/okr/web-input/TBĐL/7/2026/submit",
         headers=headers,
-        json={"data": payload},
+        json={"data": payload, "expected_revision": 0},
     )
     assert submitted.status_code == 200, submitted.text
 
@@ -211,7 +216,12 @@ def test_fi_shortage_blocks_lock_and_preserves_submitted_report(client):
     locked = client.post(
         "/api/v1/okr/web-input/TBĐL/7/2026/lock",
         headers=headers,
-        json={"reason": "Không được khóa khi thiếu FI"},
+        json={
+            "reason": "Không được khóa khi thiếu FI",
+            "expected_revision": submitted.json()["server_revision"],
+            "expected_fi_team_revision": preview.json()["fi_team_revision"],
+            "expected_plan_hash": preview.json()["plan_hash"],
+        },
     )
     assert locked.status_code == 409, locked.text
     assert locked.json()["detail"]["error_code"] == "FI_ALLOCATION_SHORTAGE"
@@ -229,6 +239,156 @@ def test_fi_shortage_blocks_lock_and_preserves_submitted_report(client):
         assert db.query(FIMonthlyAllocationModel).count() == 0
 
 
+def test_fi_finalize_rejects_preview_when_team_pool_revision_changes(client):
+    headers = _login(client, "admin", "admin-pass")
+    payload = _valid_payload(client, headers)
+    submitted = client.post(
+        "/api/v1/okr/web-input/TBCH/5/2026/submit",
+        headers=headers,
+        json={"data": payload, "expected_revision": 0},
+    )
+    assert submitted.status_code == 200, submitted.text
+
+    def create_and_approve(title: str) -> dict:
+        created = client.post(
+            "/api/v1/fi/sk-ctkt",
+            headers=headers,
+            json={
+                "author_name": "Admin kiểm thử",
+                "team": "TBCH",
+                "title": title,
+                "content_description": "Nội dung kiểm thử stale preview",
+                "completion_plan": "Kế hoạch kiểm thử",
+                "registration_month": 5,
+                "registration_year": 2026,
+            },
+        )
+        assert created.status_code == 200, created.text
+        approved = client.post(
+            f"/api/v1/fi/sk-ctkt/{created.json()['id']}/approve",
+            headers=headers,
+            json={"expected_revision": created.json()["revision"]},
+        )
+        assert approved.status_code == 200, approved.text
+        return approved.json()
+
+    create_and_approve("FI trước preview")
+    preview = client.get(
+        "/api/v1/okr/web-input/TBCH/5/2026/fi-allocation-preview",
+        headers=headers,
+    )
+    assert preview.status_code == 200, preview.text
+    create_and_approve("FI sau preview")
+
+    stale = client.post(
+        "/api/v1/okr/web-input/TBCH/5/2026/lock",
+        headers=headers,
+        json={
+            "reason": "Không chốt preview cũ",
+            "expected_revision": submitted.json()["server_revision"],
+            "expected_fi_team_revision": preview.json()["fi_team_revision"],
+            "expected_plan_hash": preview.json()["plan_hash"],
+        },
+    )
+    assert stale.status_code == 409, stale.text
+    assert stale.json()["detail"]["error_code"] == "FI_PREVIEW_STALE"
+    with create_session() as db:
+        report = db.query(TeamReportModel).filter_by(
+            team="TBCH", report_month=5, report_year=2026, is_current_version=True
+        ).one()
+        assert report.report_status == "submitted"
+        assert db.query(FIMonthlyAllocationModel).count() == 0
+
+
+def test_admin_khmt_tab_can_preview_override_and_finalize_assessment(client):
+    headers = _login(client, "admin", "admin-pass")
+    payload = _valid_payload(client, headers)
+    payload["monthly_conclusion"]["overall_assessment"] = "Hoàn thành nhiệm vụ"
+
+    submitted = client.post(
+        "/api/v1/okr/web-input/TCĐK/8/2026/submit",
+        headers=headers,
+        json={"data": payload, "expected_revision": 0},
+    )
+    assert submitted.status_code == 200, submitted.text
+
+    with create_session() as db:
+        db.add_all([
+            _approved_fi("sk-admin-tab-01", team="TCĐK", approved_at=datetime(2026, 7, 5, tzinfo=timezone.utc)),
+            _approved_fi("sk-admin-tab-02", team="TCĐK", approved_at=datetime(2026, 7, 6, tzinfo=timezone.utc)),
+            _approved_fi("sk-admin-tab-03", team="TCĐK", approved_at=datetime(2026, 7, 7, tzinfo=timezone.utc)),
+        ])
+        db.commit()
+
+    overview = client.get("/api/v1/admin/khmt-fi?month=8&year=2026", headers=headers)
+    assert overview.status_code == 200, overview.text
+    row = next(item for item in overview.json() if item["team"] == "TCĐK")
+    assert row["assessment"] == "Hoàn thành nhiệm vụ"
+    assert row["allocation"] is None
+
+    preview = client.get(
+        "/api/v1/admin/khmt-fi/TCĐK/8/2026/preview",
+        params={"assessment": "Hoàn thành tốt nhiệm vụ"},
+        headers=headers,
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["required_count"] == 3
+    with create_session() as db:
+        report = db.query(TeamReportModel).filter_by(team="TCĐK", report_month=8, report_year=2026, is_current_version=True).one()
+        assert report.team_level["monthly_assessment"] == "Hoàn thành nhiệm vụ"
+
+    finalized = client.post(
+        "/api/v1/admin/khmt-fi/TCĐK/8/2026/finalize",
+        headers=headers,
+        json={
+            "reason": "Admin chốt kỳ tháng 8",
+            "assessment": "Hoàn thành tốt nhiệm vụ",
+            "expected_revision": submitted.json()["server_revision"],
+            "expected_fi_team_revision": preview.json()["fi_team_revision"],
+            "expected_plan_hash": preview.json()["plan_hash"],
+        },
+    )
+    assert finalized.status_code == 200, finalized.text
+    with create_session() as db:
+        report = db.query(TeamReportModel).filter_by(team="TCĐK", report_month=8, report_year=2026, is_current_version=True).one()
+        plan = db.query(FIMonthlyAllocationModel).filter_by(team="TCĐK", month=8, year=2026).one()
+        assert report.report_status == "locked"
+        assert report.team_level["monthly_assessment"] == "Hoàn thành tốt nhiệm vụ"
+        assert plan.required_count == 3
+        assert plan.allocated_count == 3
+
+
+def test_admin_khmt_overview_does_not_touch_manual_monthly_fi(client):
+    headers = _login(client, "admin", "admin-pass")
+    with create_session() as db:
+        record = _approved_fi(
+            "sk-manual-july-01",
+            team="TBCH",
+            approved_at=datetime(2026, 6, 25, tzinfo=timezone.utc),
+        )
+        record.khmt_month = 7
+        record.khmt_year = 2026
+        record.consider_for_khmt = True
+        record.is_counted_for_okr = True
+        db.add(record)
+        db.commit()
+
+    overview = client.get("/api/v1/admin/khmt-fi?month=7&year=2026", headers=headers)
+    assert overview.status_code == 200, overview.text
+    row = next(item for item in overview.json() if item["team"] == "TBCH")
+    assert row["has_report"] is False
+    assert row["allocation"] is None
+    assert row["currently_assigned_count"] == 1
+
+    with create_session() as db:
+        record = db.get(SKCTKTModel, "sk-manual-july-01")
+        assert record is not None
+        assert record.khmt_month == 7
+        assert record.khmt_year == 2026
+        assert record.consider_for_khmt is True
+        assert record.is_counted_for_okr is True
+
+
 def test_team_account_cannot_access_other_team_web_input(client):
     headers = _login(client, "TBCH", "tbch-pass")
     response = client.get("/api/v1/okr/web-input/TBHTĐK/4/2026", headers=headers)
@@ -242,14 +402,14 @@ def test_team_account_cannot_write_web_input(client):
     draft = client.put(
         "/api/v1/okr/web-input/TBCH/4/2026/draft",
         headers=headers,
-        json={"data": payload, "expected_version": None},
+        json={"data": payload, "expected_revision": 0},
     )
     assert draft.status_code == 403
 
     submitted = client.post(
         "/api/v1/okr/web-input/TBCH/4/2026/submit",
         headers=headers,
-        json={"data": payload},
+        json={"data": payload, "expected_revision": 0},
     )
     assert submitted.status_code == 403
 
@@ -277,7 +437,8 @@ def test_web_input_submit_returns_validation_errors(client):
                     "detailed_description": "",
                 },
                 "objective_overrides": {},
-            }
+            },
+            "expected_revision": 0,
         },
     )
     assert response.status_code == 400

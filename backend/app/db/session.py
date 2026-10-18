@@ -2,10 +2,21 @@ from pathlib import Path
 
 from fastapi import Request
 from jose import JWTError, jwt
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
+import re
+import unicodedata
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import settings
+
+
+@event.listens_for(Engine, "connect")
+def sqlite_text_functions(connection, _record):
+    if connection.__class__.__module__.startswith("sqlite3"):
+        connection.create_function("normalize", 2, lambda value, form: unicodedata.normalize(form, str(value or "")), deterministic=True)
+        connection.create_function("translate", 3, lambda value, source, target: str(value or "").translate({ord(char): target[index] if index < len(target) else None for index, char in enumerate(source)}), deterministic=True)
+        connection.create_function("regexp_replace", 4, lambda value, pattern, replacement, flags: re.sub(pattern, replacement, str(value or ""), count=0 if "g" in flags else 1), deterministic=True)
 
 
 class Base(DeclarativeBase):

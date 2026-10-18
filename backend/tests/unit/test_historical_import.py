@@ -33,6 +33,53 @@ def _mapping() -> dict[str, KRMapping]:
     }
 
 
+def test_historical_preview_executes_no_dml_or_schema_writes(db_session, tmp_path, monkeypatch):
+    from sqlalchemy import event, func
+    from app.services.okr import historical_import as service
+    workbook = Workbook()
+    workbook.active.title = "Dashboard"
+    workbook.create_sheet("data")
+    source = tmp_path / "OKR tháng 05-2026 - X.ĐK.xlsx"
+    workbook.save(source)
+    monkeypatch.setattr(service, "TEAMS", ["TBCH"])
+    monkeypatch.setattr(service, "resolve_kr_mapping", lambda _: _mapping())
+    monkeypatch.setattr(service, "parse_team_report", lambda *_, **kwargs: {"team": "TBCH", "report_month": 5, "report_year": 2026, "sheet_name": "TBCH", "assessments": [], "team_level": {}})
+    statements = []
+    def capture(_conn, _cursor, statement, *_):
+        statements.append(statement.strip().upper())
+    event.listen(db_session.get_bind(), "before_cursor_execute", capture)
+    try:
+        result = service.run_historical_import(tmp_path, db=db_session, months=(5,))
+    finally:
+        event.remove(db_session.get_bind(), "before_cursor_execute", capture)
+    assert result.mode == "preview"
+    assert not result.errors
+    assert result.file_results[0].periods[0]["action"] == "insert"
+    assert not any(sql.startswith(("INSERT", "UPDATE", "DELETE", "CREATE", "ALTER", "SAVEPOINT")) for sql in statements)
+    assert db_session.scalar(select(func.count()).select_from(TeamReportModel)) == 0
+    assert db_session.scalar(select(func.count()).select_from(HistoricalSnapshotModel)) == 0
+
+
+def test_period_import_rolls_back_failed_summary_but_keeps_other_period(db_session, tmp_path, monkeypatch):
+    from app.services.okr import historical_import as service
+    source = tmp_path / "synthetic.xlsx"
+    source.write_bytes(b"synthetic source")
+    real_summary = service.upsert_team_monthly_summary
+    def summary(db, parsed, **kwargs):
+        if parsed["team"] == "TBCH":
+            raise ValueError("Synthetic summary failure")
+        return real_summary(db, parsed, **kwargs)
+    monkeypatch.setattr(service, "upsert_team_monthly_summary", summary)
+    result = service.FileImportResult(file_name=source.name, month=5, year=2026)
+    for team in ("TBDL", "TBCH"):
+        service._record_parsed_report(db_session, result, {"team": team, "report_month": 5, "report_year": 2026, "assessments": [], "team_level": {}}, source_path=source, imported_by="synthetic", mode="insert-missing")
+    assert [row["status"] for row in result.periods] == ["applied", "failed"]
+    assert list(db_session.scalars(select(TeamReportModel.team))) == ["TBDL"]
+    assert list(db_session.scalars(select(TeamMonthlySummaryModel.team))) == ["TBDL"]
+    assert result.table_counts["team_reports"]["inserted"] == 1
+    assert result.table_counts["team_reports"]["failed"] == 1
+
+
 def test_extract_month_year_from_historical_filename():
     assert extract_month_year_from_filename("OKR tháng 04-2026 - X.ĐK.xlsx") == (4, 2026)
 
@@ -293,7 +340,7 @@ def test_historical_snapshot_import_detects_dashboard_history_row_dynamically(db
     }
 
 
-def test_team_report_upsert_keeps_one_current_version_and_updates_summary(db_session, tmp_path):
+def test_default_import_preserves_current_report_and_managed_summary(db_session, tmp_path):
     source = tmp_path / "source.xlsx"
     source.write_bytes(b"historical source")
     parsed = {
@@ -326,8 +373,8 @@ def test_team_report_upsert_keeps_one_current_version_and_updates_summary(db_ses
     db_session.flush()
 
     assert first_action == "inserted"
-    assert second_action == "updated"
-    assert first.id != second.id
+    assert second_action == "skipped"
+    assert first.id == second.id
     current = db_session.execute(
         select(TeamReportModel).where(
             TeamReportModel.team == "TBCH",
@@ -344,8 +391,8 @@ def test_team_report_upsert_keeps_one_current_version_and_updates_summary(db_ses
             TeamMonthlySummaryModel.year == 2026,
         )
     ).scalar_one()
-    assert summary.monthly_assessment == "Không hoàn thành"
-    assert summary.discipline_status == "NOK"
+    assert summary.monthly_assessment == "Hoàn thành"
+    assert summary.discipline_status == "OK"
 
 
 def test_team_report_and_summary_upserts_skip_identical_source(db_session, tmp_path):

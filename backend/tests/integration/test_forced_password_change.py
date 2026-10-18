@@ -53,9 +53,12 @@ def test_pending_account_can_only_inspect_session_and_change_password(client, ad
     assert changed.status_code == 200, changed.text
     assert changed.json()["must_change_password"] is False
 
-    # Authorization reads the current database state, so the account unlocks
-    # immediately after the successful change, even with the original token.
-    unlocked = client.get("/api/v1/notifications", headers=headers)
+    # Password change rotates the session version.  The old token must not
+    # regain access; the newly issued token is the only valid session.
+    stale = client.get("/api/v1/notifications", headers=headers)
+    assert stale.status_code == 401, stale.text
+    new_headers = {"Authorization": f"Bearer {changed.json()['access_token']}"}
+    unlocked = client.get("/api/v1/notifications", headers=new_headers)
     assert unlocked.status_code == 200, unlocked.text
 
 

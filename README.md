@@ -121,6 +121,8 @@ Khi Admin chốt báo cáo tháng của một đội/tổ, hệ thống hiển t
 - Chốt lại cùng mức không cộng trùng. Nếu hạ mức, FI vượt định mức được trả về kho chưa phân bổ.
 - Mở chốt giữ nguyên phân bổ hiện tại; lần chốt lại sẽ đồng bộ theo mức đánh giá mới trong một giao dịch.
 
+Trong giao diện, Admin vào **Quản trị → Chốt KHMT & FI**, chọn tháng/năm và xử lý từng đội/tổ trên cùng một bảng. Mức đánh giá chỉ được ghi nhận khi Admin bấm xác nhận chốt; mở tab hoặc đổi bộ lọc không làm thay đổi dữ liệu. Vì vậy các FI đã phân bổ thủ công cho tháng 7 vẫn được giữ nguyên khi kiểm tra kỳ này.
+
 ---
 
 ## Cấu trúc thư mục

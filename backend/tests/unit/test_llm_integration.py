@@ -28,7 +28,7 @@ class FakeLLMClient:
 
 
 def test_llm_chat_session_and_history(client, admin_headers, monkeypatch):
-    clear_session("test-session")
+    clear_session("test-session", owner_user_id="admin", namespace="development")
     monkeypatch.setattr(llm_routes.settings, "llm_enabled", True)
     monkeypatch.setattr(llm_routes.settings, "llm_api_key", "test-key")
     monkeypatch.setattr(mimo_client, "_client_instance", FakeLLMClient())
@@ -36,14 +36,15 @@ def test_llm_chat_session_and_history(client, admin_headers, monkeypatch):
     response = client.post(
         "/api/v1/llm/chat",
         headers=admin_headers,
-        json={"message": "Xin chào", "session_id": "test-session"},
+        json={"message": "Xin chào", "use_tools": True},
     )
 
     assert response.status_code == 200
-    assert response.json()["reply"] == "fake reply"
-    assert response.json()["session_id"] == "test-session"
+    assert response.json()["reply"] == "fake tool reply"
+    session_id = response.json()["session_id"]
+    assert session_id
 
-    history = client.get("/api/v1/llm/chat/test-session/history", headers=admin_headers)
+    history = client.get(f"/api/v1/llm/chat/{session_id}/history", headers=admin_headers)
     assert history.status_code == 200
     assert [message["role"] for message in history.json()["messages"]] == ["user", "assistant"]
 

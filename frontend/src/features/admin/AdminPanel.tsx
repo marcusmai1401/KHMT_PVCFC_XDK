@@ -1,15 +1,20 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import {
+  AlertTriangle,
+  CalendarCheck,
   CheckCircle2,
   Clock3,
   Copy,
   Database,
+  Eye,
   FileText,
   KeyRound,
+  Lock,
   RefreshCw,
   RotateCcw,
   Search,
   ShieldCheck,
+  Unlock,
   UserRound,
   Users2,
   X,
@@ -17,12 +22,53 @@ import {
 import { api } from "../../api/client";
 import { displayTeam, isKhmtConsidered, khmtLabel } from "../fi/FIWorkspace";
 
-type AdminTab = "fi" | "accounts";
+type AdminTab = "fi" | "khmt-fi" | "accounts";
 
 const adminTabs: Array<{ value: AdminTab; label: string; icon: typeof FileText; helper: string }> = [
   { value: "fi", label: "FI", icon: FileText, helper: "SK-CTKT" },
+  { value: "khmt-fi", label: "Chốt KHMT & FI", icon: CalendarCheck, helper: "Theo tháng" },
   { value: "accounts", label: "Tài khoản", icon: Users2, helper: "Login & pass" },
 ];
+
+const MONTHLY_ASSESSMENTS = [
+  "Hoàn thành xuất sắc nhiệm vụ",
+  "Hoàn thành tốt nhiệm vụ",
+  "Hoàn thành nhiệm vụ",
+  "Không hoàn thành nhiệm vụ",
+];
+
+const FI_QUOTA_BY_ASSESSMENT: Record<string, number> = {
+  "Hoàn thành xuất sắc nhiệm vụ": 3,
+  "Hoàn thành tốt nhiệm vụ": 3,
+  "Hoàn thành nhiệm vụ": 1,
+  "Không hoàn thành nhiệm vụ": 0,
+};
+
+type KhmtFiPreview = {
+  team: string;
+  month: number;
+  year: number;
+  report_revision?: number;
+  report?: { revision?: number } | null;
+  fi_team_revision?: number;
+  plan_hash?: string;
+  assessment: string;
+  required_count: number;
+  currently_assigned_count: number;
+  unassigned_pool_count: number;
+  available_count: number;
+  shortage_count: number;
+  can_finalize: boolean;
+  selected_records: Array<{
+    id: string;
+    sk_code: string;
+    title: string;
+    author_name: string;
+    approved_at: string | null;
+    already_assigned: boolean;
+  }>;
+  to_release_sk_ids: string[];
+};
 
 const roleLabels: Record<string, string> = {
   Admin: "Quản trị",
@@ -147,6 +193,14 @@ export function AdminPanel() {
   const [resetBusyId, setResetBusyId] = useState<string | null>(null);
   const [resetResult, setResetResult] = useState<{ userId: string; password: string } | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [khmtMonth, setKhmtMonth] = useState(() => new Date().getMonth() + 1);
+  const [khmtYear, setKhmtYear] = useState(() => new Date().getFullYear());
+  const [khmtRows, setKhmtRows] = useState<any[]>([]);
+  const [khmtAssessments, setKhmtAssessments] = useState<Record<string, string>>({});
+  const [khmtLoading, setKhmtLoading] = useState(false);
+  const [khmtBusyTeam, setKhmtBusyTeam] = useState<string | null>(null);
+  const [khmtPreview, setKhmtPreview] = useState<KhmtFiPreview | null>(null);
+  const [khmtReason, setKhmtReason] = useState("");
 
   const reload = () => {
     setLoading(true);
@@ -170,6 +224,82 @@ export function AdminPanel() {
   useEffect(() => {
     reload();
   }, []);
+
+  const loadKhmtOverview = (clearError = true) => {
+    setKhmtLoading(true);
+    api.adminKhmtFiOverview(khmtMonth, khmtYear)
+      .then((rows) => {
+        setKhmtRows(rows);
+        setKhmtAssessments(Object.fromEntries(
+          rows.map((row: any) => [row.team, row.assessment || "Hoàn thành nhiệm vụ"]),
+        ));
+        setKhmtPreview(null);
+        if (clearError) setError("");
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setKhmtLoading(false));
+  };
+
+  useEffect(() => {
+    if (activeTab === "khmt-fi") loadKhmtOverview();
+  }, [activeTab, khmtMonth, khmtYear]);
+
+  const openKhmtPreview = (row: any) => {
+    if (!row.has_report) {
+      setError(`${displayTeam(row.team)} chưa có báo cáo OKR cho T${khmtMonth}/${khmtYear}.`);
+      return;
+    }
+    const assessment = khmtAssessments[row.team] || row.assessment;
+    if (!assessment) {
+      setError(`Hãy chọn mức đánh giá cho ${displayTeam(row.team)} trước khi xem trước.`);
+      return;
+    }
+    setKhmtBusyTeam(row.team);
+    setError("");
+    api.adminKhmtFiPreview(row.team, khmtMonth, khmtYear, assessment)
+      .then((preview) => {
+        setKhmtPreview(preview);
+        setKhmtReason(`Chốt KHMT tháng ${khmtMonth}/${khmtYear} · ${displayTeam(row.team)}`);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setKhmtBusyTeam(null));
+  };
+
+  const finalizeKhmt = () => {
+    if (!khmtPreview || !khmtReason.trim() || !khmtPreview.can_finalize || khmtBusyTeam) return;
+    setKhmtBusyTeam(khmtPreview.team);
+    setError("");
+    const assessment = khmtAssessments[khmtPreview.team] || khmtPreview.assessment;
+    api.adminKhmtFiFinalize(khmtPreview.team, khmtMonth, khmtYear, khmtReason.trim(), assessment, {
+      expectedRevision: khmtPreview.report_revision ?? khmtPreview.report?.revision ?? 0,
+      expectedFiTeamRevision: khmtPreview.fi_team_revision,
+      expectedPlanHash: khmtPreview.plan_hash,
+    })
+      .then(() => {
+        setKhmtPreview(null);
+        setKhmtReason("");
+        setError(`Đã chốt ${displayTeam(khmtPreview.team)} và phân bổ ${khmtPreview.required_count} FI cho T${khmtMonth}/${khmtYear}.`);
+        loadKhmtOverview(false);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setKhmtBusyTeam(null));
+  };
+
+  const unlockKhmt = (row: any) => {
+    const reason = window.prompt(`Lý do mở chốt ${displayTeam(row.team)} — T${khmtMonth}/${khmtYear}`);
+    if (!reason?.trim()) return;
+    setKhmtBusyTeam(row.team);
+    setError("");
+    api.adminKhmtFiUnlock(row.team, khmtMonth, khmtYear, reason.trim(), {
+      expectedRevision: row.report_revision ?? row.report?.revision ?? 0,
+    })
+      .then(() => {
+        setError(`Đã mở chốt ${displayTeam(row.team)}. Phân bổ hiện tại được giữ cho tới lần chốt lại.`);
+        loadKhmtOverview(false);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setKhmtBusyTeam(null));
+  };
 
   const handleResetPassword = (user: any) => {
     const label = user.display_name || user.full_name || user.id;
@@ -511,6 +641,206 @@ export function AdminPanel() {
     </>
   );
 
+  const renderKhmtFiTab = () => {
+    const selectedQuotaForRow = (row: any) => FI_QUOTA_BY_ASSESSMENT[khmtAssessments[row.team] || row.assessment || "Hoàn thành nhiệm vụ"] ?? 0;
+    const shortageForRow = (row: any) => row.has_report
+      ? Math.max(0, selectedQuotaForRow(row) - Number(row.available_count ?? 0))
+      : 0;
+    const readyCount = khmtRows.filter((row) => row.has_report && shortageForRow(row) === 0 && !row.locked).length;
+    const lockedCount = khmtRows.filter((row) => row.locked).length;
+    const missingReportCount = khmtRows.filter((row) => !row.has_report).length;
+    const shortageCount = khmtRows.filter((row) => row.has_report && shortageForRow(row) > 0).length;
+
+    return (
+      <>
+        <div className="admin-khmt-toolbar">
+          <div>
+            <h3>Chốt KHMT và phân bổ FI theo tháng</h3>
+            <p>
+              Chọn mức đánh giá cho từng đội/tổ, xem trước danh sách FI rồi mới xác nhận. Việc mở tab không tự thay đổi dữ liệu.
+            </p>
+          </div>
+          <div className="admin-khmt-period">
+            <label className="admin-filter-field">
+              Tháng
+              <select value={khmtMonth} onChange={(event) => setKhmtMonth(Number(event.target.value))}>
+                {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
+                  <option key={month} value={month}>T{month}</option>
+                ))}
+              </select>
+            </label>
+            <label className="admin-filter-field">
+              Năm
+              <select value={khmtYear} onChange={(event) => setKhmtYear(Number(event.target.value))}>
+                {Array.from({ length: 12 }, (_, index) => new Date().getFullYear() - 3 + index).map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </label>
+            <button className="admin-detail-button" disabled={khmtLoading} onClick={() => loadKhmtOverview()} type="button">
+              <RefreshCw size={15} className={khmtLoading ? "icon-spin" : undefined} />
+              Tải lại
+            </button>
+          </div>
+        </div>
+
+        <div className="admin-khmt-notice" role="note">
+          <ShieldCheck size={18} />
+          <div>
+            <strong>An toàn dữ liệu thủ công</strong>
+            <span>Hệ thống chỉ phân bổ sau khi Admin chọn mức, xem trước và bấm xác nhận. Các FI đã làm thủ công, như tháng 7, không bị tự động thay đổi.</span>
+          </div>
+        </div>
+
+        <div className="admin-fi-kpis admin-khmt-kpis">
+          <div className="admin-fi-kpi current">
+            <CalendarCheck size={18} />
+            <span>Sẵn sàng chốt</span>
+            <strong>{readyCount}/{khmtRows.length}</strong>
+            <small>Đủ FI và có báo cáo trong kỳ</small>
+          </div>
+          <div className="admin-fi-kpi">
+            <Lock size={18} />
+            <span>Đã chốt</span>
+            <strong>{lockedCount}</strong>
+            <small>Có thể mở chốt khi cần điều chỉnh</small>
+          </div>
+          <div className="admin-fi-kpi">
+            <AlertTriangle size={18} />
+            <span>Thiếu FI</span>
+            <strong>{shortageCount}</strong>
+            <small>Cần bổ sung FI hoặc chọn lại mức</small>
+          </div>
+          <div className="admin-fi-kpi">
+            <FileText size={18} />
+            <span>Chưa có báo cáo</span>
+            <strong>{missingReportCount}</strong>
+            <small>Chưa thể chốt KHMT tự động</small>
+          </div>
+        </div>
+
+        <div className="admin-khmt-table-wrap">
+          <table className="admin-khmt-table">
+            <thead>
+              <tr>
+                <th>Đội/tổ</th>
+                <th>Báo cáo tháng</th>
+                <th>Mức đánh giá Admin chọn</th>
+                <th>Định mức</th>
+                <th>FI khả dụng</th>
+                <th>Đang gán kỳ này</th>
+                <th>Trạng thái</th>
+                <th>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {khmtRows.map((row) => {
+                const assessment = khmtAssessments[row.team] || row.assessment || "Hoàn thành nhiệm vụ";
+                const required = FI_QUOTA_BY_ASSESSMENT[assessment] ?? 0;
+                const selectedShortage = shortageForRow(row);
+                const manualNote = !row.allocation && Number(row.currently_assigned_count ?? 0) > 0;
+                return (
+                  <tr key={row.team}>
+                    <td>
+                      <strong>{displayTeam(row.team)}</strong>
+                      {manualNote && <small className="admin-khmt-cell-note">Có phân bổ thủ công hiện tại</small>}
+                    </td>
+                    <td>
+                      <span className={`admin-status-pill ${row.has_report ? (row.locked ? "success" : "info") : "neutral"}`}>
+                        {row.status}
+                      </span>
+                      {row.submitted_at && <small className="admin-khmt-cell-note">Gửi {formatDateTime(row.submitted_at)}</small>}
+                    </td>
+                    <td>
+                      <select
+                        className="admin-khmt-assessment-select"
+                        disabled={!row.has_report || row.locked || Boolean(khmtBusyTeam)}
+                        value={assessment}
+                        onChange={(event) => setKhmtAssessments((current) => ({ ...current, [row.team]: event.target.value }))}
+                      >
+                        {MONTHLY_ASSESSMENTS.map((value) => <option key={value} value={value}>{value}</option>)}
+                      </select>
+                    </td>
+                    <td><strong className="admin-khmt-quota">{required} FI</strong></td>
+                    <td>{row.has_report ? `${row.available_count ?? 0}/${required}` : "—"}</td>
+                    <td>{row.currently_assigned_count ?? 0}</td>
+                    <td>
+                      {row.locked ? (
+                        <span className="admin-status-pill success">Đã chốt & phân bổ</span>
+                      ) : row.preview_error ? (
+                        <span className="admin-status-pill danger">Cần kiểm tra mức</span>
+                      ) : row.has_report && selectedShortage > 0 ? (
+                        <span className="admin-status-pill warning">Thiếu {selectedShortage} FI</span>
+                      ) : row.has_report ? (
+                        <span className="admin-status-pill info">Sẵn sàng xem trước</span>
+                      ) : (
+                        <span className="admin-status-pill neutral">Chưa có báo cáo</span>
+                      )}
+                    </td>
+                    <td>
+                      {row.locked ? (
+                        <button className="admin-detail-button" disabled={khmtBusyTeam === row.team} onClick={() => unlockKhmt(row)} type="button">
+                          <Unlock size={15} /> Mở chốt
+                        </button>
+                      ) : row.has_report ? (
+                        <button className="admin-detail-button admin-khmt-preview-button" disabled={khmtBusyTeam === row.team} onClick={() => openKhmtPreview(row)} type="button">
+                          <Eye size={15} /> Xem trước & chốt
+                        </button>
+                      ) : (
+                        <small className="admin-khmt-muted-action">Nhập báo cáo trước</small>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {!khmtRows.length && (
+                <tr><td colSpan={8}><div className="table-empty-state"><CalendarCheck size={20} /><span>{khmtLoading ? "Đang tải kỳ KHMT..." : "Chưa có dữ liệu cho kỳ này."}</span></div></td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {khmtPreview && (
+          <div className="fi-allocation-backdrop" role="presentation">
+            <section className="fi-allocation-modal admin-khmt-preview-modal" role="dialog" aria-modal="true" aria-labelledby="admin-khmt-preview-title">
+              <header className="fi-allocation-modal-head">
+                <div>
+                  <span className="fi-allocation-kicker">Chốt KHMT tháng {khmtPreview.month}/{khmtPreview.year}</span>
+                  <h2 id="admin-khmt-preview-title">{displayTeam(khmtPreview.team)} · Phân bổ FI</h2>
+                  <p>{khmtPreview.assessment}</p>
+                </div>
+                <button aria-label="Đóng xem trước" className="fi-allocation-close" disabled={Boolean(khmtBusyTeam)} onClick={() => setKhmtPreview(null)} type="button"><X size={19} /></button>
+              </header>
+              <div className="fi-allocation-modal-body">
+                <div className="fi-allocation-stats">
+                  <div><span>Định mức</span><strong>{khmtPreview.required_count} FI</strong></div>
+                  <div><span>Đang gán</span><strong>{khmtPreview.currently_assigned_count}</strong></div>
+                  <div><span>Kho chưa phân bổ</span><strong>{khmtPreview.unassigned_pool_count}</strong></div>
+                  <div className={khmtPreview.can_finalize ? "is-ready" : "is-shortage"}><span>Khả dụng</span><strong>{khmtPreview.available_count}/{khmtPreview.required_count}</strong></div>
+                </div>
+                {!khmtPreview.can_finalize && (
+                  <div className="fi-allocation-alert is-danger" role="alert"><AlertTriangle size={18} /><div><strong>Chưa đủ FI để chốt</strong><p>Còn thiếu {khmtPreview.shortage_count} FI hợp lệ. Hệ thống sẽ không thay đổi dữ liệu.</p></div></div>
+                )}
+                <section className="fi-allocation-selection">
+                  <div className="panel-header"><div><h3>Danh sách FI sẽ ghi nhận</h3><p className="panel-sub">Ưu tiên FI được duyệt cũ nhất; FI đang gán hợp lệ được giữ trước.</p></div><span className="status-badge">{khmtPreview.selected_records.length}/{khmtPreview.required_count}</span></div>
+                  {khmtPreview.selected_records.length ? (
+                    <div className="fi-allocation-list">{khmtPreview.selected_records.map((item, index) => <article key={item.id}><span className="fi-allocation-order">{index + 1}</span><div><strong>{item.sk_code}</strong><p>{item.title}</p><small>{item.author_name}{item.approved_at ? ` · Duyệt ${new Date(item.approved_at).toLocaleDateString("vi-VN")}` : ""}{item.already_assigned ? " · Đang gán kỳ này" : ""}</small></div></article>)}</div>
+                  ) : <div className="fi-allocation-empty"><CheckCircle2 size={20} /><span>Mức đánh giá này không yêu cầu ghi nhận FI.</span></div>}
+                </section>
+                {khmtPreview.to_release_sk_ids.length > 0 && <p className="fi-allocation-release-note">{khmtPreview.to_release_sk_ids.length} FI vượt định mức hoặc không hợp lệ sẽ được trả về kho.</p>}
+                <label className="fi-allocation-reason"><span>Lý do chốt</span><textarea maxLength={2000} rows={2} value={khmtReason} onChange={(event) => setKhmtReason(event.target.value)} /></label>
+              </div>
+              <footer className="fi-allocation-modal-actions">
+                <button className="btn-primary" disabled={!khmtPreview.can_finalize || !khmtReason.trim() || Boolean(khmtBusyTeam)} onClick={finalizeKhmt} type="button"><Lock size={17} />{khmtBusyTeam ? "Đang chốt..." : "Xác nhận chốt & phân bổ"}</button>
+                <button disabled={Boolean(khmtBusyTeam)} onClick={() => setKhmtPreview(null)} type="button">Quay lại</button>
+              </footer>
+            </section>
+          </div>
+        )}
+      </>
+    );
+  };
+
   const renderAccountsTab = () => (
     <>
       <div className="admin-fi-kpis admin-account-kpis">
@@ -761,6 +1091,7 @@ export function AdminPanel() {
         </div>
 
         {activeTab === "fi" && renderFiTab()}
+        {activeTab === "khmt-fi" && renderKhmtFiTab()}
         {activeTab === "accounts" && renderAccountsTab()}
       </section>
     </div>

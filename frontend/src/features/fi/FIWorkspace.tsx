@@ -32,7 +32,10 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { api } from "../../api/client";
+import { ApiError, api } from "../../api/client";
+
+import { DraftRecoveryStore, downloadDraft } from "../../shared/editing/DraftRecoveryStore";
+import { useNavigationGuard } from "../../shared/editing/NavigationGuardProvider";
 
 const TEAM_ROLE = "Team_Account";
 const STAFF_ROLE = "Staff";
@@ -375,6 +378,31 @@ function statusTone(status: string) {
   if (["NeedMoreInfo", "Deferred"].includes(status)) return "warning";
   if (["Rejected", "Cancelled"].includes(status)) return "danger";
   return "neutral";
+}
+
+function makeIdempotencyKey(prefix: string) {
+  const random = typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `${prefix}:${random}`;
+}
+
+async function uploadWithRetry(skId: string, file: File, idempotencyKey: string, expectedRevision: number) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await api.uploadSkImageWithOptions(skId, file, { idempotencyKey, expectedRevision });
+    } catch (error) {
+      lastError = error;
+      const transient = !(error instanceof ApiError)
+        || error.code === "NETWORK_ERROR"
+        || [408, 425, 429].includes(error.status)
+        || error.status >= 500;
+      if (!transient) throw error;
+      if (attempt < 2) await new Promise((resolve) => globalThis.setTimeout(resolve, 150 * (attempt + 1)));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Không thể tải ảnh lên");
 }
 
 function historyActionLabel(history: any) {
@@ -1497,6 +1525,11 @@ export function FIWorkspace({
   const defaultTab: FITab = canRegister ? "register" : canReview ? "review" : "dashboard";
   const [items, setItems] = useState<any[]>([]);
   const [allHistoryItems, setAllHistoryItems] = useState<any[]>([]);
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [historyYear, setHistoryYear] = useState("");
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPageSize, setHistoryPageSize] = useState<25 | 50>(25);
+  const [historyMeta, setHistoryMeta] = useState<any>(null);
   const [dashboard, setDashboard] = useState<any>(null);
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
@@ -1531,7 +1564,7 @@ export function FIWorkspace({
     };
   });
   const [error, setError] = useState("");
-  const [actionTarget, setActionTarget] = useState<{ id: string; label: string; decision: ReviewDecision } | null>(null);
+  const [actionTarget, setActionTarget] = useState<{ id: string; label: string; decision: ReviewDecision; revision: number } | null>(null);
   const [actionNote, setActionNote] = useState("");
   const [editTarget, setEditTarget] = useState<any>(null);
   const [editForm, setEditForm] = useState({
@@ -1542,7 +1575,11 @@ export function FIWorkspace({
     completion_plan_raw: "" as string,
   });
   const [savingEdit, setSavingEdit] = useState(false);
-  const [khmtTarget, setKhmtTarget] = useState<{ id: string; label: string; month: number; year: number } | null>(null);
+  const [loadingEdit, setLoadingEdit] = useState(false);
+  const editLoadEpoch = useRef(0);
+  const editTargetRef = useRef(editTarget);
+  editTargetRef.current = editTarget;
+  const [khmtTarget, setKhmtTarget] = useState<{ id: string; label: string; month: number; year: number; revision: number } | null>(null);
   const [assigningKhmt, setAssigningKhmt] = useState(false);
   const [pendingKhmtMonths, setPendingKhmtMonths] = useState<Record<string, string>>({});
   const draftFileInputRef = useRef<HTMLInputElement>(null);
@@ -1562,19 +1599,71 @@ export function FIWorkspace({
   const [authorPickerOpen, setAuthorPickerOpen] = useState(false);
   const [authorQuery, setAuthorQuery] = useState("");
 
+  const recoveryStore = useMemo(() => new DraftRecoveryStore<any>({
+    namespace: "okr", userId: currentUserId, module: "fi-register", resource: "active", schemaVersion: "1",
+  }), [currentUserId]);
+  const [recovery, setRecovery] = useState(() => recoveryStore.read());
+  const [recoveryWarning, setRecoveryWarning] = useState("");
+  const [operation, setOperation] = useState<any>(null);
+  const operationRef = useRef<any>(null);
+  const formBaseline = useRef(JSON.stringify(form));
+  const navigationSaved = useRef(false);
+  const { registerGuard, requestNavigation } = useNavigationGuard();
+  const formDirty = JSON.stringify(form) !== formBaseline.current || evidenceFiles.length > 0 || Boolean(operation);
+  const persist = (nextOperation = operationRef.current) => {
+    const result = recoveryStore.write({ form, operation: nextOperation, files: evidenceFiles.map((file) => file.name) }, null, 1);
+    if (!result.ok) setRecoveryWarning(result.warning ?? "");
+    return result;
+  };
+  useEffect(() => { navigationSaved.current = false; if (formDirty && !recovery) persist(); }, [form, evidenceFiles, operation, recovery]);
+  useEffect(() => registerGuard(`fi-register:${currentUserId}`, {
+    isDirty: () => creating || (formDirty && !navigationSaved.current),
+    save: async () => { const result = persist(); if (result.ok) navigationSaved.current = true; },
+    discard: () => { recoveryStore.remove(); resetRegistration(); navigationSaved.current = true; },
+  }), [registerGuard, currentUserId, formDirty, creating, form, evidenceFiles]);
+  const resetRegistration = () => {
+    recoveryStore.remove(); setRecovery(null); setOperation(null); operationRef.current = null;
+    const next = { ...form, title: "", content_description: "" };
+    formBaseline.current = JSON.stringify(next); setForm(next); setEvidenceFiles([]);
+  };
+  const reloadEpoch = useRef(0);
   const reload = () => {
+    const epoch = ++reloadEpoch.current;
     setDashboardLoading(true);
     const listFilters = canReview ? {} : { mine_only: true };
-    const historyRequest = activeTab === "history" ? api.publicSk() : Promise.resolve(null);
-    Promise.all([api.listSk(listFilters), historyRequest, api.fiDashboard()])
+    const historyRequest = activeTab === "history"
+      ? api.fiHistory({
+          q: historyQuery || undefined,
+          registration_year: historyYear ? Number(historyYear) : undefined,
+          teams: historyTeams.length ? historyTeams.join(",") : undefined,
+          registration_months: historyMonths.length ? historyMonths.join(",") : undefined,
+          authors: historyAuthors.length ? historyAuthors.join(",") : undefined,
+          submitters: historySubmitters.length ? historySubmitters.join(",") : undefined,
+          decisions: historyDecisions.length ? historyDecisions.join(",") : undefined,
+          khmt: historyKhmt.length ? historyKhmt.join(",") : undefined,
+          khmt_periods: historyKhmtPeriods.length ? historyKhmtPeriods.join(",") : undefined,
+          completion: historyCompletion.length ? historyCompletion.join(",") : undefined,
+          page: historyPage,
+          page_size: historyPageSize,
+        })
+      : Promise.resolve(null);
+    Promise.all([
+      activeTab === "history" ? Promise.resolve(items) : api.listSk(listFilters),
+      historyRequest,
+      activeTab === "history" ? Promise.resolve(dashboard) : api.fiDashboard(),
+    ])
       .then(([privateList, historyList, dashboardData]) => {
+        if (epoch !== reloadEpoch.current) return;
         setItems(privateList.filter((item) => !item.is_historical_import));
-        if (historyList) setAllHistoryItems(historyList);
+        if (historyList) {
+          setAllHistoryItems(historyList.items ?? []);
+          setHistoryMeta(historyList);
+        }
         setDashboard(dashboardData);
         setError("");
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setDashboardLoading(false));
+      .catch((err) => { if (epoch === reloadEpoch.current) setError(err.message); })
+      .finally(() => { if (epoch === reloadEpoch.current) setDashboardLoading(false); });
   };
 
   useEffect(() => {
@@ -1582,8 +1671,15 @@ export function FIWorkspace({
   }, [role]);
 
   useEffect(() => {
-    if (activeTab === "history") reload();
-  }, [activeTab]);
+    if (activeTab !== "history") return;
+    const timer = window.setTimeout(reload, 250);
+    return () => { window.clearTimeout(timer); reloadEpoch.current += 1; };
+  }, [activeTab, historyQuery, historyYear, historyPage, historyPageSize, historyTeams, historyMonths, historyAuthors, historySubmitters, historyDecisions, historyKhmt, historyKhmtPeriods, historyCompletion]);
+
+  useEffect(() => {
+    if (activeTab !== "history") return;
+    setHistoryPage(1);
+  }, [historyQuery, historyYear, historyTeams, historyMonths, historyAuthors, historySubmitters, historyDecisions, historyKhmt, historyKhmtPeriods, historyCompletion, historyPageSize]);
 
   useEffect(() => {
     if (!canUseAuthorPicker) return;
@@ -1710,7 +1806,7 @@ export function FIWorkspace({
   };
 
   const create = async () => {
-    if (creating) return;
+    if (creating || recovery) return;
     if (role === ADMIN_ROLE && !editMode) return;
     // Client-side validation: prevent submitting empty registrations.
     const missing: string[] = [];
@@ -1738,6 +1834,7 @@ export function FIWorkspace({
     if (missing.length > 0) {
       setError(`Vui lòng nhập: ${missing.join(", ")}.`);
       setNotice("");
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('[role="alert"]')?.focus());
       return;
     }
     const completionPlan = formatCompletionPlan(form.completion_done, form.completion_plan_date);
@@ -1757,14 +1854,48 @@ export function FIWorkspace({
       ? { ...basePayload, author_name: authorName, author_user_id: authorUserId, team }
       : basePayload;
     const filesToUpload = [...evidenceFiles];
+    const currentOperation = operationRef.current ?? {
+      key: makeIdempotencyKey("fi-create"), payload, recordId: null,
+      images: filesToUpload.map((file, index) => ({ name: file.name, index, status: "pending" })),
+    };
+    operationRef.current = currentOperation;
+    setOperation({ ...currentOperation });
+    persist(currentOperation);
+    const createKey = currentOperation.key;
     setCreating(true);
     setError("");
     setNotice("");
     try {
-      const created = await api.createSk(payload);
-      const uploadResults = await Promise.allSettled(
-        filesToUpload.map((file) => api.uploadSkImage(created.id, file))
-      );
+      const created = currentOperation.recordId
+        ? await api.getSk(currentOperation.recordId)
+        : await api.createSk(currentOperation.payload, createKey);
+      currentOperation.recordId = created.id;
+      currentOperation.code = created.sk_code;
+      setOperation({ ...currentOperation });
+      persist(currentOperation);
+      setSelectedItem(created);
+      let createRevision = created.server_revision ?? created.revision ?? 1;
+      const uploadResults: Array<PromiseSettledResult<any>> = [];
+      for (const file of filesToUpload) {
+        const imageState = currentOperation.images.find((entry: any) => entry.name === file.name && entry.status !== "done");
+        if (!imageState) { uploadResults.push({ status: "fulfilled", value: null }); continue; }
+        try {
+          imageState.status = "uploading";
+          const response = await uploadWithRetry(created.id, file, `${createKey}:image:${imageState.index}`, createRevision);
+          imageState.status = "done";
+          imageState.id = response.id;
+          createRevision = response.server_revision ?? createRevision + 1;
+          uploadResults.push({ status: "fulfilled", value: response });
+        } catch (reason) {
+          imageState.status = "failed";
+          uploadResults.push({ status: "rejected", reason });
+          // Reconcile a possibly committed upload before sending the next one.
+          const latest = await api.getSk(created.id).catch(() => null);
+          if (latest) createRevision = latest.server_revision ?? latest.revision;
+        }
+        setOperation({ ...currentOperation });
+        persist(currentOperation);
+      }
       const failedFiles = filesToUpload.filter((_, index) => uploadResults[index].status === "rejected");
       setEvidenceFiles(failedFiles);
       reload();
@@ -1773,20 +1904,10 @@ export function FIWorkspace({
         setError(`Đã đăng ký xét duyệt nhưng ${failedFiles.length}/${filesToUpload.length} ảnh chưa tải lên được. Có thể thử tải lại trong phần chi tiết hồ sơ.`);
       } else {
         setNotice(filesToUpload.length > 0 ? `Đã đăng ký xét duyệt và tải lên ${filesToUpload.length} ảnh bằng chứng.` : "Đã đăng ký xét duyệt.");
-        // Reset form for next entry after successful save. Tác giả quay về chính chủ
-        // để lần đăng ký kế tiếp mặc định là của mình (tránh giữ lại tên người được giúp).
-        const today = new Date();
-        setForm((current) => ({
-          ...current,
-          author_name: AUTHOR_ROLES.includes(role) ? accountAuthorName : "",
-          author_user_id: AUTHOR_ROLES.includes(role) ? currentUserId : "",
-          team: AUTHOR_ROLES.includes(role) ? accountTeam ?? current.team : defaultFormTeam,
-          title: "",
-          content_description: "",
-          completion_done: false,
-          completion_plan_date: isoDateInput(addMonths(today, 1)),
-        }));
-        if (canUseAuthorPicker) setAuthorQuery(AUTHOR_ROLES.includes(role) ? accountAuthorName : "");
+        // Keep the created record until an explicit new-registration action.
+        currentOperation.complete = currentOperation.images.every((entry: any) => entry.status === "done");
+        setOperation({ ...currentOperation });
+        persist(currentOperation);
       }
     } catch (err: any) {
       setError(err.message);
@@ -1809,7 +1930,8 @@ export function FIWorkspace({
       .catch((err) => setError(err.message));
   };
 
-  const selectTab = (tab: FITab) => {
+  const selectTab = async (tab: FITab) => {
+    if (!await requestNavigation("đổi tab FI")) return;
     setActiveTab(tab);
     setActionTarget(null);
     setEditTarget(null);
@@ -1866,6 +1988,7 @@ export function FIWorkspace({
   };
 
   const resetHistoryFilters = () => {
+    setHistoryQuery(""); setHistoryYear("");
     setHistoryTeams([]);
     setHistoryMonths([]);
     setHistoryDecisions([]);
@@ -1925,6 +2048,8 @@ export function FIWorkspace({
   };
 
   const openEdit = (item: any) => {
+    const epoch = ++editLoadEpoch.current;
+    setLoadingEdit(true);
     setActionTarget(null);
     setKhmtTarget(null);
     setEditTarget(item);
@@ -1942,6 +2067,7 @@ export function FIWorkspace({
     setNotice("");
     api.getSk(item.id)
       .then((full) => {
+        if (epoch !== editLoadEpoch.current || editTargetRef.current?.id !== item.id) return;
         setEditTarget((current: any) => current?.id === item.id ? full : current);
         setEditForm((current) => {
           const nextRaw = full.completion_plan || "";
@@ -1956,7 +2082,8 @@ export function FIWorkspace({
           };
         });
       })
-      .catch(() => {});
+      .catch((err) => { if (epoch === editLoadEpoch.current) setError(err.message); })
+      .finally(() => { if (epoch === editLoadEpoch.current) setLoadingEdit(false); });
   };
 
   const openReviewDecision = (item: any) => {
@@ -1966,6 +2093,7 @@ export function FIWorkspace({
       id: item.id,
       label: item.sk_code || item.title,
       decision: reviewDecisionFromStatus(item.status),
+      revision: item.server_revision ?? item.revision ?? 0,
     });
     setActionNote(item.decision_note || "");
     setError("");
@@ -1982,24 +2110,27 @@ export function FIWorkspace({
       label: item.sk_code || item.title,
       month: Number(item.khmt_month || registration.month || today.getMonth() + 1),
       year: Number(item.khmt_year || registration.year || today.getFullYear()),
+      revision: item.server_revision ?? item.revision ?? 0,
     });
     setError("");
     setNotice("");
   };
 
   const handleEditSave = async () => {
-    if (!editTarget || savingEdit) return;
+    if (!editTarget || savingEdit || loadingEdit) return;
     setSavingEdit(true);
     setError("");
     setNotice("");
     const wasSubmitted = editTarget.status && editTarget.status !== "Draft";
     try {
-      const updated = await api.updateSk(editTarget.id, {
+      const updated = await api.updateSkRevision(editTarget.id, {
         content_description: editForm.content_description,
         completion_plan: formatCompletionPlan(editForm.completion_done, editForm.completion_plan_date),
         completion_done: editForm.completion_done,
         completion_date: editForm.completion_plan_date,
         title: editForm.title,
+      }, {
+        expectedRevision: editTarget.server_revision ?? editTarget.revision ?? 0,
       });
       setNotice(
         wasSubmitted
@@ -2023,7 +2154,10 @@ export function FIWorkspace({
       return;
     }
     const target = actionTarget;
-    api.transitionSk(target.id, target.decision, actionNote.trim() ? { note: actionNote.trim() } : {})
+    api.transitionSk(target.id, target.decision, {
+      ...(actionNote.trim() ? { note: actionNote.trim() } : {}),
+      expected_revision: target.revision,
+    })
       .then((updated) => {
         setNotice(`Đã cập nhật đánh giá: ${reviewDecisionLabel(target.decision)}.`);
         setActionTarget(null);
@@ -2043,7 +2177,12 @@ export function FIWorkspace({
     setError("");
     setNotice("");
     try {
-      const updated = await api.assignKhmt(khmtTarget.id, khmtTarget.month, khmtTarget.year);
+      const updated = await api.assignKhmt(
+        khmtTarget.id,
+        khmtTarget.month,
+        khmtTarget.year,
+        khmtTarget.revision,
+      );
       setNotice(`Đã ghi nhận ${updated.sk_code || khmtTarget.label} vào KHMT T${khmtTarget.month}/${khmtTarget.year}.`);
       setKhmtTarget(null);
       reload();
@@ -2066,8 +2205,8 @@ export function FIWorkspace({
     setNotice("");
     try {
       const updated = isClearingKhmt
-        ? await api.clearKhmt(item.id)
-        : await api.assignKhmt(item.id, month, year);
+        ? await api.clearKhmt(item.id, item.server_revision ?? item.revision ?? 0)
+        : await api.assignKhmt(item.id, month, year, item.server_revision ?? item.revision ?? 0);
       setNotice(
         isClearingKhmt
           ? `Đã bỏ ${updated.sk_code || item.title} khỏi KHMT.`
@@ -2111,7 +2250,22 @@ export function FIWorkspace({
     setError("");
     setNotice("");
     try {
-      const results = await Promise.allSettled(files.map((file) => api.uploadSkImage(skId, file)));
+      const batchKey = makeIdempotencyKey(`fi-image:${skId}`);
+      // Image uploads share the SK revision. A tiny serialized queue keeps the
+      // CAS token current while still bounding the queue to the active form.
+      let revision = selectedItem?.id === skId
+        ? (selectedItem.server_revision ?? selectedItem.revision ?? 0)
+        : (editTarget?.server_revision ?? editTarget?.revision ?? 0);
+      const results: Array<PromiseSettledResult<any>> = [];
+      for (const [index, file] of files.entries()) {
+        try {
+          const response = await uploadWithRetry(skId, file, `${batchKey}:${index}`, revision);
+          revision = response.server_revision ?? revision + 1;
+          results.push({ status: "fulfilled", value: response });
+        } catch (reason) {
+          results.push({ status: "rejected", reason });
+        }
+      }
       const failedCount = results.filter((result) => result.status === "rejected").length;
       reload();
       await refreshSkAfterImageChange(skId).catch(() => {});
@@ -2143,7 +2297,8 @@ export function FIWorkspace({
   };
 
   const handleDeleteImage = (skId: string, imageId: string) => {
-    api.deleteSkImage(skId, imageId)
+    const currentRevision = selectedItem?.server_revision ?? selectedItem?.revision ?? editTarget?.server_revision ?? editTarget?.revision ?? 0;
+    api.deleteSkImage(skId, imageId, currentRevision)
       .then(() => {
         reload();
         refreshSkAfterImageChange(skId).catch(() => {});
@@ -2156,7 +2311,7 @@ export function FIWorkspace({
     if (!id) return;
     const label = item.sk_code || item.title || "SK-CTKT này";
     if (!confirm(`Xác nhận xóa ${label}?`)) return;
-    api.deleteSk(id)
+    api.deleteSk(id, { expectedRevision: item.server_revision ?? item.revision ?? 0 })
       .then(() => {
         if (selectedItem?.id === id) setSelectedItem(null);
         if (editTarget?.id === id) setEditTarget(null);
@@ -2219,31 +2374,12 @@ export function FIWorkspace({
   const selectedActions = selectedItem ? visibleActionsForSk(role, currentUserId, selectedItem, editMode) : [];
   const editImages = Array.isArray(editTarget?.supporting_images) ? editTarget.supporting_images : [];
   const canManageEditImages = editTarget ? canUploadImages(role, currentUserId, editTarget, editMode) : false;
-  const selectedHistoryTeamSet = new Set(historyTeams);
-  const historyItems = allHistoryItems.filter((item) =>
-    historyTeams.length === 0 || selectedHistoryTeamSet.has(item.team)
-  );
-  const historyTeamCounts = allHistoryItems.reduce<Record<string, number>>((acc, item) => {
-    if (item?.team) acc[item.team] = (acc[item.team] ?? 0) + 1;
-    return acc;
-  }, {});
-  const historyMonthCounts = historyItems.reduce<Map<number, number>>((monthCounts, item) => {
-    const month = registrationMonthValue(item);
-    if (month) monthCounts.set(month, (monthCounts.get(month) ?? 0) + 1);
-    return monthCounts;
-  }, new Map<number, number>());
-  const historyMonthOptions = Array.from(historyMonthCounts.entries()).sort((a, b) => b[0] - a[0]);
-  const selectedHistoryMonthSet = new Set(historyMonths);
-  const selectedHistoryDecisionSet = new Set(historyDecisions);
-  const selectedHistoryCompletionSet = new Set(historyCompletion);
-  const historyAuthorOptions = useMemo(
-    () => buildPersonFilterOptions(historyItems, authorOptions, "author", userLabelById),
-    [authorOptions, historyItems, userLabelById],
-  );
-  const historySubmitterOptions = useMemo(
-    () => buildPersonFilterOptions(historyItems, authorOptions, "submitter", userLabelById),
-    [authorOptions, historyItems, userLabelById],
-  );
+  const historyItems = allHistoryItems;
+  const historyTeamCounts: Record<string, number> = Object.fromEntries((historyMeta?.facets?.teams ?? []).map((row: any) => [row.value, row.count]));
+  const historyMonthOptions: Array<[number, number]> = (historyMeta?.facets?.months ?? []).map((row: any) => [row.value, row.count]).sort((a: number[], b: number[]) => b[0] - a[0]);
+  const personFacets = (kind: "authors" | "submitters"): PersonFilterOption[] => (historyMeta?.facets?.[kind] ?? []).map((row: any) => ({...row, nameKey: normalizeAuthorQuery(row.label), searchText: normalizeAuthorQuery(`${row.label} ${row.accountId ?? ""} ${row.team ?? ""}`)}));
+  const historyAuthorOptions = useMemo(() => personFacets("authors"), [historyMeta]);
+  const historySubmitterOptions = useMemo(() => personFacets("submitters"), [historyMeta]);
   const historyAuthorOptionByKey = useMemo(
     () => new Map(historyAuthorOptions.map((option) => [option.key, option])),
     [historyAuthorOptions],
@@ -2252,62 +2388,15 @@ export function FIWorkspace({
     () => new Map(historySubmitterOptions.map((option) => [option.key, option])),
     [historySubmitterOptions],
   );
-  const historyItemMatchesPerson = (
-    item: any,
-    selectedKeys: string[],
-    optionByKey: Map<string, PersonFilterOption>,
-    mode: "author" | "submitter",
-  ) => {
-    if (selectedKeys.length === 0) return true;
-    const itemId = mode === "author" ? recordAuthorId(item) : recordSubmitterId(item);
-    const itemName = mode === "author" ? item?.author_name : item?.submitted_by_name || displayUser(itemId);
-    const itemKey = personFilterKey(isSystemActorId(itemId) ? null : itemId, itemName);
-    const itemNameKey = normalizeAuthorQuery(itemName);
-    const itemTeamKey = normalizeAuthorQuery(item?.team);
-    return selectedKeys.some((key) => {
-      if (key === itemKey) return true;
-      const selectedOption = optionByKey.get(key);
-      if (!selectedOption?.nameKey || selectedOption.nameKey !== itemNameKey) return false;
-      const selectedTeamKey = normalizeAuthorQuery(selectedOption.team);
-      return !selectedTeamKey || !itemTeamKey || selectedTeamKey === itemTeamKey;
-    });
+  const historyDecisionCounts: Record<HistoryDecisionFilter, number> = {
+    approved: historyMeta?.summary?.approved ?? 0, rejected: historyMeta?.summary?.rejected ?? 0,
+    deferred: historyMeta?.summary?.deferred ?? 0, pending: historyMeta?.summary?.pending ?? 0,
   };
-  const historyDecisionCounts = historyItems.reduce<Record<HistoryDecisionFilter, number>>(
-    (acc, item) => {
-      const key = decisionFilterForItem(item);
-      acc[key] += 1;
-      return acc;
-    },
-    { approved: 0, rejected: 0, deferred: 0, pending: 0 },
-  );
-  const historyKhmtCounts = historyItems.reduce<Record<HistoryKhmtFilter, number>>(
-    (acc, item) => {
-      acc[khmtFilterForItem(item)] += 1;
-      return acc;
-    },
-    { in: 0, out: 0 },
-  );
-  const historyKhmtPeriodCounts = historyItems.reduce<Map<string, { month: number; year: number; count: number }>>((periodCounts, item) => {
-    const month = Number(item?.khmt_month);
-    const year = Number(item?.khmt_year);
-    if (isKhmtConsidered(item) && Number.isInteger(month) && month >= 1 && month <= 12 && Number.isInteger(year)) {
-      const key = `${year}-${month}`;
-      const current = periodCounts.get(key);
-      periodCounts.set(key, { month, year, count: (current?.count ?? 0) + 1 });
-    }
-    return periodCounts;
-  }, new Map<string, { month: number; year: number; count: number }>());
-  const historyKhmtPeriodOptions = Array.from(historyKhmtPeriodCounts.entries()).sort(
-    ([, a], [, b]) => a.year - b.year || a.month - b.month,
-  );
-  const historyCompletionCounts = historyItems.reduce<Record<HistoryCompletionFilter, number>>(
-    (acc, item) => {
-      acc[completionFilterForItem(item)] += 1;
-      return acc;
-    },
-    { done: 0, pending: 0 },
-  );
+  const historyKhmtCounts = {in: historyMeta?.summary?.khmt_considered ?? 0, out: historyMeta?.summary?.khmt_missing ?? 0};
+  const historyKhmtPeriodOptions: Array<[string, {month: number; year: number; count: number}]> = (historyMeta?.facets?.periods ?? []).map((row: any) => [`${row.year}-${row.month}`, row]);
+  const historyCompletionCounts = {done: historyMeta?.summary?.completed_count ?? 0, pending: historyMeta?.summary?.not_completed ?? 0};
   const historyActiveFilterCount =
+    Number(Boolean(historyQuery)) + Number(Boolean(historyYear)) +
     historyTeams.length +
     historyMonths.length +
     historyDecisions.length +
@@ -2316,17 +2405,7 @@ export function FIWorkspace({
     historyCompletion.length +
     historyAuthors.length +
     historySubmitters.length;
-  const filteredHistoryItems = historyItems
-    .filter((item) => historyMonths.length === 0 || selectedHistoryMonthSet.has(registrationMonthValue(item) ?? -1))
-    .filter((item) => historyDecisions.length === 0 || selectedHistoryDecisionSet.has(decisionFilterForItem(item)))
-    .filter((item) => matchesHistoryKhmtFilters(item, historyKhmt, historyKhmtPeriods))
-    .filter((item) => historyCompletion.length === 0 || selectedHistoryCompletionSet.has(completionFilterForItem(item)))
-    .filter((item) => historyItemMatchesPerson(item, historyAuthors, historyAuthorOptionByKey, "author"))
-    .filter((item) => historyItemMatchesPerson(item, historySubmitters, historySubmitterOptionByKey, "submitter"))
-    .sort((a, b) =>
-      (registrationMonthValue(b) ?? 0) - (registrationMonthValue(a) ?? 0) ||
-      (a.bm01_source_row ?? 0) - (b.bm01_source_row ?? 0)
-    );
+  const filteredHistoryItems = historyItems;
   const groupedHistoryItems = filteredHistoryItems.reduce<HistoryMonthGroup[]>((groups, item) => {
     const { month, year } = registrationInfo(item);
     const groupKey = `${year}-${month ?? "unknown"}`;
@@ -2359,8 +2438,15 @@ export function FIWorkspace({
     : 0;
   const historySummaryTeamRows = historyTeams.length === 0
     ? dashboardTeams
-    : dashboardTeams.filter((team: any) => selectedHistoryTeamSet.has(team.team));
-  const historyTeamSummary = aggregateTeamSummaries(historySummaryTeamRows);
+    : dashboardTeams.filter((team: any) => historyTeams.includes(team.team));
+  const historyTeamSummary = historyMeta?.summary
+    ? {
+        ...historyMeta.summary,
+        review_passed: historyMeta.summary.approved,
+        review_failed: historyMeta.summary.rejected,
+        khmt_not_considered: historyMeta.summary.khmt_missing,
+      }
+    : aggregateTeamSummaries(historySummaryTeamRows);
   const historyTeamOptions = [
     ...FI_TEAMS,
     ...Array.from(
@@ -2378,19 +2464,20 @@ export function FIWorkspace({
     setError("");
     setNotice("");
     api.exportFiReports({
+      q: historyQuery || undefined, registration_year: historyYear ? Number(historyYear) : undefined,
       teams: historyTeams,
       registration_months: historyMonths,
       decisions: historyDecisions,
       khmt: historyKhmt,
       khmt_periods: historyKhmtPeriods,
       completion: historyCompletion,
-      authors: expandPersonFilterKeys(historyAuthors, historyAuthorOptionByKey),
-      submitters: expandPersonFilterKeys(historySubmitters, historySubmitterOptionByKey),
+      authors: historyAuthors,
+      submitters: historySubmitters,
     })
       .then((blob) => {
         const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
         saveBlob(blob, `fi-reports-${stamp}.xlsx`);
-        setNotice(`Đã xuất ${filteredHistoryItems.length} SK-CTKT ra Excel.`);
+        setNotice(`Đã xuất ${historyMeta?.total ?? filteredHistoryItems.length} SK-CTKT theo bộ lọc ra Excel.`);
       })
       .catch((err) => setError(err.message))
       .finally(() => setExportingHistoryExcel(false));
@@ -2538,7 +2625,7 @@ export function FIWorkspace({
             Hủy
           </button>
         </div>
-        {error && <p className="error">{error}</p>}
+        {error && <p className="error" role="alert" tabIndex={-1}>{error}</p>}
       </section>
     );
   };
@@ -2630,6 +2717,25 @@ export function FIWorkspace({
       data-snapshot-target="true"
       data-snapshot-name={fiSnapshotName}
     >
+      {recoveryWarning && <p role="alert">{recoveryWarning}<button onClick={() => downloadDraft("fi-draft.json", { form, operation })}>Tải bản nháp</button></p>}
+      {recovery && <section className="panel wide" role="status">
+        <p>Có bản khôi phục FI của tài khoản này.</p>
+        <details><summary>Xem bản khôi phục</summary><pre>{JSON.stringify(recovery.data, null, 2)}</pre></details>
+        <button onClick={() => {
+          setForm(recovery.data.form); setAuthorQuery(recovery.data.form.author_name);
+          operationRef.current = recovery.data.operation; setOperation(recovery.data.operation);
+          if (recovery.data.operation?.recordId) reloadDetail(recovery.data.operation.recordId);
+          setNotice((recovery.data.files ?? []).length ? `Cần chọn lại ảnh: ${recovery.data.files.join(", ")}` : "Đã khôi phục nội dung. Chưa gửi lại.");
+          setRecovery(null);
+        }}>Khôi phục bản này</button>
+        <button onClick={resetRegistration}>Bỏ bản khôi phục này</button>
+      </section>}
+      {operation && <section className="panel wide" role="status">
+        <p>{operation.recordId ? `FI đã tồn tại: ${operation.code ?? operation.recordId}` : "Đang đối soát lần gửi trước. Gửi lại dùng cùng mã thao tác và nội dung đã gửi."}</p>
+        <ul>{operation.images.map((entry: any) => <li key={entry.index}>{entry.name}: {entry.status === "done" ? "Đã nhận" : "Chưa nhận / cần chọn lại"}</li>)}</ul>
+        <button disabled={creating} onClick={() => void create()}>{operation.recordId ? "Thử lại ảnh chưa gửi" : "Đối soát / gửi lại"}</button>
+        {operation.recordId && <button disabled={creating} onClick={resetRegistration}>Bắt đầu hồ sơ mới</button>}
+      </section>}
       <input
         ref={draftFileInputRef}
         type="file"
@@ -2756,6 +2862,7 @@ export function FIWorkspace({
               </button>
             </div>
             <div className="fi-edit-modal-body">
+              {loadingEdit && <p role="status">Đang tải bản hiện tại…</p>}
               {editTarget.status && editTarget.status !== "Draft" && (
                 <div className="fi-edit-modal-alert">
                   <Info size={16} />
@@ -2766,6 +2873,7 @@ export function FIWorkspace({
                 <label htmlFor="fi-edit-title">Tên SK-CTKT</label>
                 <input
                   id="fi-edit-title"
+                  disabled={loadingEdit || savingEdit}
                   value={editForm.title}
                   onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
                   placeholder="Nhập tên sáng kiến/cải tiến kỹ thuật"
@@ -2775,6 +2883,7 @@ export function FIWorkspace({
                 <label htmlFor="fi-edit-content">Nội dung đăng ký</label>
                 <textarea
                   id="fi-edit-content"
+                  disabled={loadingEdit || savingEdit}
                   value={editForm.content_description}
                   onChange={(e) => setEditForm({ ...editForm, content_description: e.target.value })}
                   placeholder="Mô tả hiện trạng, giải pháp, phạm vi áp dụng và hiệu quả dự kiến"
@@ -2789,6 +2898,7 @@ export function FIWorkspace({
                 <label className="fi-check-option fi-edit-done-option" htmlFor="fi-edit-completion-done">
                   <input
                     id="fi-edit-completion-done"
+                    disabled={loadingEdit || savingEdit}
                     type="checkbox"
                     checked={editForm.completion_done}
                     onChange={(e) => setEditForm({ ...editForm, completion_done: e.target.checked })}
@@ -2801,6 +2911,7 @@ export function FIWorkspace({
                   </label>
                   <input
                     id="fi-edit-plan-date"
+                    disabled={loadingEdit || savingEdit}
                     required
                     type="date"
                     value={editForm.completion_plan_date}
@@ -2867,10 +2978,10 @@ export function FIWorkspace({
                   </div>
                 )}
               </div>
-              {error && <p className="error">{error}</p>}
+              {error && <p className="error" role="alert" tabIndex={-1}>{error}</p>}
             </div>
             <div className="fi-edit-modal-actions">
-              <button onClick={handleEditSave} disabled={savingEdit} type="button">
+              <button onClick={handleEditSave} disabled={savingEdit || loadingEdit} type="button">
                 <ClipboardCheck size={17} />
                 {savingEdit ? "Đang lưu..." : "Lưu cập nhật"}
               </button>
@@ -2917,7 +3028,7 @@ export function FIWorkspace({
               </button>
             </div>
           </div>
-          {error && <p className="error">{error}</p>}
+          {error && <p className="error" role="alert" tabIndex={-1}>{error}</p>}
           {notice && <p className="success">{notice}</p>}
         </section>
       )}
@@ -3147,7 +3258,7 @@ export function FIWorkspace({
               {creating ? "Đang đăng ký xét duyệt..." : "Đăng ký xét duyệt"}
             </button>
           </div>
-          {error && <p className="error">{error}</p>}
+          {error && <p className="error" role="alert" tabIndex={-1}>{error}</p>}
           {notice && <p className="success">{notice}</p>}
         </section>
       )}
@@ -3162,7 +3273,7 @@ export function FIWorkspace({
         <p className="muted" style={{ marginTop: -4, marginBottom: 10 }}>
           Chỉ hiển thị hồ sơ đang chờ xử lý và sáng kiến đã duyệt chưa hoàn tất. Các hồ sơ đã có kết quả khác vẫn được lưu đầy đủ trong Lịch sử FI.
         </p>
-        {error && <p className="error">{error}</p>}
+        {error && <p className="error" role="alert" tabIndex={-1}>{error}</p>}
         <div className="fi-list-block">
           <div className="fi-list-block-head fi-ownership-group-head">
             <h3>
@@ -3288,7 +3399,7 @@ export function FIWorkspace({
               <span className="tab-badge">{reviewCounts.all}</span>
             </button>
           </div>
-          {error && <p className="error">{error}</p>}
+          {error && <p className="error" role="alert" tabIndex={-1}>{error}</p>}
           <div className="list">
             {reviewQueue.map((item) => {
               const actions = visibleActionsForSk(role, currentUserId, item, editMode);
@@ -3580,7 +3691,7 @@ export function FIWorkspace({
               Đang tải FI Dashboard...
             </p>
           )}
-          {error && <p className="error">{error}</p>}
+          {error && <p className="error" role="alert" tabIndex={-1}>{error}</p>}
 
           <div className="fi-dashboard-kpis">
             <div className="fi-dashboard-kpi total">
@@ -3799,7 +3910,11 @@ export function FIWorkspace({
       {activeTab === "history" && (
       <section className="panel wide legacy-sk-panel fi-history-panel">
         <div className="legacy-sticky-controls fi-history-controls">
+          <details className="fi-history-filter-panel" open={typeof window !== "undefined" && window.innerWidth > 760}>
+          <summary>Bộ lọc {historyActiveFilterCount > 0 ? `(${historyActiveFilterCount})` : ""} · {historyMeta?.total ?? historyItems.length} FI</summary>
           <div className="fi-history-toolbar" role="group" aria-label="Bộ lọc lịch sử FI">
+            <label>Tìm FI<input type="search" placeholder="Mã FI, tên, nội dung, tác giả" value={historyQuery} onChange={event => setHistoryQuery(event.target.value)} /></label>
+            <label>Năm đăng ký<select value={historyYear} onChange={event => setHistoryYear(event.target.value)}><option value="">Tất cả năm</option>{Array.from({length: new Date().getFullYear() - 2019}, (_, index) => new Date().getFullYear() - index).map(year => <option key={year} value={year}>{year}</option>)}</select></label>
             <span className="fi-history-toolbar-lead" aria-hidden="true">
               <SlidersHorizontal size={14} />
               <span>Bộ lọc</span>
@@ -3925,16 +4040,30 @@ export function FIWorkspace({
                   <X size={13} />
                   Xóa bộ lọc
                   <span className="fi-history-filter-reset-count">{historyActiveFilterCount}</span>
-                </button>
+                  </button>
               )}
+              <label className="fi-history-page-size">
+                <span>Số dòng</span>
+                <select
+                  value={historyPageSize}
+                  onChange={(event) => {
+                    setHistoryPageSize(Number(event.target.value) as 25 | 50);
+                    setHistoryPage(1);
+                  }}
+                  aria-label="Số dòng lịch sử FI mỗi trang"
+                >
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
+              </label>
               <span className="fi-history-toolbar-count" aria-live="polite">
                 {historyActiveFilterCount > 0 ? (
                   <>
-                    Hiển thị <strong>{filteredHistoryItems.length}</strong>/{historyItems.length}
+                    Hiển thị <strong>{filteredHistoryItems.length}</strong>/{historyMeta?.total ?? historyItems.length}
                   </>
                 ) : (
                   <>
-                    <strong>{historyItems.length}</strong> SK-CTKT
+                    <strong>{historyMeta?.total ?? historyItems.length}</strong> SK-CTKT
                   </>
                 )}
               </span>
@@ -3961,6 +4090,7 @@ export function FIWorkspace({
             </div>
           </div>
 
+          </details>
           {historyTeamSummary && (() => {
             const passed = reviewPassedCount(historyTeamSummary);
             const failed = reviewFailedCount(historyTeamSummary);
@@ -3969,6 +4099,8 @@ export function FIWorkspace({
             const notCompleted = historyTeamSummary.not_completed ?? 0;
             const totalForRate = historyTeamSummary.total ?? 0;
             return (
+              <details className="fi-history-summary-panel" open={typeof window !== "undefined" && window.innerWidth > 760}>
+              <summary>Thống kê · {formatCount(passed)} đã xét đồng ý · {formatCount(historyTeamSummary.pending ?? 0)} chưa duyệt</summary>
               <div className="fi-history-summary" role="group" aria-label="Tóm tắt — nhấn để lọc nhanh">
                 <button
                   type="button"
@@ -4045,9 +4177,31 @@ export function FIWorkspace({
                   <small>/ {formatCount(notCompleted)} chưa xong</small>
                 </button>
               </div>
+              </details>
             );
           })()}
         </div>
+        {historyMeta && historyMeta.total_pages > 1 && (
+          <div className="fi-history-pagination" role="navigation" aria-label="Phân trang lịch sử FI">
+            <button
+              type="button"
+              className="fi-history-reload"
+              disabled={historyPage <= 1 || dashboardLoading}
+              onClick={() => setHistoryPage((page) => Math.max(1, page - 1))}
+            >
+              <ChevronLeft size={16} /> Trước
+            </button>
+            <span>Trang {historyMeta.page}/{historyMeta.total_pages}</span>
+            <button
+              type="button"
+              className="fi-history-reload"
+              disabled={!historyMeta.has_next || dashboardLoading}
+              onClick={() => setHistoryPage((page) => page + 1)}
+            >
+              Sau <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
         <div className="legacy-list">
           {groupedHistoryItems.map((group) => (
             <div
@@ -4252,16 +4406,10 @@ export function FIWorkspace({
               })}
             </div>
           ))}
-          {historyItems.length === 0 &&
-            renderEmptyState(
-              historyTeams.length > 0
-                ? `Không có FI cho đội ${historyTeams.map(displayTeam).join(", ")}.`
-                : "Không có FI nào."
-            )
-          }
-          {historyItems.length > 0 && filteredHistoryItems.length === 0 && (
-            renderEmptyState("Không có Sáng kiến/CTKT nào cho tháng đang chọn.")
-          )}
+          {!dashboardLoading && !error && historyItems.length === 0 && <div role="status">
+            {renderEmptyState(historyActiveFilterCount > 0 ? `Không có kết quả phù hợp với ${historyActiveFilterCount} bộ lọc đang áp dụng.` : "Chưa có FI nào.")}
+            {historyActiveFilterCount > 0 && <button type="button" onClick={resetHistoryFilters}>Xóa bộ lọc</button>}
+          </div>}
         </div>
       </section>
       )}

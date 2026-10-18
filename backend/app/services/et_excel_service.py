@@ -14,6 +14,7 @@ from app.schemas.et_schemas import FrameworkCreate, FrameworkItemCreate, Personn
 from app.services import et_service
 from app.services.et_gap_calculator import EXCLUDED_CATEGORY
 from app.services.et_service import ETValidationError
+from app.services.repositories import make_id
 
 
 FRAMEWORK_TITLE = "KHUNG NĂNG LỰC CHUYÊN MÔN"
@@ -324,7 +325,8 @@ def export_dashboard_summary_to_excel(data: dict[str, Any]) -> Path:
 def _save_workbook(workbook: Workbook, filename: str) -> Path:
     export_dir = settings.storage_dir / "exports"
     export_dir.mkdir(parents=True, exist_ok=True)
-    path = export_dir / filename
+    requested_name = Path(filename)
+    path = export_dir / f"{requested_name.stem}-{make_id('et-export')}{requested_name.suffix}"
     workbook.save(path)
     return path
 

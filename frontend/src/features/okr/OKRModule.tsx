@@ -6,6 +6,8 @@ import { WebInputForm } from "../web-input/WebInputForm";
 import { EvaluationReference } from "./EvaluationReference";
 import { OKRWorkspace } from "./OKRWorkspace";
 
+import { useNavigationGuard } from "../../shared/editing/NavigationGuardProvider";
+
 type OKRTab = "dashboard" | "web-input" | "criteria" | "principles";
 
 const okrTabs: Array<{ id: OKRTab; label: string; icon: LucideIcon }> = [
@@ -37,6 +39,7 @@ export function OKRModule({
   tabsHost?: HTMLElement | null;
 }) {
   const [activeTab, setActiveTab] = useState<OKRTab>("dashboard");
+  const { requestNavigation } = useNavigationGuard();
   const canUseOkrWebInput = role === "Admin";
   const visibleTabs = okrTabs.filter((tab) => canUseOkrWebInput || tab.id !== "web-input");
 
@@ -49,7 +52,7 @@ export function OKRModule({
             aria-selected={activeTab === tab.id}
             className={activeTab === tab.id ? "active" : ""}
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => { void requestNavigation("đổi tab OKR").then((allowed) => { if (allowed) setActiveTab(tab.id); }); }}
             role="tab"
             type="button"
           >

@@ -146,20 +146,11 @@ def remote_deploy_command(
     seed_users: bool,
     seed_et_data: bool,
 ) -> str:
+    # Kept in the function signature for callers of the old deploy wrapper.
+    # Production deploys must only ship code and schema migrations; business
+    # imports and seed data are explicit, separately audited operations.
+    del seed_users, seed_et_data
     compose = "docker compose --env-file .env.production -f docker-compose.prod.yml"
-    if seed_users:
-        seed_block = f"echo \"Seeding 56 user accounts for Xưởng Điều khiển\"\n{compose} exec -T backend python scripts/seed_users_xuong_dk.py"
-    else:
-        seed_block = "true"
-    if seed_et_data:
-        et_seed_block = "\n".join(
-            [
-                f"{compose} exec -T backend python scripts/seed_pvcfc_knl.py",
-                f"{compose} exec -T backend python scripts/seed_et_personnel.py",
-            ]
-        )
-    else:
-        et_seed_block = "true"
     return f"""
 set -euo pipefail
 log() {{ printf '[%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }}
@@ -211,12 +202,6 @@ log "Rebuilding containers"
 {compose} up -d --build
 log "Running migrations"
 {compose} exec -T backend alembic upgrade head
-log "Importing historical OKR data for T5-T6/2026"
-{compose} exec -T backend python scripts/import_historical.py /app/KHMT_Monthly --months 5 6 --imported-by deploy-import
-log "Seeding user accounts without changing existing passwords"
-{seed_block}
-log "Seeding ET competency frameworks and personnel"
-{et_seed_block}
 log "Checking services"
 {compose} ps
 curl -fsS http://127.0.0.1/health

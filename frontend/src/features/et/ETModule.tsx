@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   CheckCircle2,
@@ -15,7 +15,11 @@ import {
   Trash2,
   X
 } from "lucide-react";
-import { api } from "../../api/client";
+import { ApiError, api } from "../../api/client";
+
+import { useDraftController } from "../../shared/editing/useDraftController";
+import { useNavigationGuard } from "../../shared/editing/NavigationGuardProvider";
+import { DraftRecoveryStore, downloadDraft, type DraftRecoveryRecord } from "../../shared/editing/DraftRecoveryStore";
 
 type Props = {
   role: string;
@@ -127,6 +131,18 @@ function normalizeSearchValue(value: unknown) {
   return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
+const populationReasonLabels: Record<string, string> = {
+  inactive: "Không hoạt động",
+  missing_position: "Thiếu vị trí/framework code",
+  missing_level: "Thiếu bậc hiện tại",
+  missing_applicable_framework: "Thiếu khung năng lực áp dụng",
+  missing_account_link: "Thiếu liên kết account",
+};
+
+function reasonLabel(value: string) {
+  return populationReasonLabels[value] ?? value;
+}
+
 function personnelRoleTone(row: any) {
   const label = normalizeSearchValue(personnelRoleLabel(row.role || row.position_code));
   if (row.role === "Workshop_Leader" || label.includes("quan doc")) return "leader";
@@ -175,6 +191,10 @@ export function ETModule({ role, currentUserId, editMode = true, tabsHost = null
     return ["dashboard", "frameworks", "personnel", "assessments", "plans"] as EtTab[];
   }, [role]);
   const [tab, setTab] = useState<EtTab>(visibleTabs[0]);
+  const { requestNavigation } = useNavigationGuard();
+  const changeTab = async (next: EtTab) => {
+    if (next !== tab && await requestNavigation("đổi tab ET")) setTab(next);
+  };
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -187,19 +207,19 @@ export function ETModule({ role, currentUserId, editMode = true, tabsHost = null
   const tabsControl = (
     <div className="segmented-control et-topbar-tabs" role="tablist" aria-label="Năng lực ET">
       {visibleTabs.includes("dashboard") && (
-        <button role="tab" aria-selected={tab === "dashboard"} className={tab === "dashboard" ? "active" : ""} onClick={() => setTab("dashboard")}>Dashboard</button>
+        <button role="tab" aria-selected={tab === "dashboard"} className={tab === "dashboard" ? "active" : ""} onClick={() => void changeTab("dashboard")}>Dashboard</button>
       )}
       {visibleTabs.includes("frameworks") && (
-        <button role="tab" aria-selected={tab === "frameworks"} className={tab === "frameworks" ? "active" : ""} onClick={() => setTab("frameworks")}>Khung năng lực</button>
+        <button role="tab" aria-selected={tab === "frameworks"} className={tab === "frameworks" ? "active" : ""} onClick={() => void changeTab("frameworks")}>Khung năng lực</button>
       )}
       {visibleTabs.includes("personnel") && (
-        <button role="tab" aria-selected={tab === "personnel"} className={tab === "personnel" ? "active" : ""} onClick={() => setTab("personnel")}>Nhân sự</button>
+        <button role="tab" aria-selected={tab === "personnel"} className={tab === "personnel" ? "active" : ""} onClick={() => void changeTab("personnel")}>Nhân sự</button>
       )}
       {visibleTabs.includes("assessments") && (
-        <button role="tab" aria-selected={tab === "assessments"} className={tab === "assessments" ? "active" : ""} onClick={() => setTab("assessments")}>Đánh giá</button>
+        <button role="tab" aria-selected={tab === "assessments"} className={tab === "assessments" ? "active" : ""} onClick={() => void changeTab("assessments")}>Đánh giá</button>
       )}
       {visibleTabs.includes("plans") && (
-        <button role="tab" aria-selected={tab === "plans"} className={tab === "plans" ? "active" : ""} onClick={() => setTab("plans")}>Kế hoạch học tập</button>
+        <button role="tab" aria-selected={tab === "plans"} className={tab === "plans" ? "active" : ""} onClick={() => void changeTab("plans")}>Kế hoạch học tập</button>
       )}
     </div>
   );
@@ -213,7 +233,7 @@ export function ETModule({ role, currentUserId, editMode = true, tabsHost = null
           Khi host chưa sẵn sàng (vd: render standalone) thì hiển thị tại chỗ. */}
       {tabsHost ? createPortal(tabsControl, tabsHost) : tabsControl}
       {error && <p className="error">{error}</p>}
-      {tab === "dashboard" && <DashboardView setError={setError} />}
+      {tab === "dashboard" && <DashboardView role={role} editMode={editMode} setError={setError} onOpenPersonnel={() => setTab("personnel")} />}
       {tab === "frameworks" && <FrameworkView role={role} editMode={editMode} setError={setError} />}
       {tab === "personnel" && <PersonnelView role={role} editMode={editMode} setError={setError} />}
       {tab === "assessments" && <AssessmentView role={role} currentUserId={currentUserId} editMode={editMode} setError={setError} />}
@@ -985,7 +1005,7 @@ function PersonnelView({ role, editMode, setError }: { role: string; editMode: b
     </div>
   );
 }
-function AssessmentView({ role, editMode, setError }: { role: string; currentUserId: string; editMode: boolean; setError: (value: string) => void }) {
+function AssessmentView({ role, currentUserId, editMode, setError }: { role: string; currentUserId: string; editMode: boolean; setError: (value: string) => void }) {
   const [assessments, setAssessments] = useState<any[]>([]);
   const [personnel, setPersonnel] = useState<any[]>([]);
   const [selected, setSelected] = useState<any | null>(null);
@@ -993,9 +1013,54 @@ function AssessmentView({ role, editMode, setError }: { role: string; currentUse
   const [createForm, setCreateForm] = useState({ personnel_id: "", assessment_period: "" });
   const [personnelPickerOpen, setPersonnelPickerOpen] = useState(false);
   const [personnelSearch, setPersonnelSearch] = useState("");
-  const [dirty, setDirty] = useState(false);
-  const [saving, setSaving] = useState(false);
   const editable = canManage(role) && editMode;
+  const [busy, setBusy] = useState(false);
+  const [recovery, setRecovery] = useState<DraftRecoveryRecord<any> | null>(null);
+  const [recoveryWarning, setRecoveryWarning] = useState("");
+  const [serverConflict, setServerConflict] = useState<any>(null);
+  const requestEpoch = useRef(0);
+  const { registerGuard, requestNavigation } = useNavigationGuard();
+  const contextKey = `et:${currentUserId}:${selected?.id ?? "none"}`;
+  const recoveryStore = useMemo(() => new DraftRecoveryStore<any>({
+    namespace: "okr", userId: currentUserId, module: "et-assessment",
+    resource: selected?.id ?? "none", schemaVersion: "1",
+  }), [currentUserId, selected?.id]);
+  const editor = useDraftController<any>({
+    contextKey, initialValue: selected,
+    serverRevision: selected?.revision ?? null,
+    save: async (snapshot, revision) => {
+      if (!editable) throw new ApiError("Phiếu đang ở chế độ chỉ xem.", { status: 403 });
+      const row = await api.updateEtAssessment(snapshot.id, {
+        notes: snapshot.notes, training_content: snapshot.training_content,
+        items: snapshot.items.map((item: any) => ({ id: item.id, actual_score: item.actual_score, notes: item.notes })),
+      }, { expectedRevision: revision });
+      return { serverRevision: row.revision, value: row };
+    },
+  });
+  const dirty = editor.dirty;
+  const saving = busy || editor.phase === "saving";
+  const changeDraft = (value: any) => {
+    setDraft(value);
+    editor.update(value);
+    const result = recoveryStore.write(value, editor.controller.state.serverRevision, editor.controller.state.localRevision);
+    if (!result.ok) setRecoveryWarning(result.warning ?? "");
+  };
+  useEffect(() => {
+    setDraft(editor.current);
+    if (editor.error) setError(editor.error.message);
+    if (editor.phase === "clean" && !editor.dirty && editor.acknowledgedLocalRevision > 0 && !recovery) recoveryStore.remove();
+  }, [editor.current, editor.phase, editor.error]);
+  useEffect(() => registerGuard(contextKey, {
+    isDirty: () => editor.controller.dirty || busy,
+    save: () => editor.flush(),
+    discard: () => { editor.discardLocalChanges(); recoveryStore.remove(); },
+  }), [contextKey, registerGuard, editor.controller, busy, recoveryStore]);
+  useEffect(() => { setRecovery(recoveryStore.read()); }, [recoveryStore]);
+  const adopt = (row: any) => {
+    setSelected(row); setDraft(row);
+    editor.hydrate(`et:${currentUserId}:${row.id}`, row, row.revision);
+    setServerConflict(null);
+  };
   const selectedPersonnel = useMemo(
     () => personnel.find((row) => row.id === createForm.personnel_id) ?? null,
     [personnel, createForm.personnel_id]
@@ -1035,37 +1100,18 @@ function AssessmentView({ role, editMode, setError }: { role: string; currentUse
   };
   useEffect(load, [editable]);
 
-  const selectAssessment = (id: string) => api.etAssessment(id).then((row) => { setSelected(row); setDraft(row); setDirty(false); }).catch((err) => setError(err.message));
+  const selectAssessment = async (id: string) => {
+    if (!await requestNavigation("đổi phiếu đánh giá")) return;
+    const epoch = ++requestEpoch.current;
+    try {
+      const row = await api.etAssessment(id);
+      if (epoch === requestEpoch.current) adopt(row);
+    } catch (err) { if (epoch === requestEpoch.current) setError((err as Error).message); }
+  };
+  useEffect(() => () => { requestEpoch.current += 1; }, []);
 
-  useEffect(() => {
-    if (!dirty || !draft || !editable) return;
-    const handle = setTimeout(() => {
-      setSaving(true);
-      api.updateEtAssessment(draft.id, {
-        notes: draft.notes,
-        training_content: draft.training_content,
-        items: draft.items.map((item: any) => ({ id: item.id, actual_score: item.actual_score, notes: item.notes }))
-      }).then((row) => {
-        setSelected(row);
-        setDraft(row);
-        setDirty(false);
-      }).catch((err) => setError(err.message)).finally(() => setSaving(false));
-    }, 3000);
-    return () => clearTimeout(handle);
-  }, [dirty, draft, editable, setError]);
-
-  useEffect(() => {
-    const beforeUnload = (event: BeforeUnloadEvent) => {
-      if (dirty) {
-        event.preventDefault();
-        event.returnValue = "";
-      }
-    };
-    window.addEventListener("beforeunload", beforeUnload);
-    return () => window.removeEventListener("beforeunload", beforeUnload);
-  }, [dirty]);
-
-  const create = () => {
+  const create = async () => {
+    if (!await requestNavigation("tạo phiếu đánh giá mới")) return;
     if (!createForm.personnel_id || !createForm.assessment_period.trim()) {
       setError("Vui lòng chọn nhân sự và nhập kỳ đánh giá.");
       return;
@@ -1074,8 +1120,7 @@ function AssessmentView({ role, editMode, setError }: { role: string; currentUse
       setCreateForm({ personnel_id: "", assessment_period: "" });
       setPersonnelSearch("");
       setPersonnelPickerOpen(false);
-      setSelected(row);
-      setDraft(row);
+      adopt(row);
       load();
     }).catch((err) => setError(err.message));
   };
@@ -1087,16 +1132,23 @@ function AssessmentView({ role, editMode, setError }: { role: string; currentUse
   };
 
   const setItem = (itemId: string, patch: any) => {
-    setDraft((current: any) => ({
-      ...current,
-      items: current.items.map((item: any) => item.id === itemId ? { ...item, ...patch } : item)
-    }));
-    setDirty(true);
+    changeDraft({ ...draft, items: draft.items.map((item: any) => item.id === itemId ? { ...item, ...patch } : item) });
   };
-
-  const submit = () => {
-    if (!draft) return;
-    api.submitEtAssessment(draft.id).then((row) => { setDraft(row); setSelected(row); load(); }).catch((err) => setError(err.message));
+  const mutateAssessment = async (kind: "submit" | "refresh") => {
+    if (!draft || busy) return;
+    setBusy(true);
+    try {
+      await editor.flush();
+      if (editor.controller.dirty) return;
+      const revision = editor.controller.state.serverRevision ?? 0;
+      const row = kind === "submit"
+        ? await api.submitEtAssessment(draft.id, { expectedRevision: revision })
+        : await api.refreshEtAssessmentScores(draft.id, revision);
+      adopt(row); load();
+    } catch (err) {
+      setError((err as Error).message);
+      if (err instanceof ApiError && err.code === "VERSION_CONFLICT") editor.controller.markConflict(err);
+    } finally { setBusy(false); }
   };
 
   return (
@@ -1182,6 +1234,21 @@ function AssessmentView({ role, editMode, setError }: { role: string; currentUse
         </div>
       </section>
       <section className="panel wide">
+        {recoveryWarning && <p role="alert">{recoveryWarning}<button onClick={() => downloadDraft("et-draft.json", draft)}>Tải bản nháp</button></p>}
+        {recovery && <div role="status">
+          <p>Có bản khôi phục của phiếu này. Revision gốc {recovery.baseRevision}; máy chủ {editor.serverRevision}.</p>
+          <details><summary>Xem bản khôi phục</summary><pre>{JSON.stringify(recovery.data, null, 2)}</pre></details>
+          <button onClick={() => { editor.hydrate(contextKey, selected, recovery.baseRevision); changeDraft(recovery.data); editor.controller.markConflict(new Error("Bản khôi phục chưa gửi. Xem bản máy chủ trước khi lưu.")); setRecovery(null); }}>Khôi phục để xem</button>
+          <button onClick={() => { recoveryStore.remove(); setRecovery(null); }}>Bỏ bản khôi phục này</button>
+        </div>}
+        {editor.phase === "conflict" && <div role="alert">
+          <p>{editor.error?.message} Nội dung đang soạn vẫn được giữ.</p>
+          <button onClick={() => api.etAssessment(draft.id).then(setServerConflict).catch((err) => setError(err.message))}>Xem bản máy chủ</button>
+          {serverConflict && <><pre>{JSON.stringify(serverConflict, null, 2)}</pre>
+            <button onClick={() => { editor.acceptServerRevision(serverConflict.revision); setServerConflict(null); void editor.retry(); }}>Lưu bản đang soạn với revision đã xem</button>
+            <button onClick={() => { adopt(serverConflict); recoveryStore.remove(); }}>Bỏ bản đang soạn, dùng bản máy chủ</button>
+          </>}
+        </div>}
         {draft ? (
           <>
             <div className="panel-header">
@@ -1192,8 +1259,8 @@ function AssessmentView({ role, editMode, setError }: { role: string; currentUse
               <div className="toolbar">
                 <span className={resultClass(draft.overall_result)}>{draft.overall_result ?? "Chưa hoàn tất"}</span>
                 <button onClick={() => api.exportEtAssessment(draft.id).then((blob) => saveBlob(blob, `assessment-${draft.assessment_period}.xlsx`))}><FileDown size={16} /></button>
-                {editable && draft.status === "draft" && <button onClick={() => api.refreshEtAssessmentScores(draft.id).then((row) => { setDraft(row); setSelected(row); })}><RefreshCw size={16} /></button>}
-                {editable && <button onClick={submit}><Send size={16} />Submit</button>}
+                {editable && draft.status === "draft" && <button aria-label="Cập nhật điểm chuẩn" disabled={saving} onClick={() => void mutateAssessment("refresh")}><RefreshCw size={16} /></button>}
+                {editable && <><button disabled={saving} onClick={() => void editor.flush()}><Save size={16} />Lưu ngay</button><button disabled={saving} onClick={() => void mutateAssessment("submit")}><Send size={16} />Gửi đánh giá</button></>}
               </div>
             </div>
             <div className="progress-line"><span style={{ width: `${draft.summary?.total_items ? (draft.summary.scored_items / draft.summary.total_items) * 100 : 0}%` }} /></div>
@@ -1209,19 +1276,19 @@ function AssessmentView({ role, editMode, setError }: { role: string; currentUse
                       <td>{item.required_score}</td>
                       <td>
                         {editable ? (
-                          <input className="score-input" type="number" min={0} max={5} value={item.actual_score ?? ""} onChange={(event) => setItem(item.id, { actual_score: event.target.value === "" ? null : Number(event.target.value) })} />
+                          <input disabled={busy} aria-label="Điểm thực tế" className="score-input" type="number" min={0} max={5} value={item.actual_score ?? ""} onChange={(event) => setItem(item.id, { actual_score: event.target.value === "" ? null : Number(event.target.value) })} />
                         ) : item.actual_score}
                       </td>
                       <td><span className={`gap-pill ${gapClass(item.gap, item.excluded_from_result ? "excluded" : undefined)}`}>{item.gap ?? ""}</span></td>
-                      <td>{editable ? <input value={item.notes ?? ""} onChange={(event) => setItem(item.id, { notes: event.target.value })} /> : item.notes}</td>
+                      <td>{editable ? <input disabled={busy} aria-label="Ghi chú năng lực" value={item.notes ?? ""} onChange={(event) => setItem(item.id, { notes: event.target.value })} /> : item.notes}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
             <div className="et-notes">
-              <textarea placeholder="Nhận xét / đánh giá" value={draft.notes ?? ""} disabled={!editable} onChange={(event) => { setDraft({ ...draft, notes: event.target.value }); setDirty(true); }} />
-              <textarea placeholder="Nội dung đào tạo" value={draft.training_content ?? ""} disabled={!editable} onChange={(event) => { setDraft({ ...draft, training_content: event.target.value }); setDirty(true); }} />
+              <textarea placeholder="Nhận xét / đánh giá" value={draft.notes ?? ""} disabled={!editable || busy} onChange={(event) => { changeDraft({ ...draft, notes: event.target.value }); }} />
+              <textarea placeholder="Nội dung đào tạo" value={draft.training_content ?? ""} disabled={!editable || busy} onChange={(event) => { changeDraft({ ...draft, training_content: event.target.value }); }} />
             </div>
           </>
         ) : (
@@ -1334,7 +1401,17 @@ function LearningPlanView({ role, editMode, setError }: { role: string; editMode
   );
 }
 
-function DashboardView({ setError }: { setError: (value: string) => void }) {
+function DashboardView({
+  role,
+  editMode,
+  setError,
+  onOpenPersonnel,
+}: {
+  role: string;
+  editMode: boolean;
+  setError: (value: string) => void;
+  onOpenPersonnel: () => void;
+}) {
   const [filters, setFilters] = useState({ team: "", position: "", level: "", result: "" });
   const [dashboard, setDashboard] = useState<any | null>(null);
   const [heatmap, setHeatmap] = useState<any | null>(null);
@@ -1346,9 +1423,18 @@ function DashboardView({ setError }: { setError: (value: string) => void }) {
   const load = () => {
     const params = query(filters);
     api.etDashboard(params).then(setDashboard).catch((err) => setError(err.message));
-    api.etHeatmap(params).then(setHeatmap).catch(() => setHeatmap(null));
+    if (role === "FI_Coordinator") {
+      setHeatmap(null);
+    } else {
+      api.etHeatmap(params).then(setHeatmap).catch(() => setHeatmap(null));
+    }
   };
-  useEffect(load, []);
+  useEffect(load, [role]);
+
+  const population = dashboard?.population ?? {};
+  const reasons = Array.isArray(population.incomplete_primary_reasons)
+    ? population.incomplete_primary_reasons
+    : [];
 
   return (
     <div className="content-grid et-grid">
@@ -1376,11 +1462,26 @@ function DashboardView({ setError }: { setError: (value: string) => void }) {
         {dashboard && (
           <>
             <div className="et-stats">
-              <div><strong>{dashboard.aggregate.total_active_personnel}</strong><span>Tổng</span></div>
+              <div><strong>{population.personnel_count ?? dashboard.aggregate.total_active_personnel}</strong><span>Hồ sơ Personnel</span></div>
+              <div><strong>{population.linked_accounts_count ?? "—"}</strong><span>Tài khoản đã liên kết</span></div>
+              <div><strong>{population.dashboard_eligible_count ?? dashboard.aggregate.total_active_personnel}</strong><span>Đủ điều kiện dashboard</span></div>
+              <div><strong>{population.assessment_ready_count ?? "—"}</strong><span>Sẵn sàng tạo đánh giá</span></div>
               <div><strong>{dashboard.aggregate.pass_count}</strong><span>Đạt ({dashboard.aggregate.pass_percentage}%)</span></div>
               <div><strong>{dashboard.aggregate.fail_count}</strong><span>Không đạt</span></div>
               <div><strong>{dashboard.aggregate.not_assessed_count}</strong><span>Chưa đánh giá</span></div>
               <div><strong>{dashboard.aggregate.draft_count}</strong><span>Đang đánh giá</span></div>
+            </div>
+            <div className="et-population-explanation">
+              <div>
+                <strong>Population kỳ này</strong>
+                <p>{population.definition || "Dashboard chỉ tính Personnel đang hoạt động, không ẩn, có vị trí và bậc."}</p>
+                <small>Các lý do bên dưới là nhóm loại trừ nhau; không cộng với nhau ngoài số hồ sơ chưa hoàn thiện.</small>
+              </div>
+              {reasons.length > 0 && (
+                <ul>
+                  {reasons.map((reason: any) => <li key={reason.key}><span>{reasonLabel(reason.key)}</span><strong>{reason.count}</strong></li>)}
+                </ul>
+              )}
             </div>
             {hasDashboardRows ? (
               <>
@@ -1415,7 +1516,13 @@ function DashboardView({ setError }: { setError: (value: string) => void }) {
               </>
             ) : (
               <div className="table-empty-state et-dashboard-empty">
-                Chưa có dữ liệu đánh giá phù hợp với bộ lọc hiện tại.
+                {population.dashboard_eligible_count === 0
+                  ? "Chưa có nhân sự đủ điều kiện hiển thị. Hoàn thiện vị trí và bậc trong hồ sơ nhân sự."
+                  : "Chưa có kết quả đánh giá phù hợp với bộ lọc hiện tại."}
+                {role === "Admin" && editMode && population.dashboard_eligible_count === 0 && (
+                  <button type="button" onClick={onOpenPersonnel}>Mở danh sách hoàn thiện hồ sơ</button>
+                )}
+                {role !== "Admin" && population.dashboard_eligible_count === 0 && <small>Vui lòng liên hệ Admin để cập nhật hồ sơ.</small>}
               </div>
             )}
           </>

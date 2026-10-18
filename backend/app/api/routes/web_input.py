@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.concurrency import require_expected_revision, require_fi_preview_binding
 from app.core.security import Role, require_role
 from app.db.session import get_db
 from app.models.domain import User
@@ -92,7 +93,17 @@ def put_web_input_draft(
     principal: dict = Depends(require_role(*WRITE_ROLES)),
     db: Session = Depends(get_db),
 ):
-    report = save_draft(db, team, month, year, payload.data, principal, payload.expected_version)
+    require_expected_revision(payload.expected_revision, "OKR draft")
+    report = save_draft(
+        db,
+        team,
+        month,
+        year,
+        payload.data,
+        principal,
+        payload.expected_version,
+        payload.expected_revision,
+    )
     return serialize_web_input(report, team, month, year)
 
 
@@ -105,7 +116,8 @@ def post_web_input_submit(
     principal: dict = Depends(require_role(*WRITE_ROLES)),
     db: Session = Depends(get_db),
 ):
-    report = submit_report(db, team, month, year, payload.data, principal)
+    require_expected_revision(payload.expected_revision, "OKR submission")
+    report = submit_report(db, team, month, year, payload.data, principal, payload.expected_revision)
     notify(
         db,
         "OKR_TEAM_SUBMITTED",
@@ -132,7 +144,24 @@ def post_web_input_lock(
     principal: dict = Depends(require_role(Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
-    report = lock_report(db, team, month, year, payload.reason, principal)
+    require_expected_revision(payload.expected_revision, "OKR lock")
+    require_fi_preview_binding(
+        payload.expected_fi_team_revision,
+        payload.expected_plan_hash,
+        "OKR lock",
+    )
+    report = lock_report(
+        db,
+        team,
+        month,
+        year,
+        payload.reason,
+        principal,
+        assessment_override=payload.assessment,
+        expected_revision=payload.expected_revision,
+        expected_fi_team_revision=payload.expected_fi_team_revision,
+        expected_plan_hash=payload.expected_plan_hash,
+    )
     result = serialize_web_input(report, team, month, year)
     result["fi_allocation"] = fi_allocation_for_period(db, team, month, year)
     return result
@@ -143,10 +172,11 @@ def get_fi_allocation_preview(
     team: str,
     month: int,
     year: int,
+    assessment: str | None = None,
     principal: dict = Depends(require_role(Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
-    return preview_fi_allocation(db, team, month, year, principal)
+    return preview_fi_allocation(db, team, month, year, principal, assessment_override=assessment)
 
 
 @router.post("/{team}/{month}/{year}/unlock")
@@ -158,7 +188,8 @@ def post_web_input_unlock(
     principal: dict = Depends(require_role(Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
-    report = unlock_report(db, team, month, year, payload.reason, principal)
+    require_expected_revision(payload.expected_revision, "OKR unlock")
+    report = unlock_report(db, team, month, year, payload.reason, principal, payload.expected_revision)
     return serialize_web_input(report, team, month, year)
 
 

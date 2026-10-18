@@ -78,6 +78,7 @@ def create_schema() -> None:
     Base.metadata.create_all(bind=engine)
     _ensure_sqlite_web_input_columns()
     _ensure_user_extra_columns()
+    _ensure_revision_columns()
     _ensure_personnel_extra_columns()
     _ensure_competency_item_text_columns()
     _ensure_sk_ctkt_completed_at_column()
@@ -168,11 +169,32 @@ def _ensure_user_extra_columns() -> None:
         "team": "ALTER TABLE users ADD COLUMN team VARCHAR",
         "must_change_password": f"ALTER TABLE users ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT {bool_false}",
         "is_active": f"ALTER TABLE users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT {bool_true}",
+        "session_version": "ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 1",
     }
     with engine.begin() as connection:
         for column_name, statement in statements.items():
             if column_name not in existing:
                 connection.execute(text(statement))
+
+
+def _ensure_revision_columns() -> None:
+    """Compatibility bridge for old local SQLite files before Alembic runs."""
+    if engine.dialect.name != "sqlite":
+        return
+    column_defaults = {
+        "team_reports": {"revision": "INTEGER NOT NULL DEFAULT 0"},
+        "sk_ctkt": {"revision": "INTEGER NOT NULL DEFAULT 1"},
+        "competency_assessments": {"revision": "INTEGER NOT NULL DEFAULT 0"},
+    }
+    inspector = inspect(engine)
+    with engine.begin() as connection:
+        for table, columns in column_defaults.items():
+            if table not in inspector.get_table_names():
+                continue
+            existing = {column["name"] for column in inspector.get_columns(table)}
+            for name, definition in columns.items():
+                if name not in existing:
+                    connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {definition}"))
 
 
 def seed_baseline(db: Session) -> None:
@@ -210,13 +232,6 @@ def _seed_admin(db: Session) -> None:
 def _seed_demo_users(db: Session) -> None:
     if settings.environment != "development":
         return
-    for user_id in LEGACY_DEMO_USER_IDS:
-        user = db.get(User, user_id)
-        if user is None:
-            continue
-        user.display_name = "Tài khoản đội/tổ cũ (ngưng dùng)"
-        user.role = Role.TEAM_ACCOUNT.value
-        user.is_active = False
     for item in DEMO_USERS:
         user = db.get(User, item["id"])
         role = item["role"].value
@@ -234,11 +249,9 @@ def _seed_demo_users(db: Session) -> None:
             )
             audit(db, "system", "Account", str(item["id"]), "seed_demo_user", {"role": role})
             continue
-        user.display_name = str(item["display_name"])
-        user.full_name = str(item["display_name"])
-        user.role = role
-        user.team = item.get("team")
-        user.is_active = True
+        # Startup bootstrap is insert-only. Account administration owns these
+        # fields; a restart must never reactivate or relabel a managed user.
+        continue
 
 
 def _seed_kr_mapping(db: Session) -> None:

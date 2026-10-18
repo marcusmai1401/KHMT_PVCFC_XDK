@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.concurrency import require_expected_revision
 from app.core.security import Role, require_role
 from app.db.session import get_db
 from app.models.et_domain import Personnel
@@ -40,6 +41,9 @@ def _handle_error(exc: ETValidationError) -> HTTPException:
     detail: Any = exc.message
     if exc.errors:
         detail = {"message": exc.message, "errors": exc.errors}
+        revision = next((item.get("current_revision") for item in exc.errors if item.get("field") == "revision"), None)
+        if exc.status_code == 409 and revision is not None:
+            detail.update(code="VERSION_CONFLICT", current_revision=revision)
     return HTTPException(status_code=exc.status_code, detail=detail)
 
 
@@ -51,7 +55,7 @@ def _safe_filename(filename: str | None) -> str:
 def _save_upload(file: UploadFile) -> Path:
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Only .xlsx files are supported")
-    data = file.file.read()
+    data = file.file.read(settings.max_excel_upload_mb * 1024 * 1024 + 1)
     if len(data) > settings.max_excel_upload_mb * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Excel file is too large")
     upload_dir = settings.storage_dir / "uploads"
@@ -465,6 +469,7 @@ def update_assessment(
     db: Session = Depends(get_db),
 ):
     try:
+        require_expected_revision(payload.expected_revision, "ET assessment update")
         assessment = et_service.update_assessment(db, assessment_id, payload, principal["user_id"])
         _commit_or_rollback(db)
         return et_service.serialize_assessment(assessment)
@@ -476,11 +481,18 @@ def update_assessment(
 @router.post("/assessments/{assessment_id}/refresh-required-scores")
 def refresh_required_scores(
     assessment_id: str,
+    expected_revision: int | None = Query(default=None, ge=0),
     principal: dict[str, str] = Depends(require_role(Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
     try:
-        assessment = et_service.refresh_required_scores(db, assessment_id, principal["user_id"])
+        require_expected_revision(expected_revision, "ET score refresh")
+        assessment = et_service.refresh_required_scores(
+            db,
+            assessment_id,
+            principal["user_id"],
+            expected_revision=expected_revision,
+        )
         _commit_or_rollback(db)
         return et_service.serialize_assessment(assessment)
     except ETValidationError as exc:
@@ -491,11 +503,18 @@ def refresh_required_scores(
 @router.post("/assessments/{assessment_id}/submit")
 def submit_assessment(
     assessment_id: str,
+    expected_revision: int | None = Query(default=None, ge=0),
     principal: dict[str, str] = Depends(require_role(Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
     try:
-        assessment = et_service.submit_assessment(db, assessment_id, principal["user_id"])
+        require_expected_revision(expected_revision, "ET assessment submission")
+        assessment = et_service.submit_assessment(
+            db,
+            assessment_id,
+            principal["user_id"],
+            expected_revision=expected_revision,
+        )
         _commit_or_rollback(db)
         return et_service.serialize_assessment(assessment)
     except ETValidationError as exc:

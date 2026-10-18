@@ -28,6 +28,19 @@ beforeEach(() => {
 });
 
 describe("api client auth contract", () => {
+  it("blocks new mutations after 401 until a new session is installed", async () => {
+    setToken("expired-test-token");
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({detail: "expired"}), {status: 401}));
+    await expect(api.listSk()).rejects.toMatchObject({status: 401});
+    const requests = fetchMock.mock.calls.length;
+    await expect(api.exportDashboard(9, 2026)).rejects.toMatchObject({code: "SESSION_EXPIRED", outcomeUnknown: false});
+    expect(fetchMock.mock.calls.length).toBe(requests);
+    fetchMock.mockResolvedValue(okJson({access_token: "new-session"}));
+    await expect(api.login("synthetic", "synthetic-password")).resolves.toMatchObject({access_token: "new-session"});
+    setToken("new-session");
+    fetchMock.mockResolvedValue(okBlob(new Blob(["synthetic"])));
+    await expect(api.exportDashboard(9, 2026)).resolves.toBeInstanceOf(Blob);
+  });
   it("logs in with user_id and password only", async () => {
     fetchMock.mockResolvedValue(okJson({ access_token: "jwt" }));
 
@@ -48,10 +61,10 @@ describe("api client auth contract", () => {
     setToken("signed-token");
     fetchMock.mockResolvedValue(okBlob(workbook));
 
-    const result = await api.exportDashboard();
+    const result = await api.exportDashboard(4, 2026);
 
     expect(result).toBe(workbook);
-    expect(fetchMock).toHaveBeenCalledWith("/api/v1/okr/dashboard/export", expect.any(Object));
+    expect(fetchMock).toHaveBeenCalledWith("/api/v1/okr/dashboard/export?month=4&year=2026", expect.any(Object));
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     expect(init.method).toBe("POST");
     expect((init.headers as Headers).get("Authorization")).toBe("Bearer signed-token");
@@ -94,7 +107,7 @@ describe("api client auth contract", () => {
 
     await api.importHistoricalSnapshot(file);
 
-    expect(fetchMock).toHaveBeenCalledWith("/api/v1/okr/historical-snapshots/import", expect.any(Object));
+    expect(fetchMock).toHaveBeenCalledWith("/api/v1/okr/historical-snapshots/import?mode=preview", expect.any(Object));
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     expect(init.method).toBe("POST");
     expect(init.body).toBeInstanceOf(FormData);
@@ -189,6 +202,29 @@ describe("api client auth contract", () => {
     expect((init.headers as Headers).get("Authorization")).toBe("Bearer signed-token");
   });
 
+  it("uses the Admin monthly KHMT/FI management endpoints", async () => {
+    setToken("signed-token");
+    fetchMock.mockResolvedValue(okJson([]));
+
+    await api.adminKhmtFiOverview(8, 2026);
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/v1/admin/khmt-fi?month=8&year=2026", expect.any(Object));
+
+    fetchMock.mockResolvedValue(okJson({ required_count: 3 }));
+    await api.adminKhmtFiPreview("TBĐL", 8, 2026, "Hoàn thành tốt nhiệm vụ");
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/v1/admin/khmt-fi/TB%C4%90L/8/2026/preview?assessment=Ho%C3%A0n+th%C3%A0nh+t%E1%BB%91t+nhi%E1%BB%87m+v%E1%BB%A5",
+      expect.any(Object),
+    );
+
+    fetchMock.mockResolvedValue(okJson({ ok: true }));
+    await api.adminKhmtFiFinalize("TBĐL", 8, 2026, "Chốt tháng", "Hoàn thành tốt nhiệm vụ");
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/v1/admin/khmt-fi/TB%C4%90L/8/2026/finalize", expect.any(Object));
+    expect(JSON.parse((fetchMock.mock.calls[2][1] as RequestInit).body as string)).toEqual({
+      reason: "Chốt tháng",
+      assessment: "Hoàn thành tốt nhiệm vụ",
+    });
+  });
+
   it("uses ET assessment update and submit endpoints", async () => {
     setToken("signed-token");
     fetchMock.mockResolvedValue(okJson({ id: "a1" }));
@@ -201,7 +237,7 @@ describe("api client auth contract", () => {
     });
 
     await api.submitEtAssessment("a1");
-    expect(fetchMock).toHaveBeenLastCalledWith("/api/v1/et/assessments/a1/submit", expect.any(Object));
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/v1/et/assessments/a1/submit?expected_revision=0", expect.any(Object));
     expect((fetchMock.mock.calls[1][1] as RequestInit).method).toBe("POST");
   });
 
@@ -281,5 +317,27 @@ describe("api client auth contract", () => {
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     expect((init.headers as Headers).get("Authorization")).toBe("Bearer signed-token");
     expect((init.headers as Headers).get("Content-Type")).toBeNull();
+  });
+});
+
+
+describe("safe API error envelopes", () => {
+  it("never exposes a proxy HTML body", async () => {
+    fetchMock.mockResolvedValue(new Response("<html>PRIVATE-PROXY-BODY</html>", {status: 500}));
+    await expect(api.login("synthetic", "synthetic-password")).rejects.toMatchObject({status: 500, code: "UNKNOWN_ERROR", message: "Máy chủ chưa xử lý được yêu cầu. Vui lòng thử lại sau."});
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it("preserves validation field paths", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({detail: [{loc: ["body", "user_id"], msg: "Required"}]}), {status: 422}));
+    await expect(api.login("", "")).rejects.toMatchObject({code: "VALIDATION_ERROR", fields: {user_id: "Required"}});
+  });
+  it("honors Retry-After without automatically retrying 429", async () => {
+    fetchMock.mockResolvedValue(new Response("", {status: 429, headers: {"Retry-After": "37"}}));
+    await expect(api.me()).rejects.toMatchObject({code: "RATE_LIMITED", retryAfter: 37});
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it("understands missing-revision 428", async () => {
+    fetchMock.mockResolvedValue(new Response("", {status: 428}));
+    await expect(api.login("synthetic", "test")).rejects.toMatchObject({code: "CLIENT_UPDATE_REQUIRED"});
   });
 });

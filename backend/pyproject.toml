@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "FastAPI backend for OKR automation and FI SK-CTKT workflow"
 requires-python = ">=3.11"
 dependencies = [
-  "fastapi>=0.115.0",
+  "fastapi==0.115.6",
   "uvicorn[standard]>=0.30.0",
   "pydantic-settings>=2.14.2",
   "python-multipart>=0.0.31",
@@ -14,9 +14,11 @@ dependencies = [
   "sqlalchemy>=2.0.32",
   "psycopg[binary]>=3.2.1",
   "openpyxl>=3.1.5",
+  "Pillow>=12.3.0",
+  "pillow-heif>=1.7.0",
   "alembic>=1.13.2",
   "redis>=5.0.8",
-  "starlette>=1.3.1",
+  "starlette==0.41.3",
   "openai>=1.50.0",
   "python-dotenv>=1.0.1",
 ]
@@ -25,7 +27,7 @@ dependencies = [
 dev = [
   "pytest>=8.3.0",
   "hypothesis>=6.112.0",
-  "httpx>=0.27.0",
+  "httpx>=0.27.0,<0.29.0",
 ]
 
 [tool.setuptools.packages.find]

@@ -6,7 +6,10 @@ import { NoDataBlock, NoPlanBlock } from "./EmptyBlocks";
 
 function formatValue(value: unknown) {
   if (value === null || value === undefined || value === "") return "-";
-  if (typeof value === "number") return Number.isInteger(value) ? String(value) : value.toFixed(2);
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return "—";
+    return Number.isInteger(value) ? String(value) : value.toFixed(2);
+  }
   return vn(String(value));
 }
 
@@ -83,6 +86,23 @@ function numberValue(value: unknown) {
   if (value === null || value === undefined || value === "") return 0;
   const parsed = Number.parseFloat(String(value));
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function finiteNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number.parseFloat(String(value));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function ratioPercent(numerator: number | null, denominator: number | null): number | null {
+  if (numerator === null || denominator === null || denominator <= 0) return null;
+  return Math.round((numerator / denominator) * 100);
+}
+
+function ratioToPercent(value: number | null): number | null {
+  if (value === null) return null;
+  return Math.round(value >= 0 && value <= 1 ? value * 100 : value);
 }
 
 const FI_TEAM_ORDER = ["TBHTĐK", "TBCH", "TBĐL", "TCĐK"];
@@ -335,21 +355,40 @@ function O3StopByTeam({ title, payload, visualId, kind }: { title: string; paylo
   const blockLabels = labels(payload);
   const cardsSeries = findSeries(series, /th[eẻ]\s*ghi\s*nh[aậ]n/i) ?? series[0];
   const headcountSeries = findSeries(series, /t[oổ]ng\s*nh[aâ]n\s*s[uự]/i) ?? series[1];
-  const rateSeries = findSeries(series, /ghi\s*nh[aậ]n/i) ?? series[2];
-  const targetSeries = findSeries(series, /ch[iỉ]\s*ti[eê]u/i) ?? series[3];
-  const target = numberValue(targetSeries?.data?.find((v) => typeof v === "number")) || 0.5;
+  const targetSeries = series.find((dataset) => /(ch[iỉ]\s*ti[eê]u|target)/i.test(vn(dataset.label))) ?? series[3];
+  const target = ratioToPercent(finiteNumber(targetSeries?.data?.find((v) => finiteNumber(v) !== null)));
 
   const teamRows = blockLabels.map((label, index) => {
-    const cards = numberValue(cardsSeries?.data?.[index]);
-    const headcount = numberValue(headcountSeries?.data?.[index]);
-    const rate = headcount > 0 ? cards / headcount : numberValue(rateSeries?.data?.[index]);
-    return { team: label, cards, headcount, rate, meets: rate >= target };
+    const cards = finiteNumber(cardsSeries?.data?.[index]);
+    const headcount = finiteNumber(headcountSeries?.data?.[index]);
+    const hasUsableDenominator = headcount !== null && headcount > 0;
+    const rate = hasUsableDenominator && cards !== null ? cards / headcount : null;
+    const displayPercent = hasUsableDenominator && cards !== null
+      ? ratioPercent(cards, headcount)
+      : null;
+    const invalidDenominator = !hasUsableDenominator;
+    return {
+      team: label,
+      cards,
+      headcount,
+      rate,
+      displayPercent,
+      invalidDenominator,
+      meets: rate !== null && rate >= 0 && target !== null && rate >= target / 100,
+    };
   });
-  const totalCards = teamRows.reduce((sum, row) => sum + row.cards, 0);
-  const totalPeople = teamRows.reduce((sum, row) => sum + row.headcount, 0);
-  const overallRate = totalPeople > 0 ? totalCards / totalPeople : 0;
+  const totalCards = teamRows.every((row) => row.cards !== null)
+    ? teamRows.reduce((sum, row) => sum + (row.cards ?? 0), 0)
+    : null;
+  const totalPeople = teamRows.every((row) => row.headcount !== null)
+    ? teamRows.reduce((sum, row) => sum + (row.headcount ?? 0), 0)
+    : null;
+  const overallRate = ratioPercent(totalCards, totalPeople);
   const teamsMeeting = teamRows.filter((row) => row.meets).length;
-  const overallTone = overallRate >= target ? "success" : overallRate >= target * 0.8 ? "warning" : "danger";
+  const overallTone = overallRate === null || target === null
+    ? "neutral"
+    : overallRate >= target ? "success" : overallRate >= target * 0.8 ? "warning" : "danger";
+  const hasInvalidData = teamRows.some((row) => row.cards !== null && row.cards < 0 || row.headcount !== null && row.headcount < 0);
 
   return (
     <ChartShell title={title} icon={<ShieldCheck size={17} />} kind={kind} visualId={visualId}>
@@ -358,17 +397,20 @@ function O3StopByTeam({ title, payload, visualId, kind }: { title: string; paylo
           <div className="o3-stop-overview-main">
             <span className="o3-stop-kicker">O3.KR2 · Chương trình STOP</span>
             <div className="o3-stop-overview-metric">
-              <strong>{Math.round(overallRate * 100)}%</strong>
-              <span>tỷ lệ ghi nhận / mục tiêu {Math.round(target * 100)}%</span>
+              <strong>{overallRate === null ? "—" : `${overallRate}%`}</strong>
+              <span>
+                Số thẻ / số nhân sự
+                {target === null ? " · Chưa có chỉ tiêu" : ` · mục tiêu ${target}%`}
+              </span>
             </div>
           </div>
           <div className="o3-stop-overview-stats">
             <span>
-              <strong>{totalCards}</strong>
+              <strong>{formatValue(totalCards)}</strong>
               <em>thẻ ghi nhận</em>
             </span>
             <span>
-              <strong>{totalPeople}</strong>
+              <strong>{formatValue(totalPeople)}</strong>
               <em>tổng nhân sự</em>
             </span>
             <span>
@@ -380,28 +422,39 @@ function O3StopByTeam({ title, payload, visualId, kind }: { title: string; paylo
 
         <div className="o3-stop-team-grid">
           {teamRows.map((row) => {
-            const pct = Math.min(140, Math.round(row.rate * 100));
-            const fillWidth = Math.min(100, pct);
             return (
               <article className={`o3-stop-team-card ${row.meets ? "tone-meet" : "tone-miss"}`} key={row.team}>
                 <header>
                   <strong>{row.team}</strong>
-                  <span className={`status-pill ${row.meets ? (pct >= Math.round(target * 100) * 2 ? "status-success" : "status-success-soft") : "status-warning"}`}>{pct}%</span>
+                  <span
+                    className={`status-pill ${row.meets ? "status-success" : row.invalidDenominator ? "status-na" : "status-warning"}`}
+                    title={row.invalidDenominator ? "Chưa có số nhân sự làm mẫu số" : undefined}
+                  >
+                    {row.displayPercent === null ? "—" : `${row.displayPercent}%`}
+                  </span>
                 </header>
                 <div className="o3-stop-team-bar">
                   <span className="o3-stop-team-track">
-                    <span className="o3-stop-team-fill" style={{ width: `${fillWidth}%` }} />
-                    <span className="o3-stop-team-target" style={{ left: `${Math.round(target * 100)}%` }} title={`Chỉ tiêu ${Math.round(target * 100)}%`} />
+                    <span
+                      className="o3-stop-team-fill"
+                      style={{ width: `${row.displayPercent === null ? 0 : Math.max(0, Math.min(100, (row.displayPercent / 140) * 100))}%` }}
+                    />
+                    {target !== null ? (
+                      <span className="o3-stop-team-target" style={{ left: `${Math.max(0, Math.min(100, (target / 140) * 100))}%` }} title={`Chỉ tiêu ${target}%`} />
+                    ) : null}
                   </span>
                 </div>
                 <footer>
-                  <span><strong>{row.cards}</strong> thẻ</span>
-                  <span>/ {row.headcount} người</span>
+                  <span title="Tử số: số thẻ ghi nhận"><strong>{formatValue(row.cards)}</strong> thẻ</span>
+                  <span title="Mẫu số: số nhân sự">/ {formatValue(row.headcount)} nhân sự</span>
+                  {row.invalidDenominator ? <small>Chưa đủ dữ liệu mẫu số</small> : null}
+                  {row.cards !== null && row.cards < 0 || row.headcount !== null && row.headcount < 0 ? <small>Dữ liệu âm cần kiểm tra</small> : null}
                 </footer>
               </article>
             );
           })}
         </div>
+        {hasInvalidData ? <p className="warning-inline">Có giá trị âm từ nguồn dữ liệu; hệ thống không tự đổi thành 0.</p> : null}
       </div>
     </ChartShell>
   );

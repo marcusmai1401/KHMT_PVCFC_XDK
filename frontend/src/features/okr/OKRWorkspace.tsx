@@ -51,13 +51,10 @@ export function OKRWorkspace({ role, editMode = true }: { role: string; editMode
   const logDashboardDiagnostics = (dashboardData: DashboardPayload) => {
     const technicalWarnings = dashboardData.technical_metadata?.warnings ?? [];
     void api.clientDebugLog({
-      source: "okr-dashboard",
-      event: "dashboard-loaded",
-      data: {
-        period: dashboardData.period,
-        technical_warning_count: technicalWarnings.length,
-        technical_warning_types: technicalWarnings.map((warning) => warning.warning_type || warning.type || "UNKNOWN_WARNING"),
-      },
+      event_name: "dashboard.loaded",
+      route_template: "/okr/dashboard/:month/:year",
+      module: "okr",
+      error_code: technicalWarnings.length > 0 ? "TECHNICAL_WARNINGS_PRESENT" : undefined,
     }).catch(() => undefined);
   };
 
@@ -125,7 +122,7 @@ export function OKRWorkspace({ role, editMode = true }: { role: string; editMode
   };
 
   const exportExcel = () => {
-    api.exportDashboard()
+    api.exportDashboard(period.month, period.year)
       .then((blob) => {
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement("a");

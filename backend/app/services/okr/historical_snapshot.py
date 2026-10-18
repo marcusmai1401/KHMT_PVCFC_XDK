@@ -16,7 +16,7 @@ from openpyxl.utils.cell import range_boundaries
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.domain import HistoricalSnapshotModel
+from app.models.domain import HistoricalSnapshotModel, TeamReportModel
 from app.services.okr.team_normalizer import normalize_team_label
 from app.services.repositories import make_id, model_to_dict
 
@@ -79,10 +79,12 @@ class HistoricalSnapshotImportResult:
     skipped_duplicates: int = 0
     months_covered: set[int] = field(default_factory=set)
     source_file_hash: str = ""
+    mode: str = "insert-missing"
     warnings: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "mode": self.mode,
             "imported_count": self.imported_count,
             "updated_count": self.updated_count,
             "skipped_duplicates": self.skipped_duplicates,
@@ -240,7 +242,35 @@ def _upsert_snapshot(
     chart_payload: dict[str, Any] | None = None,
     warnings: list[dict[str, Any]] | None = None,
     imported_by: str,
+    mode: str = "insert-missing",
 ) -> None:
+    if mode not in {"preview", "insert-missing", "replace"}:
+        raise ValueError(f"Unsupported historical snapshot import mode: {mode}")
+    if month and mode != "preview":
+        from app.services.fi.team_guard import lock_fi_team
+        lock_fi_team(db, team)
+    if month and mode in {"preview", "insert-missing"}:
+        managed_report = db.scalar(select(TeamReportModel.id).where(
+            TeamReportModel.team == team, TeamReportModel.report_month == month,
+            TeamReportModel.report_year == year, TeamReportModel.is_current_version.is_(True),
+        ).limit(1))
+        if managed_report:
+            result.skipped_duplicates += 1
+            return
+    existing_period = db.execute(
+        select(HistoricalSnapshotModel).where(
+            HistoricalSnapshotModel.team == team,
+            HistoricalSnapshotModel.month == month,
+            HistoricalSnapshotModel.year == year,
+            HistoricalSnapshotModel.source_range == source_range,
+        )
+    ).scalars().first() if month != 0 else None
+    # Dashboard history cells are period records and must never be replaced by
+    # a later source workbook. Chart/data blocks use month=0 intentionally: each
+    # source workbook is its own auditable snapshot and is keyed by file hash.
+    if existing_period is not None and mode in {"preview", "insert-missing"}:
+        result.skipped_duplicates += 1
+        return
     existing = db.execute(
         select(HistoricalSnapshotModel).where(
             HistoricalSnapshotModel.source_file_hash == result.source_file_hash,
@@ -251,6 +281,9 @@ def _upsert_snapshot(
         )
     ).scalar_one_or_none()
     if existing is not None:
+        if mode in {"preview", "insert-missing"}:
+            result.skipped_duplicates += 1
+            return
         next_payload = chart_payload or {}
         next_warnings = warnings or []
         changed = False
@@ -267,6 +300,11 @@ def _upsert_snapshot(
             result.updated_count += 1
         else:
             result.skipped_duplicates += 1
+        return
+    if mode == "preview":
+        result.imported_count += 1
+        if month:
+            result.months_covered.add(month)
         return
     db.add(
         HistoricalSnapshotModel(
@@ -354,6 +392,7 @@ def _parse_dashboard_history(db: Session, workbook: Any, result: HistoricalSnaps
                 year=year,
                 monthly_assessment=assessment,
                 imported_by=imported_by,
+                mode=result.mode,
             )
 
 
@@ -694,6 +733,7 @@ def _parse_data_blocks(
                 },
                 warnings=warnings,
                 imported_by=imported_by,
+                mode=result.mode,
             )
         except Exception as exc:
             result.warnings.append(_warning(f"Cannot parse {source_range}: {exc}", source_range))
@@ -711,6 +751,7 @@ def _parse_data_blocks(
         chart_payload={"block_type": "unconfirmed_blocks", "items": UNCONFIRMED_BLOCKS},
         warnings=[],
         imported_by=imported_by,
+        mode=result.mode,
     )
     for item in UNCONFIRMED_WARNING_BLOCKS:
         result.warnings.append(
@@ -761,6 +802,7 @@ def _parse_sap_compliance(
         chart_payload=payload,
         warnings=[],
         imported_by=imported_by,
+        mode=result.mode,
     )
 
 
@@ -770,8 +812,17 @@ def import_historical_snapshot(
     *,
     source_file_name: str,
     imported_by: str,
+    mode: str = "insert-missing",
 ) -> dict[str, Any]:
-    result = HistoricalSnapshotImportResult(source_file_hash=hashlib.sha256(workbook_bytes).hexdigest())
+    if mode not in {"preview", "insert-missing"}:
+        raise ValueError(f"Unsupported historical snapshot import mode: {mode}")
+    if mode != "preview":
+        from app.services.fi.team_guard import lock_fi_team
+        lock_fi_team(db, "__historical_snapshot__")
+    result = HistoricalSnapshotImportResult(
+        source_file_hash=hashlib.sha256(workbook_bytes).hexdigest(),
+        mode=mode,
+    )
     try:
         workbook = load_workbook(BytesIO(workbook_bytes), read_only=False, data_only=True, keep_links=False)
     except Exception as exc:
@@ -812,10 +863,13 @@ def import_historical_snapshot(
             chart_payload={"block_type": "dashboard_narratives", **narratives},
             warnings=[],
             imported_by=imported_by,
+            mode=mode,
         )
     except Exception as exc:  # pragma: no cover - narrative extraction must never break import
         result.warnings.append(_warning(f"Cannot parse Dashboard narratives: {exc}", "Dashboard!narratives", "LOW"))
-    db.flush()
+    if mode != "preview":
+        db.flush()
+    workbook.close()
     return result.to_dict()
 
 

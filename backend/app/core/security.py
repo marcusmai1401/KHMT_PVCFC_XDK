@@ -41,9 +41,12 @@ def create_access_token(
     *,
     team: str | None = None,
     sandbox: bool = False,
+    session_version: int = 1,
 ) -> str:
     expires = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_minutes)
     payload: dict[str, Any] = {"sub": subject, "role": role.value, "exp": expires}
+    if not sandbox:
+        payload["session_version"] = session_version
     if team:
         payload["team"] = team
     if sandbox:
@@ -73,6 +76,10 @@ def current_principal(
     user = db.get(User, user_id)
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Phiên đăng nhập không hợp lệ")
+    if not payload.get("sandbox"):
+        token_session_version = payload.get("session_version")
+        if not isinstance(token_session_version, int) or token_session_version != int(user.session_version):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Phiên đăng nhập đã bị thu hồi")
     team = getattr(user, "team", None) or payload.get("team")
     return {
         "user_id": user.id,

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -106,6 +106,7 @@ class CompetencyAssessment(Base):
     assessed_by: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False)
     assessed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     status: Mapped[str] = mapped_column(String(20), default="draft", nullable=False, index=True)
+    revision: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"), nullable=False)
     overall_result: Mapped[str | None] = mapped_column(String(20))
     notes: Mapped[str | None] = mapped_column(Text)
     training_content: Mapped[str | None] = mapped_column(Text)

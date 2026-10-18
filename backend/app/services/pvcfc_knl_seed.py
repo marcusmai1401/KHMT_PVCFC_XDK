@@ -37,30 +37,75 @@ def seed_pvcfc_knl_frameworks(
     frameworks = list(data.get("frameworks") or [])
 
     marker = db.get(SystemConfigModel, SEED_CONFIG_KEY)
-    if not force and marker and marker.value == source_commit and _snapshot_present(db, frameworks):
+    if marker and marker.value == source_commit and _snapshot_present(db, frameworks):
         return {"skipped": True, "source_commit": source_commit, "frameworks": 0, "items": 0}
 
     actor = _resolve_actor(db, actor_id)
     if actor is None:
         raise RuntimeError("Cannot seed PVCFC-KNL frameworks before at least one user exists")
 
-    result = {"skipped": False, "source_commit": source_commit, "frameworks": 0, "items": 0, "versioned": 0}
+    result = {
+        "skipped": False,
+        "source_commit": source_commit,
+        "frameworks": 0,
+        "items": 0,
+        "versioned": 0,
+        "conflicts": [],
+    }
     for framework_data in frameworks:
-        framework, versioned = _get_or_create_seed_target(db, framework_data, actor, force=force)
+        active = db.execute(
+            select(CompetencyFramework)
+            .options(selectinload(CompetencyFramework.items))
+            .where(
+                CompetencyFramework.code == str(framework_data["code"]),
+                CompetencyFramework.is_active.is_(True),
+            )
+            .order_by(CompetencyFramework.version.desc())
+        ).scalar_one_or_none()
+        if active is not None and not _snapshot_matches_framework(active, framework_data):
+            # Seed is initialization-only. An edited framework is an explicit
+            # product decision, never something a restart or seed silently
+            # overwrites. Use a reviewed migration to publish a new version.
+            result["conflicts"].append({"code": active.code, "id": active.id, "reason": "managed framework differs from seed"})
+            continue
+        framework, versioned = _get_or_create_seed_target(db, framework_data, actor, force=False)
         if versioned:
             result["versioned"] += 1
         _apply_framework_snapshot(db, framework, framework_data, actor, source_commit, audit_enabled=audit_enabled)
         result["frameworks"] += 1
         result["items"] += len(framework_data.get("items") or [])
 
-    if marker is None:
+    if marker is None and not result["conflicts"]:
         marker = SystemConfigModel(key=SEED_CONFIG_KEY, value=source_commit, updated_by=actor)
         db.add(marker)
-    else:
+    elif marker is not None and not result["conflicts"]:
         marker.value = source_commit
         marker.updated_by = actor
     db.flush()
     return result
+
+
+def _snapshot_matches_framework(framework: CompetencyFramework, framework_data: dict[str, Any]) -> bool:
+    existing = {item.nlcm_code: item for item in framework.items}
+    expected = list(framework_data.get("items") or [])
+    if len(existing) != len(expected):
+        return False
+    for item_data in expected:
+        item = existing.get(str(item_data["nlcm_code"]))
+        if item is None:
+            return False
+        expected_levels = {
+            str(level): int(value or 0)
+            for level, value in (item_data.get("level_requirements") or {}).items()
+        }
+        if (
+            item.definition != item_data.get("definition")
+            or item.requirements_text != item_data.get("requirements_text")
+            or item.competency_name != str(item_data.get("competency_name"))
+            or item.level_requirements != expected_levels
+        ):
+            return False
+    return True
 
 
 def _snapshot_present(db: Session, frameworks: list[dict[str, Any]]) -> bool:

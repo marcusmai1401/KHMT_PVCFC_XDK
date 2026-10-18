@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from calendar import monthrange
 from datetime import datetime, timedelta, timezone
+import hashlib
+import json
 from typing import Any
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models.domain import FIMonthlyAllocationModel, SKCTKTModel, TeamReportModel
+from app.services.fi.period_guard import assert_period_mutable, assert_period_state_mutable, lock_period_state
+from app.services.fi.team_guard import get_fi_team_revision, lock_fi_team
 from app.services.fi.workflow import SKStatus
 from app.services.okr.rules import normalize_assessment
 from app.services.repositories import audit, make_id, model_to_dict
@@ -155,6 +159,7 @@ def _build_preview(
     report: TeamReportModel,
     *,
     lock: bool,
+    assessment_override: str | None = None,
 ) -> tuple[dict[str, Any], list[SKCTKTModel], list[SKCTKTModel]]:
     if report.team is None or report.report_month is None or report.report_year is None:
         raise FIAllocationError(
@@ -164,7 +169,11 @@ def _build_preview(
     team = report.team
     month = int(report.report_month)
     year = int(report.report_year)
-    assessment = str((report.team_level or {}).get("monthly_assessment") or "").strip()
+    assessment = str(
+        assessment_override
+        if assessment_override is not None
+        else (report.team_level or {}).get("monthly_assessment") or ""
+    ).strip()
     required_count = quota_for_assessment(assessment)
 
     current_records = _load_current_assignments(db, team, month, year, lock=lock)
@@ -198,6 +207,26 @@ def _build_preview(
     available_count = len(valid_current) + len(unassigned_pool)
     shortage_count = max(0, required_count - available_count)
     existing_plan = allocation_record_for_period(db, team, month, year)
+    # Preview revision belongs to the stable per-team candidate-pool guard,
+    # not to the largest row revision.  A cold team intentionally reads as 0
+    # and is not materialized by this read-only path.
+    fi_team_revision = get_fi_team_revision(db, team)
+    plan_hash = hashlib.sha256(
+        json.dumps(
+            {
+                "report_id": report.id,
+                "report_revision": int(report.revision or 0),
+                "assessment": assessment,
+                "required_count": required_count,
+                "current_ids": sorted(record.id for record in current_records),
+                "candidate_ids": sorted(record.id for record in unassigned_pool),
+                "selected_ids": [record.id for record in selected],
+                "fi_team_revision": fi_team_revision,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
 
     preview = {
         "team": team,
@@ -225,13 +254,25 @@ def _build_preview(
         ],
         "report_id": report.id,
         "report_version": report.version,
+        "report_revision": int(report.revision or 0),
+        "fi_team_revision": fi_team_revision,
+        "plan_hash": plan_hash,
         "existing_allocation": allocation_record_to_dict(existing_plan),
     }
     return preview, selected, to_release
 
 
-def preview_monthly_fi_allocation(db: Session, report: TeamReportModel) -> dict[str, Any]:
-    preview, _, _ = _build_preview(db, report, lock=False)
+def preview_monthly_fi_allocation(
+    db: Session,
+    report: TeamReportModel,
+    assessment_override: str | None = None,
+) -> dict[str, Any]:
+    preview, _, _ = _build_preview(
+        db,
+        report,
+        lock=False,
+        assessment_override=assessment_override,
+    )
     return preview
 
 
@@ -268,8 +309,43 @@ def finalize_monthly_fi_allocation(
     db: Session,
     report: TeamReportModel,
     actor: str,
+    assessment_override: str | None = None,
+    expected_fi_team_revision: int | None = None,
+    expected_plan_hash: str | None = None,
 ) -> dict[str, Any]:
-    preview, selected, to_release = _build_preview(db, report, lock=True)
+    if report.team is None or report.report_month is None or report.report_year is None:
+        raise FIAllocationError(
+            "FI_REPORT_PERIOD_MISSING",
+            "Báo cáo chưa xác định được đội hoặc kỳ để phân bổ FI",
+        )
+    # Lock order is part of the FI invariant: team -> period -> FI rows ->
+    # allocation/report.  The caller may already hold these rows (lock_report)
+    # and row-level locks are re-entrant within the same transaction.
+    team_guard = lock_fi_team(db, report.team)
+    period_guard = lock_period_state(db, report.team, int(report.report_month), int(report.report_year))
+    assert_period_state_mutable(period_guard, report.team, int(report.report_month), int(report.report_year))
+    assert_period_mutable(db, report.team, int(report.report_month), int(report.report_year))
+    preview, selected, to_release = _build_preview(
+        db,
+        report,
+        lock=True,
+        assessment_override=assessment_override,
+    )
+    if expected_plan_hash and expected_plan_hash != preview["plan_hash"]:
+        raise FIAllocationError(
+            "FI_PREVIEW_STALE",
+            "Preview phân bổ FI đã cũ; hãy xem trước lại trước khi chốt",
+            {"expected_plan_hash": expected_plan_hash, "current_plan_hash": preview["plan_hash"]},
+        )
+    if expected_fi_team_revision is not None and expected_fi_team_revision != preview["fi_team_revision"]:
+        raise FIAllocationError(
+            "FI_PREVIEW_STALE",
+            "Nguồn FI đã thay đổi sau preview; hãy xem trước lại trước khi chốt",
+            {
+                "expected_fi_team_revision": expected_fi_team_revision,
+                "current_fi_team_revision": preview["fi_team_revision"],
+            },
+        )
     if not preview["can_finalize"]:
         raise FIAllocationError(
             "FI_ALLOCATION_SHORTAGE",
@@ -279,6 +355,12 @@ def finalize_monthly_fi_allocation(
             ),
             preview,
         )
+
+    if assessment_override is not None:
+        report.team_level = {
+            **(report.team_level or {}),
+            "monthly_assessment": preview["assessment"],
+        }
 
     changed_at = _now()
     assessment = preview["assessment"]
@@ -293,6 +375,7 @@ def finalize_monthly_fi_allocation(
             lock=True,
         )
     }
+    pool_changed = bool(to_release or (selected_ids - current_ids))
 
     for record in to_release:
         previous = {
@@ -399,7 +482,14 @@ def finalize_monthly_fi_allocation(
         "finalize",
         {"before": before_plan, "after": after_plan},
     )
-    return {**preview, "allocation": after_plan}
+    if pool_changed:
+        team_guard.revision = int(team_guard.revision or 0) + 1
+        db.flush()
+    return {
+        **preview,
+        "allocation": after_plan,
+        "fi_team_revision_after": int(team_guard.revision or 0),
+    }
 
 
 def mark_monthly_fi_allocation_reopened(

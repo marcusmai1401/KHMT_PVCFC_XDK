@@ -49,13 +49,17 @@ def _dashboard_for(db: Session, month: int, year: int) -> dict[str, Any]:
     return build_dashboard_matrix(report_dicts, mappings)
 
 
-def _tool_executors(db: Session) -> dict[str, Any]:
+def _tool_executors(db: Session, principal: dict[str, Any]) -> dict[str, Any]:
     from app.services.okr.constants import TEAMS
 
+    scoped_team = principal.get("team") if principal.get("role") == Role.TEAM_ACCOUNT.value else None
+
     def list_teams() -> list[str]:
-        return list(TEAMS)
+        return [scoped_team] if scoped_team else list(TEAMS)
 
     def get_team_report(team: str) -> dict[str, Any] | None:
+        if scoped_team and team != scoped_team:
+            return None
         report = db.execute(
             select(TeamReportModel)
             .where(
@@ -67,7 +71,10 @@ def _tool_executors(db: Session) -> dict[str, Any]:
         return model_to_dict(report) if report else None
 
     def get_dashboard_summary(month: int, year: int) -> dict[str, Any]:
-        return _dashboard_for(db, month, year)
+        data = _dashboard_for(db, month, year)
+        if scoped_team:
+            data["teams"] = [row for row in data.get("teams", []) if row.get("team") == scoped_team]
+        return data
 
     return {
         "list_teams": list_teams,
@@ -132,7 +139,7 @@ class ChatHistoryResponse(BaseModel):
 @router.post("/chat", response_model=ChatResponse)
 def llm_chat(
     req: ChatRequest,
-    _: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER, Role.TEAM_ACCOUNT)),
+    principal: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER, Role.TEAM_ACCOUNT)),
     db: Session = Depends(get_db),
 ):
     _check_llm_enabled()
@@ -142,10 +149,28 @@ def llm_chat(
 
         system = req.system_prompt or SYSTEM_PROMPT_OKR
         if req.session_id or req.use_tools:
-            session_id = req.session_id or f"chat-{uuid4().hex[:12]}"
-            session = get_or_create_session(session_id, system_prompt=system)
+            session_id = req.session_id or f"chat-{uuid4().hex[:24]}"
+            if req.session_id:
+                from app.services.llm.chatbot import get_session
+
+                session = get_session(
+                    session_id,
+                    owner_user_id=principal["user_id"],
+                    namespace=settings.environment.strip().lower(),
+                )
+                if session is None:
+                    # Do not let a guessed ID create or reveal another user's
+                    # session; 404 is intentionally uniform for unknown/foreign IDs.
+                    raise HTTPException(status_code=404, detail="Không tìm thấy phiên hội thoại")
+            else:
+                session = get_or_create_session(
+                    session_id,
+                    owner_user_id=principal["user_id"],
+                    namespace=settings.environment.strip().lower(),
+                    system_prompt=system,
+                )
             result = (
-                session.send_with_tools(req.message, _tool_executors(db))
+                session.send_with_tools(req.message, _tool_executors(db, principal))
                 if req.use_tools
                 else session.send(req.message)
             )
@@ -176,24 +201,35 @@ def llm_chat(
 @router.get("/chat/{session_id}/history", response_model=ChatHistoryResponse)
 def chat_history(
     session_id: str,
-    _: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER, Role.TEAM_ACCOUNT)),
+    principal: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER, Role.TEAM_ACCOUNT)),
 ):
     from app.services.llm.chatbot import get_session
 
-    session = get_session(session_id)
+    session = get_session(
+        session_id,
+        owner_user_id=principal["user_id"],
+        namespace=settings.environment.strip().lower(),
+    )
     if session is None:
-        raise HTTPException(status_code=404, detail="Chat session not found")
+        raise HTTPException(status_code=404, detail="Không tìm thấy phiên hội thoại")
     return ChatHistoryResponse(session_id=session_id, messages=session.get_history())
 
 
 @router.delete("/chat/{session_id}")
 def clear_chat_session(
     session_id: str,
-    _: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER, Role.TEAM_ACCOUNT)),
+    principal: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER, Role.TEAM_ACCOUNT)),
 ):
     from app.services.llm.chatbot import clear_session
 
-    return {"cleared": clear_session(session_id), "session_id": session_id}
+    return {
+        "cleared": clear_session(
+            session_id,
+            owner_user_id=principal["user_id"],
+            namespace=settings.environment.strip().lower(),
+        ),
+        "session_id": session_id,
+    }
 
 
 @router.post("/analyze/dashboard", response_model=AnalysisResponse)

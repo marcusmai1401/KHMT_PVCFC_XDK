@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app.services.llm.client import SYSTEM_PROMPT_CHATBOT, get_llm_client
 
 logger = logging.getLogger(__name__)
+SESSION_TTL = timedelta(hours=24)
+MAX_SESSIONS_PER_OWNER = 20
+MAX_MESSAGES_PER_SESSION = 60
+MAX_SESSION_BYTES = 512 * 1024
 
 CONTEXT_TOOLS = [
     {
@@ -66,10 +71,15 @@ class ChatSession:
     def __init__(
         self,
         session_id: str,
+        owner_user_id: str,
+        namespace: str,
         context_data: dict[str, Any] | None = None,
         system_prompt: str = SYSTEM_PROMPT_CHATBOT,
     ) -> None:
         self.session_id = session_id
+        self.owner_user_id = owner_user_id
+        self.namespace = namespace
+        self.last_accessed_at = datetime.now(timezone.utc)
         self.messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt},
         ]
@@ -81,6 +91,8 @@ class ChatSession:
             })
 
     def send(self, user_message: str) -> dict[str, Any]:
+        self._touch()
+        self._check_capacity()
         client = get_llm_client()
         self.messages.append({"role": "user", "content": user_message})
         response = client.chat(self.messages, max_tokens=4096)
@@ -98,6 +110,8 @@ class ChatSession:
         user_message: str,
         tool_executors: dict[str, Any],
     ) -> dict[str, Any]:
+        self._touch()
+        self._check_capacity()
         client = get_llm_client()
         self.messages.append({"role": "user", "content": user_message})
         response = client.tool_call(
@@ -115,25 +129,69 @@ class ChatSession:
         }
 
     def get_history(self) -> list[dict[str, Any]]:
+        self._touch()
         return [m for m in self.messages if m["role"] != "system"]
+
+    def _touch(self) -> None:
+        self.last_accessed_at = datetime.now(timezone.utc)
+
+    def _check_capacity(self) -> None:
+        if len(self.messages) >= MAX_MESSAGES_PER_SESSION:
+            raise RuntimeError("Phiên hội thoại đã đạt giới hạn tin nhắn; hãy tạo phiên mới")
+        encoded_size = sum(len(str(message.get("content") or "").encode("utf-8")) for message in self.messages)
+        if encoded_size >= MAX_SESSION_BYTES:
+            raise RuntimeError("Phiên hội thoại đã đạt giới hạn dung lượng; hãy tạo phiên mới")
 
 
 _sessions: dict[str, ChatSession] = {}
 
 
+def _expired(session: ChatSession) -> bool:
+    return datetime.now(timezone.utc) - session.last_accessed_at > SESSION_TTL
+
+
 def get_or_create_session(
     session_id: str,
+    *,
+    owner_user_id: str,
+    namespace: str,
     context_data: dict[str, Any] | None = None,
     system_prompt: str = SYSTEM_PROMPT_CHATBOT,
 ) -> ChatSession:
-    if session_id not in _sessions:
-        _sessions[session_id] = ChatSession(session_id, context_data, system_prompt)
-    return _sessions[session_id]
+    existing = _sessions.get(session_id)
+    if existing is not None:
+        if _expired(existing):
+            _sessions.pop(session_id, None)
+            existing = None
+        elif existing.owner_user_id != owner_user_id or existing.namespace != namespace:
+            raise KeyError("Chat session not found")
+    if existing is None:
+        owned = [session for session in _sessions.values() if session.owner_user_id == owner_user_id and session.namespace == namespace]
+        for stale in owned:
+            if _expired(stale):
+                _sessions.pop(stale.session_id, None)
+        owned = [session for session in _sessions.values() if session.owner_user_id == owner_user_id and session.namespace == namespace]
+        if len(owned) >= MAX_SESSIONS_PER_OWNER:
+            oldest = min(owned, key=lambda session: session.last_accessed_at)
+            _sessions.pop(oldest.session_id, None)
+        existing = ChatSession(session_id, owner_user_id, namespace, context_data, system_prompt)
+        _sessions[session_id] = existing
+    return existing
 
 
-def get_session(session_id: str) -> ChatSession | None:
-    return _sessions.get(session_id)
+def get_session(session_id: str, *, owner_user_id: str, namespace: str) -> ChatSession | None:
+    session = _sessions.get(session_id)
+    if session is None or _expired(session):
+        _sessions.pop(session_id, None)
+        return None
+    if session.owner_user_id != owner_user_id or session.namespace != namespace:
+        return None
+    return session
 
 
-def clear_session(session_id: str) -> bool:
-    return _sessions.pop(session_id, None) is not None
+def clear_session(session_id: str, *, owner_user_id: str, namespace: str) -> bool:
+    session = get_session(session_id, owner_user_id=owner_user_id, namespace=namespace)
+    if session is None:
+        return False
+    _sessions.pop(session_id, None)
+    return True

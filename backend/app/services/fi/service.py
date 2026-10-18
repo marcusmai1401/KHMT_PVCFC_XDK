@@ -2,13 +2,14 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 import unicodedata
 
 from fastapi import HTTPException
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -20,6 +21,12 @@ from app.services.fi.completion import (
     completion_plan_indicates_done,
 )
 from app.services.fi.workflow import FIAction, SKStatus, is_public_status, next_status
+from app.services.fi.period_guard import (
+    assert_period_mutable,
+    assert_period_state_mutable,
+    lock_period_state,
+)
+from app.services.fi.team_guard import lock_fi_team, lock_fi_teams
 from app.services.repositories import audit, make_id, model_to_dict, notify
 
 NON_DRAFT_STATUSES = {status.value for status in SKStatus if status != SKStatus.DRAFT}
@@ -59,6 +66,58 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _assert_revision(record: SKCTKTModel, expected_revision: int | None) -> None:
+    if expected_revision is not None and record.revision != expected_revision:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "VERSION_CONFLICT",
+                "error_code": "VERSION_CONFLICT",
+                "message": "SK-CTKT đã được cập nhật ở nơi khác",
+                "request_id": str(uuid4()),
+                "current_revision": record.revision,
+            },
+        )
+
+
+def _lock_record_context(
+    db: Session,
+    record_id: str,
+    *,
+    extra_periods: set[tuple[str, int, int]] | None = None,
+) -> tuple[SKCTKTModel, Any]:
+    """Acquire FI mutation locks in the common team -> period -> FI order."""
+    preliminary = db.get(SKCTKTModel, record_id)
+    if preliminary is None:
+        raise KeyError("SK-CTKT not found")
+    team = str(preliminary.team)
+    team_guards = lock_fi_teams(db, {team})
+    team_guard = team_guards[team]
+    db.refresh(preliminary)
+    if preliminary.team != team:
+        raise HTTPException(status_code=409, detail={"code": "VERSION_CONFLICT", "message": "Đội của FI vừa thay đổi. Vui lòng tải lại."})
+    contexts = set(extra_periods or set())
+    if preliminary.khmt_month is not None and preliminary.khmt_year is not None:
+        contexts.add((team, int(preliminary.khmt_month), int(preliminary.khmt_year)))
+    for context_team, context_month, context_year in sorted(contexts, key=lambda item: (item[0], item[2], item[1])):
+        if context_team != team:
+            raise ValueError("FI mutation cannot change team outside the locked context")
+        guard = lock_period_state(db, context_team, context_month, context_year)
+        assert_period_state_mutable(guard, context_team, context_month, context_year)
+        assert_period_mutable(db, context_team, context_month, context_year)
+    # The source row is deliberately re-read only after all context locks are
+    # held. This prevents a stale preliminary read from selecting a new FI
+    # pool/period under a different lock set.
+    record = db.execute(
+        select(SKCTKTModel).where(SKCTKTModel.id == record_id).with_for_update().execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if record is None:
+        raise KeyError("SK-CTKT not found")
+    if record.team != team:
+        raise ValueError("FI team changed while acquiring mutation locks")
+    return record, team_guard
+
+
 def generate_sk_code(db: Session, team: str, year: int, month: int) -> str:
     """Sinh mã SK-CTKT theo format FI/MM/YYYY-TEAM-NN.
 
@@ -68,13 +127,56 @@ def generate_sk_code(db: Session, team: str, year: int, month: int) -> str:
       * TBCH tháng 5/2026: -01 (độc lập với TBĐL)
     """
     prefix = f"FI/{month:02d}/{year}-{team}"
-    sequence = db.get(SKCodeSequenceModel, prefix)
-    if sequence is None:
-        sequence = SKCodeSequenceModel(prefix=prefix, next_value=1)
-        db.add(sequence)
-        db.flush()
-    value = sequence.next_value
-    sequence.next_value += 1
+    # Seed the first atomic increment from the highest existing code.  This
+    # preserves legacy rows when the sequence table was introduced late.
+    max_value = 0
+    for (existing_code,) in db.execute(
+        select(SKCTKTModel.sk_code).where(SKCTKTModel.sk_code.like(f"{prefix}-%"))
+    ).all():
+        try:
+            max_value = max(max_value, int(str(existing_code).rsplit("-", 1)[1]))
+        except (IndexError, ValueError):
+            continue
+    first_value = max_value + 1
+    sequence_table = SKCodeSequenceModel.__table__
+    dialect = db.bind.dialect.name if db.bind is not None else ""
+    if dialect == "sqlite":
+        from sqlalchemy.dialects.sqlite import insert as dialect_insert
+    elif dialect == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as dialect_insert
+    else:
+        dialect_insert = None
+    if dialect_insert is not None:
+        next_value = case(
+            (sequence_table.c.next_value < first_value, first_value),
+            else_=sequence_table.c.next_value,
+        ) + 1
+        statement = (
+            dialect_insert(sequence_table)
+            .values(prefix=prefix, next_value=first_value + 1)
+            .on_conflict_do_update(
+                index_elements=[sequence_table.c.prefix],
+                set_={"next_value": next_value},
+            )
+            .returning(sequence_table.c.next_value - 1)
+        )
+        value = int(db.execute(statement).scalar_one())
+    else:
+        # Conservative adapter for an unsupported dialect.  Production uses
+        # PostgreSQL and SQLite fixtures use the atomic upsert above.
+        sequence = db.execute(
+            select(SKCodeSequenceModel)
+            .where(SKCodeSequenceModel.prefix == prefix)
+            .with_for_update()
+        ).scalar_one_or_none()
+        if sequence is None:
+            sequence = SKCodeSequenceModel(prefix=prefix, next_value=first_value + 1)
+            db.add(sequence)
+            db.flush()
+            value = first_value
+        else:
+            value = max(int(sequence.next_value), first_value)
+            sequence.next_value = value + 1
     return f"{prefix}-{value:02d}"
 
 
@@ -139,13 +241,17 @@ def resolve_legacy_author_user(record: SKCTKTModel, db: Session) -> User | None:
     target_name = _normalize_person_filter_value(record.author_name)
     if not target_name:
         return None
-    candidates = db.execute(
-        select(User).where(
-            User.is_active.is_(True),
-            User.team == record.team,
-            User.role.in_(AUTHOR_ROLES),
-        )
-    ).scalars()
+    directory = db.info.get("fi_user_directory")
+    if directory is not None:
+        candidates = [user for user in directory if user.is_active and user.team == record.team and user.role in AUTHOR_ROLES]
+    else:
+        candidates = db.execute(
+            select(User).where(
+                User.is_active.is_(True),
+                User.team == record.team,
+                User.role.in_(AUTHOR_ROLES),
+            )
+        ).scalars()
     matches = [user for user in candidates if target_name in _user_name_aliases(user)]
     return matches[0] if len(matches) == 1 else None
 
@@ -180,6 +286,7 @@ def create_sk_ctkt(
     actor: str,
     *,
     submit_immediately: bool = False,
+    commit: bool = True,
 ) -> SKCTKTModel:
     now = _utc_now()
     team = payload["team"]
@@ -188,6 +295,10 @@ def create_sk_ctkt(
     if registration_month < 1 or registration_month > 12:
         registration_month = now.month
     registration_year = _int_or_default(payload.get("registration_year"), year)
+    lock_fi_team(db, team)
+    period_guard = lock_period_state(db, team, registration_month, registration_year)
+    assert_period_state_mutable(period_guard, team, registration_month, registration_year)
+    assert_period_mutable(db, team, registration_month, registration_year)
     completed_at = _completed_at_from_payload(payload, fallback=now)
     initial_status = SKStatus.SUBMITTED if submit_immediately else SKStatus.DRAFT
     record = SKCTKTModel(
@@ -228,8 +339,9 @@ def create_sk_ctkt(
     audit(db, actor, "SK_CTKT", record.id, "create", model_to_dict(record))
     if submit_immediately:
         _notify_transition(db, record, record.id)
-    db.commit()
-    db.refresh(record)
+    if commit:
+        db.commit()
+        db.refresh(record)
     return record
 
 
@@ -267,9 +379,9 @@ def update_sk_ctkt(
     actor: str,
     role: str,
 ) -> SKCTKTModel:
-    record = db.get(SKCTKTModel, record_id)
-    if record is None:
-        raise KeyError("SK-CTKT not found")
+    expected_revision = payload.pop("expected_revision", None)
+    record, _team_guard = _lock_record_context(db, record_id)
+    _assert_revision(record, expected_revision)
     requested_fields = set(payload)
     shared_content_edit = bool(requested_fields) and requested_fields <= SHARED_CONTENT_EDIT_FIELDS
     if not is_author_or_submitter(record, actor, db):
@@ -294,6 +406,7 @@ def update_sk_ctkt(
             existing=record.completed_at,
         )
     record.updated_at = _utc_now()
+    record.revision += 1
     audit(db, actor, "SK_CTKT", record_id, "update", {"before": before, "after": model_to_dict(record)})
     # Nếu tác giả chỉnh sửa SK đã gửi duyệt thì gửi noti cho FI_Coordinator +
     # Admin để xét duyệt lại.
@@ -358,10 +471,10 @@ def transition_sk_ctkt(
     role: str,
     note: str | None = None,
     comments: str | None = None,
+    expected_revision: int | None = None,
 ) -> SKCTKTModel:
-    record = db.get(SKCTKTModel, record_id)
-    if record is None:
-        raise KeyError("SK-CTKT not found")
+    record, team_guard = _lock_record_context(db, record_id)
+    _assert_revision(record, expected_revision)
     if action == FIAction.SUBMIT.value and record.status == SKStatus.SUBMITTED.value:
         _validate_actor_for_transition(record, action, actor, role, db)
         return record
@@ -371,6 +484,13 @@ def transition_sk_ctkt(
     _validate_actor_for_transition(record, action, actor, role, db)
     result = next_status(record.status, action, role, note)
     before = record.status
+    before_pool_state = (
+        before in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value},
+        bool(record.consider_for_khmt),
+        bool(record.is_counted_for_okr),
+        record.khmt_month,
+        record.khmt_year,
+    )
     now = _utc_now()
     record.status = result.to_status.value
     record.is_public = is_public_status(record.status)
@@ -406,6 +526,16 @@ def transition_sk_ctkt(
         "comments": comments,
     }
     record.status_history = [*record.status_history, history]
+    record.revision += 1
+    after_pool_state = (
+        record.status in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value},
+        bool(record.consider_for_khmt),
+        bool(record.is_counted_for_okr),
+        record.khmt_month,
+        record.khmt_year,
+    )
+    if before_pool_state != after_pool_state:
+        team_guard.revision = int(team_guard.revision or 0) + 1
     audit(db, actor, "SK_CTKT", record_id, f"transition:{action}", history)
     _notify_transition(db, record, record_id)
     db.commit()
@@ -439,15 +569,24 @@ def assign_khmt(
     actor: str,
     role: str = Role.ADMIN.value,
     principal_team: str | None = None,
+    expected_revision: int | None = None,
 ) -> SKCTKTModel:
-    record = db.get(SKCTKTModel, record_id)
-    if record is None:
-        raise KeyError("SK-CTKT not found")
     if month < 1 or month > 12:
         raise ValueError("Tháng KHMT phải nằm trong khoảng 1-12")
     if year < 2020 or year > 2100:
         raise ValueError("Năm KHMT không hợp lệ")
+    preliminary = db.get(SKCTKTModel, record_id)
+    if preliminary is None:
+        raise KeyError("SK-CTKT not found")
+    record, team_guard = _lock_record_context(db, record_id, extra_periods={(preliminary.team, month, year)})
+    _assert_revision(record, expected_revision)
     _ensure_khmt_editable(record, actor, role, principal_team)
+    before_pool_state = (
+        bool(record.consider_for_khmt),
+        bool(record.is_counted_for_okr),
+        record.khmt_month,
+        record.khmt_year,
+    )
     record.khmt_month = month
     record.khmt_year = year
     record.consider_for_khmt = True
@@ -466,7 +605,11 @@ def assign_khmt(
         },
     }
     record.status_history = [*record.status_history, history]
+    record.revision += 1
     record.updated_at = now
+    after_pool_state = (True, True, month, year)
+    if before_pool_state != after_pool_state:
+        team_guard.revision = int(team_guard.revision or 0) + 1
     audit(db, actor, "SK_CTKT", record_id, "assign_khmt", {"month": month, "year": year})
     db.commit()
     db.refresh(record)
@@ -479,11 +622,17 @@ def clear_khmt(
     actor: str,
     role: str = Role.ADMIN.value,
     principal_team: str | None = None,
+    expected_revision: int | None = None,
 ) -> SKCTKTModel:
-    record = db.get(SKCTKTModel, record_id)
-    if record is None:
-        raise KeyError("SK-CTKT not found")
+    record, team_guard = _lock_record_context(db, record_id)
+    _assert_revision(record, expected_revision)
     _ensure_khmt_editable(record, actor, role, principal_team)
+    before_pool_state = (
+        bool(record.consider_for_khmt),
+        bool(record.is_counted_for_okr),
+        record.khmt_month,
+        record.khmt_year,
+    )
     previous_month = record.khmt_month
     previous_year = record.khmt_year
     record.khmt_month = None
@@ -504,7 +653,10 @@ def clear_khmt(
         },
     }
     record.status_history = [*record.status_history, history]
+    record.revision += 1
     record.updated_at = now
+    if before_pool_state != (False, False, None, None):
+        team_guard.revision = int(team_guard.revision or 0) + 1
     audit(
         db,
         actor,
@@ -728,6 +880,8 @@ def count_for_okr(db: Session, month: int, year: int) -> dict[str, int]:
 
 def build_fi_report_export_filters(
     *,
+    q: str | None = None,
+    registration_year: int | None = None,
     teams: str | None = None,
     registration_months: str | None = None,
     decisions: str | None = None,
@@ -738,6 +892,8 @@ def build_fi_report_export_filters(
     submitters: str | None = None,
 ) -> dict[str, set[Any]]:
     return {
+        "query": {q} if q else set(),
+        "registration_years": {registration_year} if registration_year else set(),
         "teams": _parse_csv_values(teams),
         "registration_months": _parse_month_values(registration_months),
         "decisions": _parse_allowed_values(decisions, FI_EXPORT_DECISIONS, "decisions"),
@@ -763,7 +919,7 @@ def export_fi_reports_to_excel(db: Session, filters: dict[str, set[Any]]) -> Pat
 
     export_dir = settings.storage_dir / "exports"
     export_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"fi-reports-export-{generated_at.strftime('%Y%m%d-%H%M%S')}.xlsx"
+    filename = f"fi-reports-export-{generated_at.strftime('%Y%m%d-%H%M%S')}-{make_id('fi-export')}.xlsx"
     path = export_dir / filename
     workbook.save(path)
     return path
@@ -820,7 +976,11 @@ def _filtered_fi_export_records(db: Session, filters: dict[str, set[Any]]) -> li
 
 
 def _fi_export_record_matches(record: SKCTKTModel, filters: dict[str, set[Any]], db: Session) -> bool:
-    registration_month, _ = _fi_registration_period(record)
+    registration_month, registration_year = _fi_registration_period(record)
+    if filters.get("registration_years") and registration_year not in filters["registration_years"]: return False
+    if filters.get("query"):
+        haystack = _normalize_person_filter_value(f"{record.sk_code} {record.title} {record.author_name} {record.content_description}")
+        if not any(_normalize_person_filter_value(query) in haystack for query in filters["query"]): return False
     teams = filters.get("teams") or set()
     months = filters.get("registration_months") or set()
     decisions = filters.get("decisions") or set()
@@ -1401,10 +1561,22 @@ def _fi_export_tone(value: str) -> tuple[str, str] | None:
     return None
 
 
-def delete_sk_ctkt(db: Session, record_id: str, actor: str, role: str) -> None:
-    record = db.get(SKCTKTModel, record_id)
-    if record is None:
-        raise KeyError("SK-CTKT not found")
+def delete_sk_ctkt(
+    db: Session,
+    record_id: str,
+    actor: str,
+    role: str,
+    expected_revision: int | None = None,
+) -> None:
+    record, team_guard = _lock_record_context(db, record_id)
+    _assert_revision(record, expected_revision)
+    before_pool_state = (
+        record.status in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value},
+        bool(record.consider_for_khmt),
+        bool(record.is_counted_for_okr),
+        record.khmt_month,
+        record.khmt_year,
+    )
     can_delete = role == Role.ADMIN.value
     if role in AUTHOR_ROLES:
         can_delete = is_author_or_submitter(record, actor) and record.status in OWNER_DELETABLE_STATUSES
@@ -1419,4 +1591,6 @@ def delete_sk_ctkt(db: Session, record_id: str, actor: str, role: str) -> None:
             pass
         db.delete(image)
     db.delete(record)
+    if before_pool_state != (False, False, False, None, None):
+        team_guard.revision = int(team_guard.revision or 0) + 1
     db.commit()

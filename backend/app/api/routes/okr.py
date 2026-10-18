@@ -1,8 +1,10 @@
+from app.services.repositories import public_report_dict
 from datetime import datetime, timezone
 from pathlib import Path
 import hashlib
 import json
-from typing import Any
+import tempfile
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
@@ -15,6 +17,7 @@ from app.db.session import get_db
 from app.models.domain import HistoricalSnapshotModel, KRMappingModel, SystemConfigModel, TeamHeadcountModel, TeamReportModel, WarningModel
 from app.schemas.common import LeaderKPIAllocationUpdate, WarningResolveRequest
 from app.services.cache import cache_delete_prefix, cache_get, cache_set
+from app.services.fi.period_guard import assert_period_mutable
 from app.services.fi.service import count_for_okr, fi_dashboard
 from app.services.okr.constants import TEAM_DISPLAY_NAMES, TEAMS
 from app.services.okr.dashboard import build_dashboard_view, export_dashboard_workbook
@@ -22,7 +25,7 @@ from app.services.okr.historical_snapshot import import_historical_snapshot, sna
 from app.services.okr.kpi_rules import kpi_rule_periods
 from app.services.okr.period_resolver import find_latest_data_period, find_workbook_period, resolve_default_period
 from app.services.okr.report_template import TEMPLATE_FILENAME, generate_standard_report_template
-from app.services.okr.workbook import parse_team_report
+from app.services.okr.workbook import identify_month, identify_team, identify_year, parse_team_report
 from app.services.repositories import audit, current_report_for, make_id, model_to_dict, warning_from_dict
 
 router = APIRouter(prefix="/okr", tags=["okr"])
@@ -40,14 +43,66 @@ def _truncate_for_log(value: Any, limit: int = 2000) -> str:
     return text if len(text) <= limit else f"{text[:limit]}..."
 
 
-def _current_reports(db: Session) -> list[dict[str, Any]]:
-    reports = db.execute(
-        select(TeamReportModel).where(
-            TeamReportModel.is_current_version.is_(True),
-            TeamReportModel.report_status.in_(["submitted", "locked"]),
-        )
-    ).scalars().all()
-    return [model_to_dict(report) for report in reports]
+TELEMETRY_STRING_FIELDS = {
+    "event_name",
+    "route_template",
+    "module",
+    "error_code",
+    "request_id",
+    "build_id",
+    "environment",
+}
+TELEMETRY_NUMBER_FIELDS = {"duration_ms", "http_status"}
+TELEMETRY_OPTIONAL_FIELDS = TELEMETRY_STRING_FIELDS | TELEMETRY_NUMBER_FIELDS | {"role"}
+
+
+def _allowlisted_telemetry(payload: dict[str, Any]) -> dict[str, Any]:
+    """Keep client telemetry useful without accepting user/content payloads."""
+    raw = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    result: dict[str, Any] = {}
+    for field in TELEMETRY_STRING_FIELDS:
+        value = raw.get(field)
+        if value in (None, ""):
+            continue
+        text = str(value).strip()[:160]
+        # Route templates must not smuggle query strings, identifiers, or paths.
+        if field == "route_template" and ("?" in text or "\\" in text):
+            continue
+        result[field] = text
+    for field in TELEMETRY_NUMBER_FIELDS:
+        value = raw.get(field)
+        if isinstance(value, bool):
+            continue
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            continue
+        if field == "duration_ms":
+            result[field] = max(0, min(number, 86_400_000))
+        else:
+            result[field] = max(100, min(number, 599))
+    role = raw.get("role")
+    if role in {role_value.value for role_value in Role}:
+        result["role"] = role
+    return result
+
+
+def _current_reports(
+    db: Session,
+    *,
+    month: int | None = None,
+    year: int | None = None,
+) -> list[dict[str, Any]]:
+    conditions = [
+        TeamReportModel.is_current_version.is_(True),
+        TeamReportModel.report_status.in_(["submitted", "locked"]),
+    ]
+    if month is not None:
+        conditions.append(TeamReportModel.report_month == month)
+    if year is not None:
+        conditions.append(TeamReportModel.report_year == year)
+    reports = db.execute(select(TeamReportModel).where(*conditions)).scalars().all()
+    return [public_report_dict(report) for report in reports]
 
 
 def _mapping_records(db: Session) -> list[dict[str, Any]]:
@@ -191,17 +246,15 @@ def _sk_count_mismatch_warnings(db: Session, report: TeamReportModel) -> None:
 
 @router.post("/client-debug-log")
 def client_debug_log(payload: dict[str, Any], principal: dict = Depends(require_role(*REFERENCE_VIEW_ROLES))):
-    source = str(payload.get("source") or "frontend")[:80]
-    event = str(payload.get("event") or "debug")[:80]
-    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
-    message = str(payload.get("message") or "")[:500]
+    telemetry = _allowlisted_telemetry(payload)
+    telemetry.setdefault("environment", settings.environment)
+    telemetry.setdefault("role", principal["role"])
     print(
-        "[client-debug] "
-        f"user={principal['user_id']} role={principal['role']} source={source} event={event} "
-        f"message={message} data={_truncate_for_log(data)}",
+        "[client-telemetry] "
+        f"data={_truncate_for_log(telemetry, limit=1200)}",
         flush=True,
     )
-    return {"ok": True}
+    return {"ok": True, "accepted_fields": sorted(telemetry)}
 
 
 @router.post("/reports/upload")
@@ -210,7 +263,11 @@ def upload_report(
     team: str | None = Form(default=None),
     month: int | None = Form(default=None),
     year: int | None = Form(default=None),
+    mode: Literal["preview", "insert-missing", "replace"] = Form(default="insert-missing"),
     confirm_replace: bool = Form(default=False),
+    expected_revision: int | None = Form(default=None),
+    preview_token: str | None = Form(default=None),
+    replace_reason: str | None = Form(default=None),
     principal: dict = Depends(require_role(Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
@@ -221,33 +278,99 @@ def upload_report(
         "application/octet-stream",
     }:
         raise HTTPException(status_code=400, detail={"error_code": "INVALID_CONTENT_TYPE", "message": "Only Excel workbook uploads are supported"})
-    data = file.file.read()
+    data = file.file.read(settings.max_excel_upload_mb * 1024 * 1024 + 1)
     if len(data) > settings.max_excel_upload_mb * 1024 * 1024:
         raise HTTPException(status_code=400, detail={"error_code": "FILE_TOO_LARGE", "message": "Excel file is too large"})
     upload_dir = settings.storage_dir / "uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
     file_hash = hashlib.sha256(data).hexdigest()
     safe_name = _safe_filename(file.filename)
-    target = upload_dir / f"{file_hash}-{safe_name}"
-    target.write_bytes(data)
+    # Parse from a short-lived file first.  A preview, rejected replacement,
+    # or invalid workbook must not create a referenced-looking artifact.
+    temp_path: Path | None = None
+    temp_handle, temp_name = tempfile.mkstemp(prefix=".report-preview-", suffix=".xlsx", dir=upload_dir)
     try:
-        parsed = parse_team_report(target, team=team, month=month, year=year)
+        temp_path = Path(temp_name)
+        with open(temp_handle, "wb", closefd=True) as handle:
+            handle.write(data)
+    except OSError as exc:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail={"error_code": "FILE_STAGE_FAILED", "message": "Không thể tiếp nhận file báo cáo"}) from exc
+    source_team = team or identify_team(safe_name)
+    source_month = month or identify_month(safe_name)
+    source_year = year or identify_year(safe_name)
+    try:
+        parsed = parse_team_report(temp_path, team=source_team, month=source_month, year=source_year)
     except Exception as exc:
-        target.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail={"error_code": "TEMPLATE_MISMATCH", "message": str(exc)}) from exc
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
 
     existing = current_report_for(db, parsed.get("team"), parsed.get("report_month"), parsed.get("report_year"))
-    if existing is not None and not confirm_replace:
+    identity = {
+        "file_hash": file_hash,
+        "team": parsed.get("team"),
+        "month": parsed.get("report_month"),
+        "year": parsed.get("report_year"),
+        "existing_report_id": existing.id if existing else None,
+        "existing_revision": existing.revision if existing else 0,
+    }
+    expected_preview_token = hashlib.sha256(
+        json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    if mode == "preview":
+        action = "insert"
+        if existing is not None:
+            action = "skip" if existing.file_hash == file_hash else "replace"
+        return {
+            "mode": "preview",
+            "action": action,
+            "source_file_hash": file_hash,
+            "preview_token": expected_preview_token,
+            "team": parsed.get("team"),
+            "month": parsed.get("report_month"),
+            "year": parsed.get("report_year"),
+            "existing_report": model_to_dict(existing) if existing else None,
+            "warnings": parsed.get("warnings", []),
+        }
+    if mode == "insert-missing" and existing is not None:
         raise HTTPException(
             status_code=409,
             detail={
                 "error_code": "DUPLICATE_FILE",
+                "message": "Đã có báo cáo cho đội/kỳ này; dữ liệu hiện tại được giữ nguyên.",
+                "action": "skipped",
+                "source_file_hash": file_hash,
                 "existing_report_id": existing.id,
-                "team": existing.team,
-                "month": existing.report_month,
-                "year": existing.report_year,
             },
         )
+    if mode in {"insert-missing", "replace"} and parsed.get("team") and parsed.get("report_month") and parsed.get("report_year"):
+        assert_period_mutable(
+            db,
+            parsed["team"],
+            int(parsed["report_month"]),
+            int(parsed["report_year"]),
+        )
+    if mode == "replace":
+        if not confirm_replace:
+            raise HTTPException(status_code=409, detail={"error_code": "REPLACE_CONFIRMATION_REQUIRED", "message": "Cần xác nhận thay thế báo cáo sau khi xem preview."})
+        if not preview_token or preview_token != expected_preview_token:
+            raise HTTPException(status_code=409, detail={"error_code": "STALE_IMPORT_PREVIEW", "message": "Preview file đã cũ hoặc không khớp nguồn hiện tại; hãy preview lại."})
+        if existing is not None and expected_revision is None:
+            raise HTTPException(status_code=428, detail={"error_code": "CLIENT_UPDATE_REQUIRED", "message": "Thay thế báo cáo yêu cầu client mới có expected_revision."})
+        if existing is not None and existing.revision != expected_revision:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error_code": "VERSION_CONFLICT",
+                    "message": "Báo cáo đã thay đổi; hãy preview lại trước khi thay thế.",
+                    "current_revision": existing.revision,
+                },
+            )
+        if not (replace_reason or "").strip():
+            raise HTTPException(status_code=422, detail={"error_code": "REPLACEMENT_REASON_REQUIRED", "message": "Cần ghi lý do thay thế báo cáo."})
     version = 1
     replaced_report_id = None
     if existing is not None:
@@ -255,6 +378,8 @@ def upload_report(
         version = existing.version + 1
         replaced_report_id = existing.id
 
+    target = upload_dir / f"{make_id('report-file')}-{safe_name}"
+    target.write_bytes(data)
     report = TeamReportModel(
         id=make_id("report"),
         file_name=safe_name,
@@ -276,6 +401,7 @@ def upload_report(
         source_type="excel_upload",
         report_status="submitted",
         submitted_at=datetime.now(timezone.utc),
+        revision=(existing.revision + 1) if existing is not None else 1,
     )
     db.add(report)
     db.flush()
@@ -303,11 +429,16 @@ def upload_report(
                 "admin_action": "PENDING",
             },
         )
-    audit(db, principal["user_id"], "TeamReport", report.id, "upload", {"file_name": safe_name, "version": version})
-    db.commit()
+    audit(db, principal["user_id"], "TeamReport", report.id, "upload", {"file_name": safe_name, "version": version, "mode": mode, "reason": replace_reason})
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        target.unlink(missing_ok=True)
+        raise
     cache_delete_prefix("okr:dashboard")
     db.refresh(report)
-    return model_to_dict(report)
+    return public_report_dict(report)
 
 
 @router.get("/reports")
@@ -317,7 +448,7 @@ def list_reports(_: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER
         .where(TeamReportModel.report_status.in_(["submitted", "locked"]))
         .order_by(TeamReportModel.uploaded_at.desc())
     ).scalars().all()
-    return [model_to_dict(report) for report in reports]
+    return [public_report_dict(report) for report in reports]
 
 
 @router.get("/reports/template")
@@ -338,7 +469,7 @@ def preview_report(report_id: str, _: dict = Depends(require_role(Role.ADMIN, Ro
         raise HTTPException(status_code=404, detail="Report not found")
     if report.report_status not in {"submitted", "locked"}:
         raise HTTPException(status_code=403, detail="Draft reports are only visible in the team input workspace")
-    return model_to_dict(report)
+    return public_report_dict(report)
 
 
 @router.get("/warnings")
@@ -394,7 +525,7 @@ def _dashboard_payload(month: int, year: int, principal: dict, db: Session) -> d
     if cached is not None:
         return cached
     reports = [
-        model_to_dict(report)
+        public_report_dict(report)
         for report in db.execute(
             select(TeamReportModel).where(
                 TeamReportModel.is_current_version.is_(True),
@@ -405,7 +536,7 @@ def _dashboard_payload(month: int, year: int, principal: dict, db: Session) -> d
         ).scalars()
     ]
     history_reports = [
-        model_to_dict(report)
+        public_report_dict(report)
         for report in db.execute(
             select(TeamReportModel).where(
                 TeamReportModel.is_current_version.is_(True),
@@ -417,7 +548,7 @@ def _dashboard_payload(month: int, year: int, principal: dict, db: Session) -> d
         ).scalars()
     ]
     matrix_history_reports = [
-        model_to_dict(report)
+        public_report_dict(report)
         for report in db.execute(
             select(TeamReportModel).where(
                 TeamReportModel.is_current_version.is_(True),
@@ -525,17 +656,35 @@ def dashboard(
 
 
 @router.post("/dashboard/export")
-def export_dashboard(_: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER)), db: Session = Depends(get_db)):
-    reports = _current_reports(db)
-    period = _infer_period_from_reports(reports)
-    fi_counts = count_for_okr(db, *period) if period else None
-    path = export_dashboard_workbook(reports, fi_counts_by_team=fi_counts)
-    return FileResponse(path, filename=Path(path).name)
+def export_dashboard(
+    month: int = Query(..., ge=1, le=12),
+    year: int = Query(..., ge=2020, le=2100),
+    _: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER)),
+    db: Session = Depends(get_db),
+):
+    # The period is part of the contract.  This prevents a stale or unrelated
+    # current report from silently becoming the export source.
+    reports = _current_reports(db, month=month, year=year)
+    fi_counts = count_for_okr(db, month, year)
+    export_id = make_id("okr-export")
+    path = settings.storage_dir / "exports" / f"okr-dashboard-{year}-{month:02d}-{export_id}.xlsx"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        path = export_dashboard_workbook(reports, output_path=path, fi_counts_by_team=fi_counts)
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+    return FileResponse(
+        path,
+        filename=f"okr-dashboard-T{month}-{year}.xlsx",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 @router.post("/historical-snapshots/import")
 def import_snapshot(
     file: UploadFile = File(...),
+    mode: Literal["preview", "insert-missing"] = Query(default="preview"),
     principal: dict = Depends(require_role(Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
@@ -546,7 +695,7 @@ def import_snapshot(
         "application/octet-stream",
     }:
         raise HTTPException(status_code=400, detail={"error_code": "INVALID_CONTENT_TYPE", "message": "Only Excel workbook uploads are supported"})
-    data = file.file.read()
+    data = file.file.read(settings.max_excel_upload_mb * 1024 * 1024 + 1)
     if len(data) > settings.max_excel_upload_mb * 1024 * 1024:
         raise HTTPException(status_code=400, detail={"error_code": "FILE_TOO_LARGE", "message": "Excel file is too large"})
     try:
@@ -555,12 +704,18 @@ def import_snapshot(
             data,
             source_file_name=_safe_filename(file.filename),
             imported_by=principal["user_id"],
+            mode=mode,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail={"error_code": "INVALID_WORKBOOK", "message": str(exc)}) from exc
-    audit(db, principal["user_id"], "HistoricalSnapshot", result["source_file_hash"], "import", result)
-    db.commit()
-    cache_delete_prefix("okr:dashboard")
+    if mode == "preview":
+        db.rollback()
+        result["mode"] = "preview"
+    else:
+        audit(db, principal["user_id"], "HistoricalSnapshot", result["source_file_hash"], "import", result)
+        db.commit()
+        cache_delete_prefix("okr:dashboard")
+        result["mode"] = "insert-missing"
     return result
 
 

@@ -4,8 +4,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import admin, auth, et, fi, llm, notifications, okr, web_input
+from app.api.routes import admin, auth, et, feedback, fi, llm, notifications, okr, web_input
 from app.core.config import settings
+from app.core.login_limiter import login_limiter
 from app.db.session import create_session
 from app.services.bootstrap import create_schema, seed_baseline
 
@@ -35,10 +36,11 @@ def create_app() -> FastAPI:
     app.include_router(fi.router, prefix=settings.api_prefix)
     app.include_router(notifications.router, prefix=settings.api_prefix)
     app.include_router(llm.router, prefix=settings.api_prefix)
+    app.include_router(feedback.router, prefix=settings.api_prefix)
 
     @app.get("/health")
     def health():
-        return {"status": "ok", "app": settings.app_name}
+        return {"status": "ok", "app": settings.app_name, "rate_limiter": login_limiter.health()}
 
     return app
 

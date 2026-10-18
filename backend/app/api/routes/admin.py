@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.concurrency import require_expected_revision, require_fi_preview_binding
 from app.core.security import Role, hash_password, require_role
 from app.db.session import get_db
 from app.models.domain import (
@@ -24,12 +25,88 @@ from app.schemas.common import (
     UserCreate,
     UserRoleUpdate,
 )
+from app.schemas.web_input import LockRequest
 from app.services.cache import cache_delete_prefix, cache_get, cache_set
+from app.services.okr.web_input import (
+    lock_report,
+    monthly_fi_admin_overview,
+    preview_fi_allocation,
+    unlock_report,
+)
 from app.services.repositories import audit, make_id, model_to_dict
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 DEFAULT_RESET_PASSWORD = "PVCFC@123"
+
+
+@router.get("/khmt-fi")
+def khmt_fi_overview(
+    month: int,
+    year: int,
+    principal: dict = Depends(require_role(Role.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    return monthly_fi_admin_overview(db, month, year, principal)
+
+
+@router.get("/khmt-fi/{team}/{month}/{year}/preview")
+def khmt_fi_preview(
+    team: str,
+    month: int,
+    year: int,
+    assessment: str | None = None,
+    principal: dict = Depends(require_role(Role.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    return preview_fi_allocation(db, team, month, year, principal, assessment_override=assessment)
+
+
+@router.post("/khmt-fi/{team}/{month}/{year}/finalize")
+def khmt_fi_finalize(
+    team: str,
+    month: int,
+    year: int,
+    payload: LockRequest,
+    principal: dict = Depends(require_role(Role.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    require_expected_revision(payload.expected_revision, "KHMT finalize")
+    require_fi_preview_binding(
+        payload.expected_fi_team_revision,
+        payload.expected_plan_hash,
+        "KHMT finalize",
+    )
+    report = lock_report(
+        db,
+        team,
+        month,
+        year,
+        payload.reason,
+        principal,
+        assessment_override=payload.assessment,
+        expected_revision=payload.expected_revision,
+        expected_fi_team_revision=payload.expected_fi_team_revision,
+        expected_plan_hash=payload.expected_plan_hash,
+    )
+    return {
+        "report": model_to_dict(report),
+        "overview": monthly_fi_admin_overview(db, month, year, principal),
+    }
+
+
+@router.post("/khmt-fi/{team}/{month}/{year}/unlock")
+def khmt_fi_unlock(
+    team: str,
+    month: int,
+    year: int,
+    payload: LockRequest,
+    principal: dict = Depends(require_role(Role.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    require_expected_revision(payload.expected_revision, "KHMT unlock")
+    report = unlock_report(db, team, month, year, payload.reason, principal, payload.expected_revision)
+    return {"report": model_to_dict(report), "overview": monthly_fi_admin_overview(db, month, year, principal)}
 
 
 def _validate_password_policy(password: str) -> None:
@@ -123,13 +200,14 @@ def reset_user_password(
     ``must_change_password`` để buộc user đặt mật khẩu mới ở lần đăng nhập kế.
     Trả về mật khẩu tạm (plaintext) để admin chuyển cho user qua kênh an toàn.
     """
-    user = db.get(User, user_id)
+    user = db.scalar(select(User).where(User.id == user_id).with_for_update().execution_options(populate_existing=True))
     if user is None:
         raise HTTPException(status_code=404, detail="Không tìm thấy tài khoản")
     temp_password = (payload.new_password or "").strip() or DEFAULT_RESET_PASSWORD
     _validate_password_policy(temp_password)
     user.password_hash = hash_password(temp_password)
     user.must_change_password = True
+    user.session_version = int(getattr(user, "session_version", 1)) + 1
     audit(
         db,
         principal["user_id"],

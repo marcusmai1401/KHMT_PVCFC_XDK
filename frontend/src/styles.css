@@ -3367,8 +3367,142 @@ tr:hover td {
   border-radius: 8px;
   display: grid;
   gap: 6px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   padding: 6px;
+}
+
+.admin-khmt-toolbar {
+  align-items: end;
+  background: #f8fbff;
+  border: 1px solid #d7e4f4;
+  border-radius: 10px;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+
+.admin-khmt-toolbar h3,
+.admin-khmt-toolbar p {
+  margin: 0;
+}
+
+.admin-khmt-toolbar h3 {
+  color: #0f172a;
+  font-size: 17px;
+}
+
+.admin-khmt-toolbar p {
+  color: #607087;
+  font-size: 12px;
+  line-height: 1.45;
+  margin-top: 4px;
+  max-width: 700px;
+}
+
+.admin-khmt-period {
+  align-items: end;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.admin-khmt-period .admin-filter-field select {
+  min-width: 82px;
+}
+
+.admin-khmt-notice {
+  align-items: flex-start;
+  background: #ecfdf3;
+  border: 1px solid #b9e6cb;
+  border-left: 4px solid #169045;
+  border-radius: 9px;
+  color: #14532d;
+  display: flex;
+  gap: 10px;
+  line-height: 1.4;
+  padding: 11px 13px;
+}
+
+.admin-khmt-notice svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.admin-khmt-notice strong,
+.admin-khmt-notice span {
+  display: block;
+}
+
+.admin-khmt-notice span {
+  color: #276749;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.admin-khmt-table-wrap {
+  border: 1px solid #dbe4ee;
+  border-radius: 9px;
+  overflow: auto;
+}
+
+.admin-khmt-table {
+  border: 0;
+  min-width: 1240px;
+}
+
+.admin-khmt-table th {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.admin-khmt-table th,
+.admin-khmt-table td {
+  vertical-align: middle;
+}
+
+.admin-khmt-table td:first-child {
+  min-width: 130px;
+}
+
+.admin-khmt-assessment-select {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  color: #0f172a;
+  min-width: 225px;
+  padding: 7px 9px;
+}
+
+.admin-khmt-assessment-select:disabled {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.admin-khmt-quota {
+  color: #2c398e;
+  white-space: nowrap;
+}
+
+.admin-khmt-cell-note,
+.admin-khmt-muted-action {
+  color: #64748b;
+  display: block;
+  font-size: 11px;
+  line-height: 1.35;
+  margin-top: 4px;
+}
+
+.admin-khmt-preview-button {
+  white-space: nowrap;
+}
+
+.admin-khmt-preview-modal {
+  max-width: 860px;
 }
 
 .admin-tabs button {
@@ -4935,6 +5069,20 @@ th {
   margin-left: auto;
 }
 
+.fi-history-page-size {
+  align-items: center;
+  color: #607087;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.fi-history-page-size select {
+  min-height: 34px;
+  width: 68px;
+}
+
 .fi-history-toolbar-count {
   color: #607087;
   font-size: 12.5px;
@@ -6385,6 +6533,17 @@ th {
 @media (max-width: 900px) {
   .admin-tabs {
     grid-template-columns: 1fr;
+  }
+
+  .admin-khmt-toolbar,
+  .admin-khmt-period {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-khmt-period .admin-filter-field,
+  .admin-khmt-period button {
+    width: 100%;
   }
 
   .admin-fi-kpis {
@@ -16754,4 +16913,144 @@ nav button.active {
   border-color: #c7cfdf;
   color: #667085;
   box-shadow: none;
+}
+
+/* Shared editing feedback. Kept compact so every module can reuse one visual language. */
+.save-status {
+  align-items: center;
+  color: var(--muted, #667085);
+  display: inline-flex;
+  gap: 6px;
+  min-height: 24px;
+}
+.save-status-clean { color: #18794e; }
+.save-status-dirty, .save-status-conflict, .save-status-error { color: #a15c00; }
+.save-status-offline, .save-status-auth-required { color: #9b2c2c; }
+.save-status-locked { color: #5b6475; }
+.save-status-spin { animation: save-status-spin 0.9s linear infinite; }
+.save-status-recovery {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  padding: 2px 4px;
+  text-decoration: underline;
+}
+@keyframes save-status-spin { to { transform: rotate(360deg); } }
+.editing-dialog-backdrop {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.44);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 300;
+}
+.editing-dialog {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #d7dce5);
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.25);
+  max-width: 520px;
+  padding: 24px;
+  width: 100%;
+}
+.editing-dialog h2 { margin: 0 0 10px; }
+.editing-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+.module-loading {
+  align-items: center;
+  color: #607087;
+  display: flex;
+  justify-content: center;
+  min-height: 240px;
+  padding: 32px 16px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .save-status-spin { animation: none; }
+}
+/* Audit remediation: only the compact filter toolbar stays pinned. The KPI
+   summary remains in document flow so it cannot consume the viewport while
+   browsing long history lists. */
+.legacy-sticky-controls.fi-history-controls {
+  position: static;
+  top: auto;
+}
+
+.legacy-sticky-controls.fi-history-controls > .fi-history-toolbar {
+  position: sticky;
+  top: var(--app-topbar-h, 72px);
+  z-index: 31;
+}
+
+.legacy-sticky-controls.fi-history-controls > .fi-history-summary {
+  position: static;
+}
+
+.fi-history-pagination {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  padding: 10px 12px 0;
+}
+
+.fi-history-filter-panel > summary, .fi-history-summary-panel > summary {
+  cursor: pointer;
+  padding: 12px;
+  min-height: 44px;
+  font-weight: 700;
+  background: var(--surface, #fff);
+  border: 1px solid #dbe4ef;
+  border-radius: 10px;
+}
+.fi-history-filter-panel .fi-history-toolbar { position: static; }
+@media (max-width: 760px) {
+  .fi-history-panel .fi-history-table thead { position: static; }
+  .fi-history-filter-panel .fi-history-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    max-height: 60dvh;
+    overflow: auto;
+  }
+  .fi-history-filter-panel .fi-history-toolbar > label {
+    min-width: 0;
+    width: 100%;
+  }
+  .fi-history-filter-panel input { max-width: 100%; }
+}
+
+.fi-history-pagination > span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.et-population-explanation {
+  align-items: flex-start;
+  background: #f8fafc;
+  border: 1px solid #dbe4ef;
+  border-radius: 14px;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  margin: 12px 0 18px;
+  padding: 14px 16px;
+}
+.et-population-explanation p { margin: 5px 0; max-width: 760px; }
+.et-population-explanation small { color: #64748b; }
+.et-population-explanation ul { list-style: none; margin: 0; min-width: 230px; padding: 0; }
+.et-population-explanation li { display: flex; gap: 12px; justify-content: space-between; padding: 3px 0; }
+.et-population-explanation li strong { color: #0f766e; }
+.et-dashboard-empty { align-items: center; display: flex; flex-direction: column; gap: 10px; }
+.et-dashboard-empty small { color: #64748b; }
+@media (max-width: 720px) {
+  .et-population-explanation { flex-direction: column; gap: 10px; }
+  .et-population-explanation ul { min-width: 0; width: 100%; }
 }

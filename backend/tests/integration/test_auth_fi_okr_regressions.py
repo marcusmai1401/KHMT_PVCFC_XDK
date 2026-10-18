@@ -1,3 +1,12 @@
+from io import BytesIO as ImageBytesIO
+from PIL import Image
+
+
+def _test_image(format="PNG"):
+    buffer = ImageBytesIO()
+    Image.new("RGB", (2, 2), "blue").save(buffer, format=format)
+    return buffer.getvalue()
+
 from datetime import datetime, timezone
 from io import BytesIO
 import json
@@ -117,8 +126,9 @@ def test_user_cannot_submit_another_users_sk(client, admin_headers):
     )
     assert created.status_code == 200
     record_id = created.json()["id"]
-    assert client.post(f"/api/v1/fi/sk-ctkt/{record_id}/submit", headers=user_two, json={}).status_code == 403
-    assert client.post(f"/api/v1/fi/sk-ctkt/{record_id}/submit", headers=user_one, json={}).status_code == 200
+    revision = created.json()["revision"]
+    assert client.post(f"/api/v1/fi/sk-ctkt/{record_id}/submit", headers=user_two, json={"expected_revision": revision}).status_code == 403
+    assert client.post(f"/api/v1/fi/sk-ctkt/{record_id}/submit", headers=user_one, json={"expected_revision": revision}).status_code == 200
 
 
 def test_team_account_create_is_locked_to_own_team(client):
@@ -215,7 +225,10 @@ def test_team_account_can_register_on_behalf_of_other(client, admin_headers):
         {item["id"] for item in author_ownership.json()}
     )
 
-    assert client.delete(f"/api/v1/fi/sk-ctkt/{proxy.json()['id']}", headers=team_headers).status_code == 200
+    assert client.delete(
+        f"/api/v1/fi/sk-ctkt/{proxy.json()['id']}?expected_revision={proxy.json()['revision']}",
+        headers=team_headers,
+    ).status_code == 200
 
     proxy_for_author_delete = client.post(
         "/api/v1/fi/sk-ctkt",
@@ -228,7 +241,10 @@ def test_team_account_can_register_on_behalf_of_other(client, admin_headers):
         },
     )
     assert proxy_for_author_delete.status_code == 200, proxy_for_author_delete.text
-    assert client.delete(f"/api/v1/fi/sk-ctkt/{proxy_for_author_delete.json()['id']}", headers=minh_headers).status_code == 200
+    assert client.delete(
+        f"/api/v1/fi/sk-ctkt/{proxy_for_author_delete.json()['id']}?expected_revision={proxy_for_author_delete.json()['revision']}",
+        headers=minh_headers,
+    ).status_code == 200
 
     # Bỏ trống author_name -> tự lấy họ tên của tài khoản đăng nhập.
     fallback = client.post(
@@ -274,7 +290,10 @@ def test_admin_can_register_on_behalf_of_other(client, admin_headers):
     assert "-TBĐL-" in payload["sk_code"]
     assert payload["status_history"][0]["comments"]["submitted_by"] == "admin"
 
-    deleted = client.delete(f"/api/v1/fi/sk-ctkt/{payload['id']}", headers=admin_headers)
+    deleted = client.delete(
+        f"/api/v1/fi/sk-ctkt/{payload['id']}?expected_revision={payload['revision']}",
+        headers=admin_headers,
+    )
     assert deleted.status_code == 200, deleted.text
     assert deleted.json() == {"deleted": True}
 
@@ -311,7 +330,11 @@ def test_fi_team_create_is_submitted_immediately(client, admin_headers):
 
     team_list = client.get("/api/v1/fi/sk-ctkt", headers=team_headers)
     assert record_id in {item["id"] for item in team_list.json()}
-    submitted = client.post(f"/api/v1/fi/sk-ctkt/{record_id}/submit", headers=team_headers, json={})
+    submitted = client.post(
+        f"/api/v1/fi/sk-ctkt/{record_id}/submit",
+        headers=team_headers,
+        json={"expected_revision": created.json()["revision"]},
+    )
     assert submitted.status_code == 200, submitted.text
 
     admin_list_after_submit = client.get("/api/v1/fi/sk-ctkt", headers=admin_headers)
@@ -326,7 +349,11 @@ def test_fi_team_create_is_submitted_immediately(client, admin_headers):
     public_after_submit = client.get("/api/v1/fi/sk-ctkt/public", headers=team_headers)
     assert record_id in {item["id"] for item in public_after_submit.json()}
 
-    approved = client.post(f"/api/v1/fi/sk-ctkt/{record_id}/approve", headers=fi_headers, json={"note": "Đủ điều kiện"})
+    approved = client.post(
+        f"/api/v1/fi/sk-ctkt/{record_id}/approve",
+        headers=fi_headers,
+        json={"note": "Đủ điều kiện", "expected_revision": submitted.json()["revision"]},
+    )
     assert approved.status_code == 200, approved.text
     assert approved.json()["decision_note"] == "Đủ điều kiện"
     assert approved.json()["workshop_leader_conclusion"] is None
@@ -378,19 +405,32 @@ def test_fi_reject_requires_note_and_delete_is_admin_only(client, admin_headers)
     )
     assert created.status_code == 200, created.text
     record_id = created.json()["id"]
-    assert client.post(f"/api/v1/fi/sk-ctkt/{record_id}/submit", headers=team_headers, json={}).status_code == 200
+    assert client.post(
+        f"/api/v1/fi/sk-ctkt/{record_id}/submit",
+        headers=team_headers,
+        json={"expected_revision": created.json()["revision"]},
+    ).status_code == 200
 
-    missing_note = client.post(f"/api/v1/fi/sk-ctkt/{record_id}/reject", headers=fi_headers, json={})
+    missing_note = client.post(
+        f"/api/v1/fi/sk-ctkt/{record_id}/reject",
+        headers=fi_headers,
+        json={"expected_revision": created.json()["revision"]},
+    )
     assert missing_note.status_code == 400
-    rejected = client.post(f"/api/v1/fi/sk-ctkt/{record_id}/reject", headers=fi_headers, json={"note": "Trùng ý tưởng"})
+    rejected = client.post(
+        f"/api/v1/fi/sk-ctkt/{record_id}/reject",
+        headers=fi_headers,
+        json={"note": "Trùng ý tưởng", "expected_revision": created.json()["revision"]},
+    )
     assert rejected.status_code == 200, rejected.text
     assert rejected.json()["status"] == "Rejected"
     assert rejected.json()["decision_note"] == "Trùng ý tưởng"
     assert rejected.json()["workshop_leader_conclusion"] is None
 
-    assert client.delete(f"/api/v1/fi/sk-ctkt/{record_id}", headers=team_headers).status_code == 403
-    assert client.delete(f"/api/v1/fi/sk-ctkt/{record_id}", headers=fi_headers).status_code == 403
-    deleted = client.delete(f"/api/v1/fi/sk-ctkt/{record_id}", headers=admin_headers)
+    revision = rejected.json()["revision"]
+    assert client.delete(f"/api/v1/fi/sk-ctkt/{record_id}?expected_revision={revision}", headers=team_headers).status_code == 403
+    assert client.delete(f"/api/v1/fi/sk-ctkt/{record_id}?expected_revision={revision}", headers=fi_headers).status_code == 403
+    deleted = client.delete(f"/api/v1/fi/sk-ctkt/{record_id}?expected_revision={revision}", headers=admin_headers)
     assert deleted.status_code == 200
     assert deleted.json() == {"deleted": True}
 
@@ -412,10 +452,10 @@ def test_team_account_can_delete_own_newly_submitted_sk(client):
     assert created.status_code == 200, created.text
     record_id = created.json()["id"]
 
-    other_delete = client.delete(f"/api/v1/fi/sk-ctkt/{record_id}", headers=other_team_headers)
+    other_delete = client.delete(f"/api/v1/fi/sk-ctkt/{record_id}?expected_revision={created.json()['revision']}", headers=other_team_headers)
     assert other_delete.status_code == 403
 
-    own_delete = client.delete(f"/api/v1/fi/sk-ctkt/{record_id}", headers=team_headers)
+    own_delete = client.delete(f"/api/v1/fi/sk-ctkt/{record_id}?expected_revision={created.json()['revision']}", headers=team_headers)
     assert own_delete.status_code == 200
     assert own_delete.json() == {"deleted": True}
     assert client.get(f"/api/v1/fi/sk-ctkt/{record_id}", headers=team_headers).status_code == 404
@@ -432,8 +472,15 @@ def test_team_account_can_delete_own_newly_submitted_sk(client):
         },
     )
     submitted_id = submitted.json()["id"]
-    assert client.post(f"/api/v1/fi/sk-ctkt/{submitted_id}/submit", headers=team_headers, json={}).status_code == 200
-    assert client.delete(f"/api/v1/fi/sk-ctkt/{submitted_id}", headers=team_headers).status_code == 200
+    assert client.post(
+        f"/api/v1/fi/sk-ctkt/{submitted_id}/submit",
+        headers=team_headers,
+        json={"expected_revision": submitted.json()["revision"]},
+    ).status_code == 200
+    assert client.delete(
+        f"/api/v1/fi/sk-ctkt/{submitted_id}?expected_revision={submitted.json()['revision']}",
+        headers=team_headers,
+    ).status_code == 200
 
 
 def test_public_sk_is_internal_and_includes_submitted_records(client):
@@ -453,7 +500,11 @@ def test_public_sk_is_internal_and_includes_submitted_records(client):
     assert created.status_code == 200, created.text
     record_id = created.json()["id"]
     assert client.get("/api/v1/fi/sk-ctkt/public").status_code == 401
-    assert client.post(f"/api/v1/fi/sk-ctkt/{record_id}/submit", headers=team_headers, json={}).status_code == 200
+    assert client.post(
+        f"/api/v1/fi/sk-ctkt/{record_id}/submit",
+        headers=team_headers,
+        json={"expected_revision": created.json()["revision"]},
+    ).status_code == 200
     assert record_id in {item["id"] for item in client.get("/api/v1/fi/sk-ctkt/public", headers=team_headers).json()}
     cross_team_detail = client.get(f"/api/v1/fi/sk-ctkt/{record_id}", headers=other_team_headers)
     assert cross_team_detail.status_code == 200, cross_team_detail.text
@@ -505,18 +556,22 @@ def test_legacy_sk_is_history_and_can_be_reviewed_from_history(client, admin_hea
     content_update = client.put(
         "/api/v1/fi/sk-ctkt/sk-legacy",
         headers=team_headers,
-        json={"content_description": "Nội dung đã cập nhật", "completion_plan": "Dự kiến 07/2026"},
+        json={"content_description": "Nội dung đã cập nhật", "completion_plan": "Dự kiến 07/2026", "expected_revision": 1},
     )
     assert content_update.status_code == 403
 
     protected_update = client.put(
         "/api/v1/fi/sk-ctkt/sk-legacy",
         headers=team_headers,
-        json={"title": "Không được đổi tên"},
+        json={"title": "Không được đổi tên", "expected_revision": 1},
     )
     assert protected_update.status_code == 403
 
-    transition = client.post("/api/v1/fi/sk-ctkt/sk-legacy/approve", headers=fi_headers, json={})
+    transition = client.post(
+        "/api/v1/fi/sk-ctkt/sk-legacy/approve",
+        headers=fi_headers,
+        json={"expected_revision": 1},
+    )
     assert transition.status_code == 200
     assert transition.json()["status"] == "Approved"
     assert transition.json()["is_historical_import"] is True
@@ -524,13 +579,16 @@ def test_legacy_sk_is_history_and_can_be_reviewed_from_history(client, admin_hea
     admin_khmt = client.post(
         "/api/v1/fi/sk-ctkt/sk-legacy/assign-khmt",
         headers=admin_headers,
-        json={"month": 8, "year": 2026},
+        json={"month": 8, "year": 2026, "expected_revision": transition.json()["revision"]},
     )
     assert admin_khmt.status_code == 200, admin_khmt.text
     assert admin_khmt.json()["consider_for_khmt"] is True
     assert admin_khmt.json()["khmt_month"] == 8
 
-    admin_clear_khmt = client.delete("/api/v1/fi/sk-ctkt/sk-legacy/assign-khmt", headers=admin_headers)
+    admin_clear_khmt = client.delete(
+        f"/api/v1/fi/sk-ctkt/sk-legacy/assign-khmt?expected_revision={admin_khmt.json()['revision']}",
+        headers=admin_headers,
+    )
     assert admin_clear_khmt.status_code == 200, admin_clear_khmt.text
     assert admin_clear_khmt.json()["consider_for_khmt"] is False
     assert admin_clear_khmt.json()["khmt_month"] is None
@@ -538,20 +596,23 @@ def test_legacy_sk_is_history_and_can_be_reviewed_from_history(client, admin_hea
     foreign_khmt = client.post(
         "/api/v1/fi/sk-ctkt/sk-legacy/assign-khmt",
         headers=other_team_headers,
-        json={"month": 7, "year": 2026},
+        json={"month": 7, "year": 2026, "expected_revision": admin_clear_khmt.json()["revision"]},
     )
     assert foreign_khmt.status_code == 403
 
     khmt = client.post(
         "/api/v1/fi/sk-ctkt/sk-legacy/assign-khmt",
         headers=team_headers,
-        json={"month": 7, "year": 2026},
+        json={"month": 7, "year": 2026, "expected_revision": admin_clear_khmt.json()["revision"]},
     )
     assert khmt.status_code == 200, khmt.text
     assert khmt.json()["consider_for_khmt"] is True
     assert khmt.json()["khmt_month"] == 7
 
-    deleted = client.delete("/api/v1/fi/sk-ctkt/sk-legacy", headers=admin_headers)
+    deleted = client.delete(
+        f"/api/v1/fi/sk-ctkt/sk-legacy?expected_revision={khmt.json()['revision']}",
+        headers=admin_headers,
+    )
     assert deleted.status_code == 200, deleted.text
     assert deleted.json() == {"deleted": True}
     assert client.get("/api/v1/fi/sk-ctkt/sk-legacy", headers=admin_headers).status_code == 404
@@ -611,6 +672,7 @@ def test_legacy_import_is_owned_by_matching_author_account(client, admin_headers
             "title": "Legacy tác giả đã sửa",
             "content_description": "Nội dung đã cập nhật",
             "completion_plan": "Dự kiến hoàn thành 09/2026",
+            "expected_revision": 1,
         },
     )
     assert updated.status_code == 200, updated.text
@@ -786,14 +848,28 @@ def test_okr_duplicate_requires_confirmation_and_export_is_valid_xlsx(client, ad
         files={"file": ("Bao cao TBCH T4 2026.xlsx", data, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
     )
     assert duplicate.status_code == 409
+    preview = client.post(
+        "/api/v1/okr/reports/upload",
+        headers=admin_headers,
+        data={"mode": "preview"},
+        files={"file": ("Bao cao TBCH T4 2026.xlsx", data, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    assert preview.status_code == 200
+    preview_payload = preview.json()
     confirmed = client.post(
         "/api/v1/okr/reports/upload",
         headers=admin_headers,
-        data={"confirm_replace": "true"},
+        data={
+            "mode": "replace",
+            "confirm_replace": "true",
+            "expected_revision": str(preview_payload["existing_report"]["revision"]),
+            "preview_token": preview_payload["preview_token"],
+            "replace_reason": "Đồng bộ lại workbook đã được kiểm tra",
+        },
         files={"file": ("Bao cao TBCH T4 2026.xlsx", data, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
     )
     assert confirmed.status_code == 200
-    export = client.post("/api/v1/okr/dashboard/export", headers=admin_headers)
+    export = client.post("/api/v1/okr/dashboard/export?month=4&year=2026", headers=admin_headers)
     assert export.status_code == 200, export.text
     wb = load_workbook(BytesIO(export.content), read_only=True)
     assert {"data", "Dashboard"}.issubset(wb.sheetnames)
@@ -887,16 +963,16 @@ def test_sk_image_lifecycle_is_separate_from_create_schema(client, admin_headers
     assert "supporting_images" not in created.json()
 
     rejected_upload = client.post(
-        f"/api/v1/fi/sk-ctkt/{record_id}/images",
+        f"/api/v1/fi/sk-ctkt/{record_id}/images?expected_revision={created.json()['revision']}",
         headers=user_headers,
         files={"file": ("not-image.txt", b"not an image", "text/plain")},
     )
     assert rejected_upload.status_code == 400
 
     uploaded = client.post(
-        f"/api/v1/fi/sk-ctkt/{record_id}/images",
+        f"/api/v1/fi/sk-ctkt/{record_id}/images?expected_revision={created.json()['revision']}",
         headers=user_headers,
-        files={"file": ("evidence.JPG", b"fake-jpg", "application/octet-stream")},
+        files={"file": ("evidence.JPG", _test_image("JPEG"), "application/octet-stream")},
     )
     assert uploaded.status_code == 200, uploaded.text
     image_id = uploaded.json()["id"]
@@ -911,15 +987,24 @@ def test_sk_image_lifecycle_is_separate_from_create_schema(client, admin_headers
     assert detail.json()["supporting_images"][0]["id"] == image_id
     json.dumps(detail.json(), ensure_ascii=False)
 
-    deleted = client.delete(f"/api/v1/fi/sk-ctkt/{record_id}/images/{image_id}", headers=user_headers)
+    deleted = client.delete(
+        f"/api/v1/fi/sk-ctkt/{record_id}/images/{image_id}?expected_revision={uploaded.json()['server_revision']}",
+        headers=user_headers,
+    )
     assert deleted.status_code == 200
     assert deleted.json() == {"deleted": True}
     assert client.get(f"/api/v1/fi/sk-ctkt/{record_id}/images", headers=user_headers).json() == []
 
-    approved = client.post(f"/api/v1/fi/sk-ctkt/{record_id}/approve", headers=admin_headers, json={})
+    after_delete = client.get(f"/api/v1/fi/sk-ctkt/{record_id}", headers=user_headers)
+    assert after_delete.status_code == 200
+    approved = client.post(
+        f"/api/v1/fi/sk-ctkt/{record_id}/approve",
+        headers=admin_headers,
+        json={"expected_revision": after_delete.json()["revision"]},
+    )
     assert approved.status_code == 200, approved.text
     locked_upload = client.post(
-        f"/api/v1/fi/sk-ctkt/{record_id}/images",
+        f"/api/v1/fi/sk-ctkt/{record_id}/images?expected_revision={approved.json()['revision']}",
         headers=user_headers,
         files={"file": ("after-approval.png", b"locked", "image/png")},
     )
@@ -942,16 +1027,20 @@ def test_team_uploaded_sk_image_is_visible_to_fi_after_submit(client):
     )
     assert created.status_code == 200, created.text
     record_id = created.json()["id"]
-    image_bytes = b"image-bytes"
+    image_bytes = _test_image()
 
     uploaded = client.post(
-        f"/api/v1/fi/sk-ctkt/{record_id}/images",
+        f"/api/v1/fi/sk-ctkt/{record_id}/images?expected_revision={created.json()['revision']}",
         headers=team_headers,
         files={"file": ("evidence.png", image_bytes, "image/png")},
     )
     assert uploaded.status_code == 200, uploaded.text
     image_id = uploaded.json()["id"]
-    assert client.post(f"/api/v1/fi/sk-ctkt/{record_id}/submit", headers=team_headers, json={}).status_code == 200
+    assert client.post(
+        f"/api/v1/fi/sk-ctkt/{record_id}/submit",
+        headers=team_headers,
+        json={"expected_revision": uploaded.json()["server_revision"]},
+    ).status_code == 200
 
     detail = client.get(f"/api/v1/fi/sk-ctkt/{record_id}", headers=fi_headers)
     assert detail.status_code == 200, detail.text
@@ -962,9 +1051,12 @@ def test_team_uploaded_sk_image_is_visible_to_fi_after_submit(client):
     assert raw.content == image_bytes
 
     fi_upload = client.post(
-        f"/api/v1/fi/sk-ctkt/{record_id}/images",
+        f"/api/v1/fi/sk-ctkt/{record_id}/images?expected_revision={uploaded.json()['server_revision']}",
         headers=fi_headers,
         files={"file": ("fi-evidence.png", b"fi-image", "image/png")},
     )
     assert fi_upload.status_code == 403
-    assert client.delete(f"/api/v1/fi/sk-ctkt/{record_id}/images/{image_id}", headers=fi_headers).status_code == 403
+    assert client.delete(
+        f"/api/v1/fi/sk-ctkt/{record_id}/images/{image_id}?expected_revision={uploaded.json()['server_revision']}",
+        headers=fi_headers,
+    ).status_code == 403

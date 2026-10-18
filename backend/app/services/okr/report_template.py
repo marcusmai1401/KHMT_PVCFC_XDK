@@ -1,3 +1,4 @@
+from uuid import uuid4
 from copy import copy
 import hashlib
 from pathlib import Path
@@ -332,7 +333,7 @@ def web_input_excel_path(report: TeamReportModel) -> Path:
     return (
         settings.storage_dir
         / "exports"
-        / f"bao-cao-okr-{report.team}-T{report.report_month}-{report.report_year}{suffix}.xlsx"
+        / f"bao-cao-okr-{report.team}-T{report.report_month}-{report.report_year}{suffix}-r{report.revision}-{report.id}-{uuid4().hex}.xlsx"
     )
 
 
@@ -395,6 +396,9 @@ def generate_excel_from_web_input(report: TeamReportModel, output_path: Path | N
 
     target = output_path or web_input_excel_path(report)
     target.parent.mkdir(parents=True, exist_ok=True)
+    if output_path is None:
+        from app.services.artifacts import register_artifact
+        register_artifact(target, "okr-web-input-excel")
     workbook.properties.creator = "OKR Automation System"
     workbook.properties.lastModifiedBy = "OKR Automation System"
     strip_workbook_external_state(workbook)

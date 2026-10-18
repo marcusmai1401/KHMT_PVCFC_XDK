@@ -150,6 +150,7 @@ class AssessmentUpdate(BaseModel):
     notes: str | None = None
     training_content: str | None = None
     items: list[AssessmentItemUpdate] = Field(default_factory=list)
+    expected_revision: int | None = Field(default=None, ge=0)
 
 
 class AssessmentSubmitResponse(BaseModel):

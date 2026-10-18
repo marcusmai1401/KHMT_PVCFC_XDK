@@ -102,10 +102,20 @@ class WebInputPayload(BaseModel):
 class WebInputSaveRequest(BaseModel):
     data: WebInputPayload
     expected_version: int | None = None
+    expected_revision: int | None = Field(default=None, ge=0)
 
 
 class LockRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=2000)
+    assessment: Literal[
+        "Hoàn thành xuất sắc nhiệm vụ",
+        "Hoàn thành tốt nhiệm vụ",
+        "Hoàn thành nhiệm vụ",
+        "Không hoàn thành nhiệm vụ",
+    ] | None = None
+    expected_revision: int | None = Field(default=None, ge=0)
+    expected_fi_team_revision: int | None = Field(default=None, ge=0)
+    expected_plan_hash: str | None = Field(default=None, min_length=64, max_length=64)
 
 
 class WebInputStatus(BaseModel):

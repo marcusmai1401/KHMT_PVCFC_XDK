@@ -1,4 +1,3 @@
-import html2canvas from "html2canvas";
 import { api } from "../api/client";
 
 const EXPORT_BACKGROUND = "#f4f6f8";
@@ -11,9 +10,9 @@ const SNAPSHOT_FALLBACK_SELECTOR = "[data-snapshot-fallback='true']";
 function logDebug(step: string, payload?: Record<string, unknown>) {
   console.debug(EXPORT_DEBUG_PREFIX, step, payload ?? {});
   void api.clientDebugLog({
-    source: "png-snapshot",
-    event: step,
-    data: payload ?? {},
+    event_name: `png_snapshot.${step}`,
+    route_template: "/okr/dashboard/export/png",
+    module: "okr",
   }).catch(() => undefined);
 }
 
@@ -117,6 +116,7 @@ export async function captureElementAsPng(element: HTMLElement, filename: string
     }
     await waitForImages(element);
 
+    const { default: html2canvas } = await import("html2canvas");
     const canvas = await html2canvas(element, {
       allowTaint: false,
       backgroundColor: EXPORT_BACKGROUND,

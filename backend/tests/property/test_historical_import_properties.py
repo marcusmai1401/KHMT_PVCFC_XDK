@@ -218,6 +218,8 @@ def test_numeric_precision_preservation_property(tmp_path, value):
     suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
 def test_storage_round_trip_for_team_reports_property(db_session, tmp_path, month, implementation):
+    # Each Hypothesis example gets a fresh transaction; fixture scope spans examples.
+    db_session.rollback()
     # Feature: historical-data-import, Property 5: Storage Round-Trip for Team Reports
     source = tmp_path / f"source-{month}.xlsx"
     source.write_bytes(b"source")
@@ -258,7 +260,8 @@ def test_storage_round_trip_for_team_reports_property(db_session, tmp_path, mont
     suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
 def test_import_idempotence_property(db_session, tmp_path, month, first, second):
-    # Feature: historical-data-import, Property 6: Import Idempotence
+    db_session.rollback()
+    # Feature: historical-data-import, Property 6: Insert-missing preserves managed data
     source = tmp_path / f"idempotent-{month}.xlsx"
     source.write_bytes(b"source")
 
@@ -318,8 +321,8 @@ def test_import_idempotence_property(db_session, tmp_path, month, first, second)
     ).scalar_one()
 
     assert len(current) == 1
-    assert current[0].assessments[0]["implementation_report"] == second
-    assert summary.stats["source_file_hash"] == f"hash-second-{month}"
+    assert current[0].assessments[0]["implementation_report"] == first
+    assert summary.stats["source_file_hash"] == f"hash-first-{month}"
 
 
 @given(counts=st.lists(st.integers(min_value=0, max_value=37), min_size=1, max_size=4))

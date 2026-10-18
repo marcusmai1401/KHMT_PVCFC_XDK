@@ -96,6 +96,7 @@ def serialize_assessment_item(item: AssessmentItem) -> dict[str, Any]:
 
 def serialize_assessment(assessment: CompetencyAssessment, include_items: bool = True) -> dict[str, Any]:
     data = model_to_dict(assessment)
+    data["server_revision"] = assessment.revision
     data["personnel"] = serialize_personnel(assessment.personnel)
     data["framework"] = serialize_framework(assessment.framework)
     if include_items:
@@ -533,23 +534,116 @@ def bulk_update_personnel_level(db: Session, personnel_ids: list[str], current_l
 
 
 def personnel_summary(db: Session) -> dict[str, Any]:
-    rows = list_personnel(db)
-    return {
-        "total": len(rows),
-        "by_position": dict(Counter(row.position_code or "N/A" for row in rows)),
-        "by_team": dict(Counter(row.team or "N/A" for row in rows)),
-        "by_level": {str(key): value for key, value in Counter(row.current_level if row.current_level is not None else "N/A" for row in rows).items()},
-    }
+    return personnel_population_summary(db, include_users=False)
 
 
 def personnel_summary_with_users(db: Session) -> dict[str, Any]:
-    personnel_rows = [serialize_personnel(row) for row in list_personnel(db)]
-    rows = personnel_rows + list_user_personnel_rows(db)
+    return personnel_population_summary(db, include_users=True)
+
+
+def personnel_population_summary(
+    db: Session,
+    filters: dict[str, Any] | None = None,
+    *,
+    include_users: bool = True,
+) -> dict[str, Any]:
+    """Return the explicit populations used by the ET dashboard.
+
+    The dashboard intentionally counts Personnel and accounts separately.  A
+    user row is never silently promoted to a Personnel row and a missing
+    position/level/framework is reported instead of being filled with a
+    default.  Hidden rows are omitted from every public count in this scope.
+    """
+    filters = filters or {}
+    personnel_rows = list_personnel(db, filters)
+    active_framework_codes = set(
+        db.execute(select(CompetencyFramework.code).where(CompetencyFramework.is_active.is_(True))).scalars()
+    )
+    dashboard_eligible = [
+        row
+        for row in personnel_rows
+        if row.status == "active" and row.position_code and row.current_level is not None
+    ]
+    assessment_ready = [
+        row for row in dashboard_eligible if row.position_code in active_framework_codes
+    ]
+
+    reason_counts = {
+        "inactive": 0,
+        "missing_position": 0,
+        "missing_level": 0,
+        "missing_applicable_framework": 0,
+        "missing_account_link": 0,
+    }
+    for row in personnel_rows:
+        if row.status != "active":
+            reason_counts["inactive"] += 1
+        elif not row.position_code:
+            reason_counts["missing_position"] += 1
+        elif row.current_level is None:
+            reason_counts["missing_level"] += 1
+        elif row.position_code not in active_framework_codes:
+            reason_counts["missing_applicable_framework"] += 1
+        elif not row.user_id:
+            # This is deliberately last: the profile is still assessment-ready
+            # but the account-link quality issue should remain visible.
+            reason_counts["missing_account_link"] += 1
+
+    linked_account_ids = {row.user_id for row in personnel_rows if row.user_id}
+    accounts_in_scope = []
+    if include_users:
+        hidden_user_ids = _hidden_source_ids(db, "user")
+        users = db.execute(select(User).order_by(User.team, User.display_name, User.id)).scalars().all()
+        for user in users:
+            if user.id in hidden_user_ids:
+                continue
+            if filters.get("team") and user.team != filters["team"]:
+                continue
+            if filters.get("position") and user.id not in linked_account_ids:
+                continue
+            if filters.get("status"):
+                expected_active = filters["status"] == "active"
+                if bool(user.is_active) != expected_active:
+                    continue
+            accounts_in_scope.append(user)
+    accounts_in_scope_ids = {user.id for user in accounts_in_scope} | linked_account_ids
+    incomplete_total = sum(reason_counts.values())
     return {
-        "total": len(rows),
-        "by_position": dict(Counter(row.get("role") or row.get("position_code") or "N/A" for row in rows)),
-        "by_team": dict(Counter(row.get("team") or "N/A" for row in rows)),
-        "by_level": {str(key): value for key, value in Counter(row.get("salary_grade") or "N/A" for row in rows).items()},
+        # Backward-compatible keys are retained for existing admin widgets.
+        "total": len(personnel_rows) + (len(accounts_in_scope_ids - linked_account_ids) if include_users else 0),
+        "by_position": dict(Counter(row.position_code or "N/A" for row in personnel_rows)),
+        "by_team": dict(Counter(row.team or "N/A" for row in personnel_rows)),
+        "by_level": {
+            str(key): value
+            for key, value in Counter(
+                row.current_level if row.current_level is not None else "N/A" for row in personnel_rows
+            ).items()
+        },
+        "population": {
+            "accounts_in_scope_count": len(accounts_in_scope_ids),
+            "linked_accounts_count": len(linked_account_ids),
+            "unlinked_accounts_count": max(len(accounts_in_scope_ids - linked_account_ids), 0),
+            "personnel_count": len(personnel_rows),
+            "dashboard_eligible_count": len(dashboard_eligible),
+            "assessment_ready_count": len(assessment_ready),
+            "incomplete_personnel_count": incomplete_total,
+            "incomplete_primary_reasons": [
+                {"key": key, "count": count}
+                for key, count in reason_counts.items()
+                if count
+            ],
+            "reason_counts_are_mutually_exclusive": True,
+            "hidden_rows_excluded": True,
+            "definition": (
+                "Dashboard eligible = Personnel active, visible, có position_code và current_level. "
+                "Assessment ready = dashboard eligible và có competency framework active áp dụng."
+            ),
+            "filter_scope": {
+                key: filters.get(key)
+                for key in ("team", "position", "level", "status", "search")
+                if filters.get(key) not in (None, "")
+            },
+        },
     }
 
 
@@ -618,7 +712,13 @@ def list_assessments(db: Session, filters: dict[str, Any] | None = None) -> list
     return db.execute(statement).scalars().all()
 
 
-def get_assessment(db: Session, assessment_id: str) -> CompetencyAssessment:
+def get_assessment(db: Session, assessment_id: str, *, lock: bool = False) -> CompetencyAssessment:
+    if lock:
+        # Lock the parent before loading children; every editor mutation shares
+        # this lock and refreshes any already-cached ORM state after waiting.
+        db.execute(select(CompetencyAssessment.id).where(
+            CompetencyAssessment.id == assessment_id
+        ).with_for_update()).scalar_one_or_none()
     assessment = db.execute(
         select(CompetencyAssessment)
         .options(
@@ -627,6 +727,7 @@ def get_assessment(db: Session, assessment_id: str) -> CompetencyAssessment:
             selectinload(CompetencyAssessment.items).selectinload(AssessmentItem.competency_item),
         )
         .where(CompetencyAssessment.id == assessment_id)
+        .execution_options(populate_existing=lock)
     ).scalar_one_or_none()
     if assessment is None:
         raise ETValidationError("Assessment not found", status_code=404)
@@ -634,9 +735,16 @@ def get_assessment(db: Session, assessment_id: str) -> CompetencyAssessment:
 
 
 def update_assessment(db: Session, assessment_id: str, data: Any, actor: str) -> CompetencyAssessment:
-    assessment = get_assessment(db, assessment_id)
+    assessment = get_assessment(db, assessment_id, lock=True)
     before = serialize_assessment(assessment)
     payload = _dump(data, exclude_unset=True)
+    expected_revision = payload.pop("expected_revision", None)
+    if expected_revision is not None and assessment.revision != expected_revision:
+        raise ETValidationError(
+            "Assessment đã được cập nhật ở nơi khác",
+            [{"field": "revision", "current_revision": assessment.revision}],
+            status_code=409,
+        )
     if "notes" in payload:
         assessment.notes = payload["notes"]
     if "training_content" in payload:
@@ -654,13 +762,25 @@ def update_assessment(db: Session, assessment_id: str, data: Any, actor: str) ->
         if "notes" in item_data:
             row.notes = item_data["notes"]
     assessment.overall_result = determine_overall_result(assessment.items)
+    assessment.revision += 1
     db.flush()
     audit(db, actor, "CompetencyAssessment", assessment.id, "update", {"before": before, "after": serialize_assessment(assessment)})
     return get_assessment(db, assessment.id)
 
 
-def refresh_required_scores(db: Session, assessment_id: str, actor: str) -> CompetencyAssessment:
-    assessment = get_assessment(db, assessment_id)
+def refresh_required_scores(
+    db: Session,
+    assessment_id: str,
+    actor: str,
+    expected_revision: int | None = None,
+) -> CompetencyAssessment:
+    assessment = get_assessment(db, assessment_id, lock=True)
+    if expected_revision is not None and assessment.revision != expected_revision:
+        raise ETValidationError(
+            "Assessment đã được cập nhật ở nơi khác",
+            [{"field": "revision", "current_revision": assessment.revision}],
+            status_code=409,
+        )
     if assessment.status != "draft":
         raise ETValidationError("Only draft assessments can refresh required scores", status_code=409)
     before = serialize_assessment(assessment)
@@ -687,13 +807,30 @@ def refresh_required_scores(db: Session, assessment_id: str, actor: str) -> Comp
             )
         )
     assessment.overall_result = determine_overall_result(assessment.items)
+    assessment.revision += 1
     audit(db, actor, "CompetencyAssessment", assessment.id, "refresh_required_scores", {"before": before})
     db.flush()
     return get_assessment(db, assessment.id)
 
 
-def submit_assessment(db: Session, assessment_id: str, actor: str) -> CompetencyAssessment:
-    assessment = get_assessment(db, assessment_id)
+def submit_assessment(
+    db: Session,
+    assessment_id: str,
+    actor: str,
+    expected_revision: int | None = None,
+) -> CompetencyAssessment:
+    # Serialize submissions for the same person before locking assessments.
+    # Two different draft IDs must not both become the latest assessment.
+    personnel_id = db.scalar(select(CompetencyAssessment.personnel_id).where(CompetencyAssessment.id == assessment_id))
+    if personnel_id:
+        db.execute(select(Personnel.id).where(Personnel.id == personnel_id).with_for_update()).scalar_one()
+    assessment = get_assessment(db, assessment_id, lock=True)
+    if expected_revision is not None and assessment.revision != expected_revision:
+        raise ETValidationError(
+            "Assessment đã được cập nhật ở nơi khác",
+            [{"field": "revision", "current_revision": assessment.revision}],
+            status_code=409,
+        )
     assessment.overall_result = determine_overall_result(assessment.items)
     if assessment.overall_result is None:
         raise ETValidationError("Assessment is not complete", status_code=409)
@@ -710,6 +847,7 @@ def submit_assessment(db: Session, assessment_id: str, actor: str) -> Competency
     assessment.status = "submitted"
     assessment.is_latest = True
     assessment.assessed_at = now_utc()
+    assessment.revision += 1
     audit(db, actor, "CompetencyAssessment", assessment.id, "submit", {"overall_result": assessment.overall_result})
     db.flush()
     return get_assessment(db, assessment.id)
@@ -885,6 +1023,7 @@ def mark_plan_item_complete(db: Session, plan_id: str, item_id: str, actual_leve
 
 
 def get_dashboard_summary(db: Session, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+    filters = filters or {}
     personnel_rows = _filtered_active_personnel(db, filters or {})
     personnel_ids = [person.id for person in personnel_rows]
     latest_by_personnel = _latest_submitted_assessments_by_personnel(db, personnel_ids)
@@ -932,6 +1071,7 @@ def get_dashboard_summary(db: Session, filters: dict[str, Any] | None = None) ->
     if filters and filters.get("result"):
         rows = [row for row in rows if row["overall_result"] == filters["result"]]
     top_personnel.sort(key=lambda row: (row["gap_count"], -row["total_gap"]), reverse=True)
+    population = personnel_population_summary(db, filters, include_users=True)["population"]
     return {
         "aggregate": {
             "total_active_personnel": total_active,
@@ -947,6 +1087,7 @@ def get_dashboard_summary(db: Session, filters: dict[str, Any] | None = None) ->
             for code, count in top_item_counter.most_common(5)
         ],
         "top_gap_personnel": top_personnel[:5],
+        "population": population,
     }
 
 

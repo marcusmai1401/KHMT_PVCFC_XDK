@@ -1,3 +1,4 @@
+import os
 from functools import cached_property
 from pathlib import Path
 
@@ -150,4 +151,4 @@ class Settings(BaseSettings):
         return float(self.llm_timeout_seconds)
 
 
-settings = Settings()
+settings = Settings(_env_file=None) if os.environ.get("OKR_TEST_MANIFEST") else Settings()

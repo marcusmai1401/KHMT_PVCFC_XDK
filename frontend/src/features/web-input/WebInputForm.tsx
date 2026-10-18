@@ -17,7 +17,11 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { api } from "../../api/client";
+import { ApiError, api } from "../../api/client";
+import { DraftRecoveryStore, downloadDraft, type DraftRecoveryRecord } from "../../shared/editing/DraftRecoveryStore";
+import { SaveStatus } from "../../shared/editing/SaveStatus";
+import { useDraftController } from "../../shared/editing/useDraftController";
+import { useNavigationGuard } from "../../shared/editing/NavigationGuardProvider";
 
 const TEAMS = ["TBHTĐK", "TBCH", "TBĐL", "TCĐK"];
 const KR_ASSESSMENTS = ["Hoàn thành xuất sắc", "Hoàn thành tốt", "Hoàn thành", "Không hoàn thành", "N/A"];
@@ -120,6 +124,9 @@ type FIAllocationPreview = {
   available_count: number;
   shortage_count: number;
   can_finalize: boolean;
+  report_revision: number;
+  fi_team_revision: number;
+  plan_hash: string;
   selected_records: FIAllocationCandidate[];
   to_assign_sk_ids: string[];
   to_release_sk_ids: string[];
@@ -298,12 +305,56 @@ export function WebInputForm({
   const [fiAllocationPreview, setFiAllocationPreview] = useState<FIAllocationPreview | null>(null);
   const [fiAllocationReason, setFiAllocationReason] = useState("");
   const [fiAllocationLoading, setFiAllocationLoading] = useState(false);
-  const autosaveTimer = useRef<number | null>(null);
+  const [recoveryDraft, setRecoveryDraft] = useState<DraftRecoveryRecord<WebInputData> | null>(null);
+  const [recoveryWarning, setRecoveryWarning] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const loadEpoch = useRef(0);
 
   const canWrite = role === "Admin" && editMode;
-  const readOnly = !canWrite || locked;
+  const readOnly = !canWrite || locked || submitting || fiAllocationLoading;
   const showAdminEditCommands = canWrite;
   const emailText = useMemo(() => buildEmailText(team, month, data), [team, month, data]);
+  const draftContextKey = `okr-web-input:${currentUserId}:${team}:${month}:${year}`;
+  const recoveryStore = useMemo(() => new DraftRecoveryStore<WebInputData>({
+    namespace: "okr",
+    userId: currentUserId,
+    module: "web-input",
+    resource: `${team}:${month}:${year}`,
+    schemaVersion: "1",
+  }), [currentUserId, team, month, year]);
+  const saveRevision = useCallback(async (snapshot: WebInputData, expectedRevision: number | null, signal: AbortSignal) => {
+    const epoch = loadEpoch.current;
+    setSaving(true);
+    try {
+      const response = await api.saveWebInputDraftRevision(team, month, year, snapshot, {
+        expectedRevision,
+        signal,
+      });
+      if (epoch !== loadEpoch.current || signal.aborted) return;
+      setStatus(response.status ?? "Đang nhập");
+      setVersion(response.version ?? response.revision ?? response.server_revision ?? null);
+      setSavedAt(response.last_saved_at ?? new Date().toISOString());
+      setWarnings(response.warnings ?? []);
+      return {
+        serverRevision: response.server_revision ?? response.revision ?? response.version ?? expectedRevision,
+        savedAt: response.last_saved_at ?? new Date().toISOString(),
+      };
+    } finally {
+      if (epoch === loadEpoch.current) setSaving(false);
+    }
+  }, [month, team, year]);
+  const draft = useDraftController<WebInputData>({
+    contextKey: draftContextKey,
+    initialValue: data,
+    serverRevision: version,
+    save: saveRevision,
+    debounceMs: 1000,
+  });
+  const { registerGuard, requestNavigation } = useNavigationGuard();
+  const [conflictServer, setConflictServer] = useState<any>(null);
+  const changeContext = async (action: () => void) => {
+    if (await requestNavigation("đổi đội hoặc kỳ OKR")) action();
+  };
 
   const mappingByCode = useMemo(() => new Map(mapping.map((item) => [item.workshop_kr_code, item])), [mapping]);
   const grouped = useMemo(() => {
@@ -338,22 +389,34 @@ export function WebInputForm({
 
   const load = useCallback(() => {
     if (!mapping.length) return;
+    const epoch = ++loadEpoch.current;
     setLoading(true);
     api.getWebInput(team, month, year)
       .then((response) => {
-        setData(mergeData(response.data, mapping));
+        if (epoch !== loadEpoch.current) return;
+        const loadedData = mergeData(response.data, mapping);
+        const serverRevision = response.server_revision ?? response.revision ?? response.version ?? null;
+        setData(loadedData);
+        draft.controller.hydrate(draftContextKey, loadedData, serverRevision);
         setStatus(response.status ?? "Chưa nhập");
         setLocked(Boolean(response.locked));
-        setVersion(response.version ?? null);
+        setVersion(serverRevision);
         setSavedAt(response.last_saved_at ?? response.submitted_at ?? null);
         setWarnings(response.warnings ?? []);
         setValidationErrors(response.validation_errors ?? []);
         setUnsaved(false);
+        const recovery = recoveryStore.read();
+        if (recovery) {
+          setRecoveryDraft(recovery);
+        } else {
+          recoveryStore.remove();
+          setRecoveryDraft(null);
+        }
         setError("");
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [mapping, team, month, year]);
+      .catch((err) => { if (epoch === loadEpoch.current) setError(err.message); })
+      .finally(() => { if (epoch === loadEpoch.current) setLoading(false); });
+  }, [draft.controller, draftContextKey, mapping, month, recoveryStore, team, year]);
 
   useEffect(() => {
     api.krMapping()
@@ -385,54 +448,42 @@ export function WebInputForm({
 
   useEffect(() => {
     load();
+    return () => { loadEpoch.current += 1; };
   }, [load]);
 
-  const saveDraft = useCallback((manual = false) => {
-    if (!canWrite || locked) return Promise.resolve();
-    setSaving(true);
-    return api.saveWebInputDraft(team, month, year, data, version)
-      .then((response) => {
-        setStatus(response.status ?? "Đang nhập");
-        setVersion(response.version ?? null);
-        setSavedAt(response.last_saved_at ?? new Date().toISOString());
-        setWarnings(response.warnings ?? []);
-        setUnsaved(false);
-        if (manual) {
-          setHasSavedDraft(true);
-          setError("Đã lưu đăng ký. Bạn có thể bấm Gửi báo cáo.");
-        } else {
-          setError("");
-        }
-      })
-      .catch((err) => {
-        setError(err.message);
-        if (err.message.includes("Draft") || err.message.includes("VERSION")) {
-          load();
-        }
-      })
-      .finally(() => setSaving(false));
-  }, [canWrite, data, locked, load, month, team, version, year]);
+  const saveDraft = useCallback(async (manual = false) => {
+    if (!canWrite || locked) return;
+    await draft.controller.flush();
+    const result = draft.controller.state;
+    if (result.phase === "clean") {
+      setUnsaved(false);
+      recoveryStore.remove();
+      if (manual) {
+        setHasSavedDraft(true);
+        setError("Đã lưu đăng ký. Bạn có thể bấm Gửi báo cáo.");
+      } else {
+        setError("");
+      }
+    } else if (result.error) {
+      setError(result.error.message);
+    }
+  }, [canWrite, draft.controller, locked, recoveryStore]);
 
   useEffect(() => {
-    if (!unsaved || readOnly) return;
-    if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current);
-    autosaveTimer.current = window.setTimeout(() => {
-      saveDraft(false);
-    }, 3000);
-    return () => {
-      if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current);
-    };
-  }, [data, readOnly, saveDraft, unsaved]);
+    setUnsaved(draft.dirty);
+    if (draft.phase === "clean" && !draft.dirty && draft.acknowledgedLocalRevision > 0) recoveryStore.remove();
+    if ((draft.phase === "conflict" || draft.phase === "offline") && draft.error) {
+      setError(draft.error.message);
+    }
+  }, [draft.dirty, draft.error, draft.phase, recoveryStore]);
 
   useEffect(() => {
-    const handler = (event: BeforeUnloadEvent) => {
-      if (!unsaved) return;
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [unsaved]);
+    return registerGuard(`web-input:${draftContextKey}`, {
+      isDirty: () => draft.controller.dirty || submitting || fiAllocationLoading,
+      save: () => saveDraft(false),
+      discard: () => { draft.controller.discardLocalChanges(); setData(draft.controller.state.current); recoveryStore.remove(); },
+    });
+  }, [draft.controller, draftContextKey, registerGuard, saveDraft, submitting, fiAllocationLoading]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -446,7 +497,11 @@ export function WebInputForm({
   }, [saveDraft]);
 
   function mutate(next: (current: WebInputData) => WebInputData) {
-    setData((current) => next(current));
+    const nextData = next(data);
+    setData(nextData);
+    draft.controller.update(nextData);
+    const recoveryResult = recoveryStore.write(nextData, draft.controller.state.serverRevision, draft.controller.state.localRevision);
+    if (!recoveryResult.ok) setRecoveryWarning(recoveryResult.warning ?? "");
     setUnsaved(true);
     setHasSavedDraft(false);
     setError("");
@@ -482,28 +537,72 @@ export function WebInputForm({
     }, 0);
   }
 
-  function submit() {
-    const errors = validateData(data);
+  async function submit() {
+    if (submitting || fiAllocationLoading) return;
+    await draft.controller.flush();
+    if (draft.controller.dirty) return;
+    const snapshot = draft.controller.state.current;
+    const errors = validateData(snapshot);
     setValidationErrors(errors);
     if (errors.length) {
       focusFirstError(errors);
       return;
     }
     setSaving(true);
-    api.submitWebInput(team, month, year, data)
+    setSubmitting(true);
+    const epoch = loadEpoch.current;
+    api.submitWebInputRevision(team, month, year, snapshot, { expectedRevision: draft.controller.state.serverRevision ?? 0 })
       .then((response) => {
-        setData(mergeData(response.data, mapping));
+        if (epoch !== loadEpoch.current) return;
+        const submittedData = mergeData(response.data, mapping);
+        const serverRevision = response.server_revision ?? response.revision ?? response.version ?? null;
+        setData(submittedData);
+        draft.controller.hydrate(draftContextKey, submittedData, serverRevision);
         setStatus(response.status ?? "Đã gửi");
-        setVersion(response.version ?? null);
+        setVersion(serverRevision);
         setLocked(Boolean(response.locked));
         setSavedAt(response.submitted_at ?? new Date().toISOString());
         setWarnings(response.warnings ?? []);
         setValidationErrors([]);
         setUnsaved(false);
+        recoveryStore.remove();
+        setRecoveryDraft(null);
         setError("Đã gửi báo cáo.");
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setSaving(false));
+      .catch((err) => {
+        if (epoch !== loadEpoch.current) return;
+        setError(err.message);
+        if (err instanceof ApiError && err.code === "VERSION_CONFLICT") {
+          draft.controller.markConflict(err);
+        }
+      })
+      .finally(() => { if (epoch === loadEpoch.current) setSaving(false); setSubmitting(false); });
+  }
+
+  function recoverDraft() {
+    if (!recoveryDraft) return;
+    setData(recoveryDraft.data);
+    draft.controller.hydrate(draftContextKey, recoveryDraft.data, recoveryDraft.baseRevision);
+    draft.controller.update(recoveryDraft.data);
+    draft.controller.markConflict(new Error("Bản khôi phục chưa được gửi. Hãy xem bản máy chủ trước khi lưu."));
+    setUnsaved(true);
+    setHasSavedDraft(false);
+    setRecoveryDraft(null);
+    setError("Đã khôi phục để xem. Chưa gửi lên máy chủ.");
+  }
+
+  function discardRecoveryDraft() {
+    recoveryStore.remove();
+    setRecoveryDraft(null);
+  }
+
+  function keepLocalAfterConflict() {
+    if (!conflictServer) return;
+    const serverRevision = conflictServer.server_revision ?? conflictServer.revision ?? conflictServer.version ?? null;
+    draft.controller.acceptServerRevision(serverRevision);
+    setVersion(serverRevision);
+    setConflictServer(null);
+    void draft.controller.retry();
   }
 
   function preview() {
@@ -536,12 +635,19 @@ export function WebInputForm({
     if (!fiAllocationPreview?.can_finalize || !fiAllocationReason.trim() || fiAllocationLoading) return;
     setFiAllocationLoading(true);
     setError("");
-    api.lockWebInput(team, month, year, fiAllocationReason.trim())
+    api.lockWebInput(team, month, year, fiAllocationReason.trim(), {
+      expectedRevision: draft.controller.state.serverRevision ?? 0,
+      expectedFiTeamRevision: fiAllocationPreview.fi_team_revision,
+      expectedPlanHash: fiAllocationPreview.plan_hash,
+    })
       .then((response) => {
         const allocated = Number(response.fi_allocation?.allocated_count ?? fiAllocationPreview.required_count);
         setStatus(response.status);
         setLocked(Boolean(response.locked));
-        setVersion(response.version ?? version);
+        const revision = response.server_revision ?? response.revision ?? response.version ?? version;
+        setVersion(revision);
+        draft.controller.acceptServerRevision(revision);
+        if (response.locked) draft.controller.markLocked();
         setFiAllocationPreview(null);
         setFiAllocationReason("");
         setError(`Đã chốt báo cáo và tự phân bổ ${allocated} FI vào KHMT T${month}/${year}.`);
@@ -554,20 +660,33 @@ export function WebInputForm({
     const reason = window.prompt("Lý do mở chốt báo cáo");
     if (!reason?.trim()) return;
     setFiAllocationLoading(true);
-    api.unlockWebInput(team, month, year, reason.trim())
+    api.unlockWebInput(team, month, year, reason.trim(), {
+      expectedRevision: draft.controller.state.serverRevision ?? 0,
+    })
       .then((response) => {
         setStatus(response.status);
         setLocked(Boolean(response.locked));
         setError("Đã mở chốt báo cáo. Phân bổ FI hiện tại được giữ cho đến lần chốt lại.");
+        const revision = response.server_revision ?? response.revision ?? response.version ?? version;
+        setVersion(revision);
+        draft.controller.acceptServerRevision(revision);
       })
       .catch((err) => setError(err.message))
       .finally(() => setFiAllocationLoading(false));
   }
 
-  const saveLabel = saving ? "Đang lưu" : unsaved ? "Chưa lưu" : savedAt ? `Đã lưu ${new Date(savedAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}` : "Chưa có dữ liệu";
+  const savePhase = locked ? "locked" : saving ? "saving" : draft.phase;
 
   return (
     <div className="web-input-shell">
+      {draft.phase === "conflict" && <div role="alert" className="panel">
+        <p>{draft.error?.message} Nội dung đang soạn vẫn được giữ.</p>
+        <button onClick={() => api.getWebInput(team, month, year).then(setConflictServer).catch((err) => setError(err.message))}>Xem bản máy chủ</button>
+        {conflictServer && <><pre>{JSON.stringify(conflictServer.data, null, 2)}</pre>
+          <button onClick={keepLocalAfterConflict}>Lưu bản đang soạn với revision đã xem</button>
+          <button onClick={() => { recoveryStore.remove(); setConflictServer(null); load(); }}>Bỏ bản đang soạn, dùng bản máy chủ</button>
+        </>}
+      </div>}
       <section className="panel wide web-input-header">
         <div>
           <h2>Nhập liệu OKR</h2>
@@ -576,26 +695,31 @@ export function WebInputForm({
         <div className="web-input-controls">
           <label>
             <span>Đội/Tổ</span>
-            <select value={team} onChange={(event) => setTeam(event.target.value)} disabled={role === "Team_Account"}>
+            <select value={team} onChange={(event) => { const value = event.target.value; void changeContext(() => setTeam(value)); }} disabled={role === "Team_Account"}>
               {TEAMS.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
           </label>
           <label>
             <span>Tháng</span>
-            <select value={month} onChange={(event) => setMonth(Number(event.target.value))}>
+            <select value={month} onChange={(event) => { const value = Number(event.target.value); void changeContext(() => setMonth(value)); }}>
               {Array.from({ length: 12 }, (_, index) => index + 1).map((item) => <option key={item} value={item}>T{item}</option>)}
             </select>
           </label>
           <label>
             <span>Năm</span>
-            <select value={year} onChange={(event) => setYear(Number(event.target.value))}>
+            <select value={year} onChange={(event) => { const value = Number(event.target.value); void changeContext(() => setYear(value)); }}>
               {Array.from({ length: 12 }, (_, index) => 2024 + index).map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
           </label>
           <span className={`status-badge status-${status.replace(/\s+/g, "-").toLowerCase()}`}>{status}</span>
         </div>
         <div className="web-input-actions">
-          <span className={unsaved ? "save-state unsaved" : "save-state"}>{saveLabel}</span>
+          <SaveStatus
+            phase={savePhase}
+            savedAt={savedAt}
+            recoveryAvailable={Boolean(recoveryWarning)}
+            onDownloadRecovery={() => downloadDraft(`okr-${team}-${month}-${year}-draft.json`, data)}
+          />
           <button aria-label="Tải lại" type="button" onClick={load} title="Tải lại"><RefreshCw size={17} className={loading ? "icon-spin" : undefined} /></button>
           {showAdminEditCommands && (
             <button
@@ -642,6 +766,14 @@ export function WebInputForm({
           <span style={{ width: `${completion}%` }} />
         </div>
         {error && <p className={error.includes("Đã") ? "success" : "error"}>{error}</p>}
+        {recoveryWarning && <p className="error" role="alert">{recoveryWarning}</p>}
+        {recoveryDraft && (
+          <div className="draft-recovery-banner" role="status">
+            <span>Bản nháp trên thiết bị được cập nhật lúc {new Date(recoveryDraft.updatedAt).toLocaleString("vi-VN")}.</span>
+            <button type="button" className="btn-primary-soft" onClick={recoverDraft}>Khôi phục</button>
+            <button type="button" onClick={discardRecoveryDraft}>Bỏ qua</button>
+          </div>
+        )}
         {loading && (
           <p className="loading-inline" role="status">
             <Loader2 size={15} className="icon-spin" />

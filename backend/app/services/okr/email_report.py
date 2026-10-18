@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from app.core.config import settings
 from app.models.domain import TeamReportModel
@@ -85,11 +86,13 @@ def email_report_path(report: TeamReportModel) -> Path:
     return (
         settings.storage_dir
         / "exports"
-        / f"email-bao-cao-okr-{report.team}-T{report.report_month}-{report.report_year}.txt"
+        / f"email-bao-cao-okr-{report.team}-T{report.report_month}-{report.report_year}-r{report.revision}-{report.id}-{uuid4().hex}.txt"
     )
 
 
 def write_email_report_file(report: TeamReportModel) -> Path:
     path = email_report_path(report)
+    from app.services.artifacts import register_artifact
+    register_artifact(path, "okr-email-text")
     path.write_text(generate_email_report(report), encoding="utf-8")
     return path

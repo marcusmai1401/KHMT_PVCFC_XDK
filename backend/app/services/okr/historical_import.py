@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from contextlib import nullcontext
 from datetime import datetime, timezone
 import argparse
 import hashlib
+import json
 from pathlib import Path
 import re
 import threading
@@ -85,6 +87,7 @@ class FileImportResult:
     file_name: str
     month: int
     year: int
+    source_file_hash: str = ""
     teams_imported: list[str] = field(default_factory=list)
     records_per_team: dict[str, int] = field(default_factory=dict)
     table_counts: dict[str, dict[str, int]] = field(
@@ -98,6 +101,7 @@ class FileImportResult:
     success: bool = True
     errors: list[ImportIssue] = field(default_factory=list)
     warnings: list[ImportIssue] = field(default_factory=list)
+    periods: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -108,6 +112,7 @@ class FileImportResult:
 
 @dataclass
 class ImportSessionReport:
+    mode: str = "preview"
     file_results: list[FileImportResult] = field(default_factory=list)
     total_team_reports: int = 0
     total_snapshots: int = 0
@@ -121,6 +126,7 @@ class ImportSessionReport:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "mode": self.mode,
             "total_team_reports": self.total_team_reports,
             "total_snapshots": self.total_snapshots,
             "total_summaries_upserted": self.total_summaries_upserted,
@@ -149,6 +155,9 @@ class ImportSessionReport:
                 f"snapshots={result.table_counts['historical_snapshots']['inserted']} "
                 f"warnings={len(result.warnings)} errors={len(result.errors)}"
             )
+            lines.append(f"  source_sha256={result.source_file_hash}")
+            for period in result.periods:
+                lines.append(f"  {period['team']} T{period['month']}/{period['year']}: {period.get('status', 'planned')} {period['action']} ({period['reason']}); source_sha256={period['source_hash']}")
         if self.warnings:
             lines.append("Warnings:")
             for issue in self.warnings[:30]:
@@ -440,10 +449,19 @@ def upsert_team_report(
     source_file: Path,
     source_hash: str,
     imported_by: str,
+    mode: str = "insert-missing",
 ) -> tuple[TeamReportModel, str]:
+    if mode not in {"insert-missing", "replace"}:
+        raise ValueError(f"Unsupported historical report import mode: {mode}")
     team = parsed_data.get("team")
     month = parsed_data.get("report_month")
     year = parsed_data.get("report_year")
+    from app.services.fi.team_guard import lock_fi_team
+    from app.services.fi.period_guard import assert_period_mutable
+    lock_fi_team(db, team)
+    if mode == "replace":
+        assert_period_mutable(db, team, month, year)
+        raise ValueError("Historical replacement requires a bound preview; use the reviewed replacement workflow")
     existing_records = db.execute(
         select(TeamReportModel).where(
             TeamReportModel.team == team,
@@ -460,6 +478,8 @@ def upsert_team_report(
             and existing.source_cell_references == parsed_data.get("source_cell_references", [])
         ):
             return existing, "skipped"
+    if existing_records and mode == "insert-missing":
+        return existing_records[0], "skipped"
     version = 1
     replaced_report_id = None
     action = "inserted"
@@ -504,7 +524,12 @@ def upsert_team_monthly_summary(
     *,
     source_file: Path,
     source_hash: str,
+    mode: str = "insert-missing",
 ) -> tuple[TeamMonthlySummaryModel, str]:
+    if mode not in {"insert-missing", "replace"}:
+        raise ValueError(f"Unsupported historical summary import mode: {mode}")
+    if mode == "replace":
+        raise ValueError("Historical summary replacement requires a bound preview")
     team = str(parsed_data.get("team"))
     month = int(parsed_data.get("report_month"))
     year = int(parsed_data.get("report_year"))
@@ -540,6 +565,8 @@ def upsert_team_monthly_summary(
         db.add(record)
         db.flush()
         return record, "inserted"
+    if mode == "insert-missing":
+        return existing, "skipped"
     if (
         existing.discipline_status == discipline_status
         and existing.discipline_description == team_level.get("discipline_description")
@@ -562,12 +589,14 @@ def upsert_historical_snapshots(
     file_path: Path,
     *,
     imported_by: str,
+    mode: str = "insert-missing",
 ) -> dict[str, Any]:
     return import_historical_snapshot(
         db,
         file_path.read_bytes(),
         source_file_name=file_path.name,
         imported_by=imported_by,
+        mode=mode,
     )
 
 
@@ -598,6 +627,7 @@ def _record_parsed_report(
     *,
     source_path: Path,
     imported_by: str,
+    mode: str,
 ) -> None:
     source_hash = _source_hash(source_path)
     parsed["team_level"] = apply_discipline_overrides(
@@ -605,39 +635,43 @@ def _record_parsed_report(
         str(parsed.get("team")),
         int(parsed.get("report_month") or 0),
     )
+    if mode == "preview":
+        existing = list(db.scalars(select(TeamReportModel).where(
+            TeamReportModel.team == parsed["team"], TeamReportModel.report_month == parsed["report_month"],
+            TeamReportModel.report_year == parsed["report_year"], TeamReportModel.is_current_version.is_(True),
+        )))
+        action = "skipped" if existing else "inserted"
+        result.table_counts["team_reports"][action] += 1
+        summary = db.scalar(select(TeamMonthlySummaryModel.id).where(
+            TeamMonthlySummaryModel.team == parsed["team"], TeamMonthlySummaryModel.month == parsed["report_month"], TeamMonthlySummaryModel.year == parsed["report_year"],
+        ))
+        result.table_counts["team_monthly_summaries"]["skipped" if existing or summary else "inserted"] += 1
+        result.periods.append({"team": parsed["team"], "month": parsed["report_month"], "year": parsed["report_year"], "action": "skip" if existing else "insert", "reason": "managed_period_exists" if existing else "missing_period", "source_hash": source_hash, "current": [{"id": row.id, "revision": row.revision, "status": row.report_status, "hash": row.file_hash} for row in existing]})
+        return
+    scope = {"team": parsed["team"], "month": parsed["report_month"], "year": parsed["report_year"], "source_hash": source_hash}
     try:
-        report, report_action = upsert_team_report(
-            db,
-            parsed,
-            source_file=source_path,
-            source_hash=source_hash,
-            imported_by=imported_by,
-        )
-        result.table_counts["team_reports"][report_action] += 1
-        _summary, summary_action = upsert_team_monthly_summary(
-            db,
-            parsed,
-            source_file=source_path,
-            source_hash=source_hash,
-        )
-        result.table_counts["team_monthly_summaries"][summary_action] += 1
-        result.teams_imported.append(str(parsed.get("team")))
-        result.records_per_team[str(parsed.get("team"))] = len(parsed.get("assessments") or [])
-        for warning in parsed.get("warnings", []):
+        with db.begin_nested():
+            report, report_action = upsert_team_report(db, parsed, source_file=source_path, source_hash=source_hash, imported_by=imported_by, mode=mode)
+            summary_action = "skipped"
             if report_action != "skipped":
-                warning_from_dict(db, report.id, warning)
-            result.warnings.append(_issue_from_warning(source_path.name, warning))
+                _summary, summary_action = upsert_team_monthly_summary(db, parsed, source_file=source_path, source_hash=source_hash, mode=mode)
+                for warning in parsed.get("warnings", []):
+                    warning_from_dict(db, report.id, warning)
+        db.commit()
+        result.table_counts["team_reports"][report_action] += 1
+        result.table_counts["team_monthly_summaries"][summary_action] += 1
+        result.periods.append({**scope, "action": report_action, "status": "applied" if report_action != "skipped" else "skipped", "report_id": report.id, "reason": "managed_period_exists" if report_action == "skipped" else "missing_period"})
+        if report_action != "skipped":
+            result.teams_imported.append(str(parsed.get("team")))
+            result.records_per_team[str(parsed.get("team"))] = len(parsed.get("assessments") or [])
+        result.warnings.extend(_issue_from_warning(source_path.name, warning) for warning in parsed.get("warnings", []))
     except Exception as exc:
+        db.rollback()
         result.success = False
         result.table_counts["team_reports"]["failed"] += 1
-        result.errors.append(
-            ImportIssue(
-                source_file=source_path.name,
-                severity="HIGH",
-                reason=f"Failed to store team report {parsed.get('team')}: {exc}",
-                error_type="STORAGE_FAILURE",
-            )
-        )
+        result.periods.append({**scope, "action": "none", "status": "failed", "reason": str(exc)})
+        result.errors.append(ImportIssue(source_file=source_path.name, severity="HIGH", reason=f"Failed to store team report {parsed.get('team')}: {exc}", error_type="STORAGE_FAILURE"))
+
 
 
 def _verify_completeness(
@@ -696,14 +730,24 @@ def run_historical_import(
     *,
     db: Session | None = None,
     workspace_dir: Path | None = None,
-    commit: bool = True,
+    commit: bool | None = None,
     months: tuple[int, ...] | None = None,
+    mode: str = "preview",
 ) -> ImportSessionReport:
+    if mode not in {"preview", "insert-missing"}:
+        raise ValueError("Historical import mode must be 'preview' or 'insert-missing'")
+    if commit is True:
+        # Backwards-compatible programmatic callers that explicitly requested a
+        # commit now receive the safe, insert-only behavior.
+        mode = "insert-missing"
+    elif commit is False:
+        mode = "preview"
     source_directory = Path(source_directory)
     root = workspace_dir or source_directory.parent
     own_session = db is None
     session = db or create_session()
-    report = ImportSessionReport()
+    report = ImportSessionReport(mode=mode)
+    preview_transaction = None  # Preview executes SELECT only; no simulated mutations.
     try:
         selected_months = tuple(sorted(set(months or HISTORICAL_MONTHS)))
         invalid_months = [month for month in selected_months if month not in HISTORICAL_MONTHS]
@@ -735,10 +779,17 @@ def run_historical_import(
             )
             report.completeness = _verify_completeness(session, months=selected_months)
             report.complete = False
+            if preview_transaction is not None:
+                preview_transaction.rollback()
             return report
 
         for item in discovered:
-            file_result = FileImportResult(file_name=item.file_name, month=item.month, year=item.year)
+            file_result = FileImportResult(
+                file_name=item.file_name,
+                month=item.month,
+                year=item.year,
+                source_file_hash=_source_hash(item.path),
+            )
             report.file_results.append(file_result)
             try:
                 probe_workbook = read_workbook_with_timeout(item.path)
@@ -784,7 +835,12 @@ def run_historical_import(
                 )
 
             try:
-                snapshot_result = upsert_historical_snapshots(session, item.path, imported_by=imported_by)
+                with session.begin_nested() if mode != "preview" else nullcontext():
+                    snapshot_result = upsert_historical_snapshots(
+                        session, item.path, imported_by=imported_by, mode=mode
+                    )
+                if mode != "preview":
+                    session.commit()
                 file_result.table_counts["historical_snapshots"]["inserted"] += int(
                     snapshot_result.get("imported_count") or 0
                 )
@@ -827,6 +883,7 @@ def run_historical_import(
                             parsed,
                             source_path=item.path,
                             imported_by=imported_by,
+                            mode=mode,
                         )
                     except Exception as exc:
                         file_result.success = False
@@ -870,6 +927,7 @@ def run_historical_import(
                             parsed,
                             source_path=Path(parsed["source_path"]),
                             imported_by=imported_by,
+                            mode=mode,
                         )
                     except Exception as exc:
                         file_result.success = False
@@ -889,10 +947,13 @@ def run_historical_import(
             report.warnings.extend(file_result.warnings)
             report.errors.extend(file_result.errors)
 
-        if commit:
+        # Each team period commits report+summary together. A failed later
+        # period cannot roll back periods already reported as applied.
+        if report.errors:
+            if mode == "insert-missing":
+                session.rollback()
+        elif mode == "insert-missing":
             session.commit()
-        else:
-            session.flush()
         report.total_team_reports = sum(
             result.table_counts["team_reports"]["inserted"]
             + result.table_counts["team_reports"]["updated"]
@@ -909,15 +970,30 @@ def run_historical_import(
             for result in report.file_results
         )
         report.completeness = _verify_completeness(session, months=selected_months)
-        report.complete = (
-            not report.errors
-            and report.completeness.get("team_reports_complete", False)
-            and report.completeness.get("team_monthly_summaries_complete", False)
-            and report.completeness.get("dashboard_history_snapshots_complete", False)
+        if mode == "preview":
+            report.completeness["preview_only"] = True
+        missing_required_sources = any(
+            issue.error_type == "MISSING_SOURCE_WORKBOOK"
+            for issue in report.warnings
         )
+        if mode == "preview":
+            # Preview counts planned operations and therefore must not be
+            # judged by database counts before the planned operations are applied.
+            report.complete = (
+                not report.errors
+                and not missing_required_sources
+                and report.total_files_attempted == report.total_files_successful
+            )
+        else:
+            report.complete = (
+                not report.errors
+                and report.completeness.get("team_reports_complete", False)
+                and report.completeness.get("team_monthly_summaries_complete", False)
+                and report.completeness.get("dashboard_history_snapshots_complete", False)
+            )
         return report
     except Exception:
-        if commit:
+        if mode == "insert-missing":
             session.rollback()
         raise
     finally:
@@ -942,20 +1018,34 @@ def main(argv: list[str] | None = None) -> int:
         help="Only import the selected month numbers (for example: --months 6)",
     )
     parser.add_argument(
+        "--mode",
+        choices=("preview", "insert-missing"),
+        default="preview",
+        help="preview is read-only; insert-missing applies only missing records",
+    )
+    parser.add_argument(
         "--no-commit",
         action="store_true",
-        help="Run through parsing/storage without committing",
+        help="Deprecated alias for --mode preview",
+    )
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        help="Write the machine-readable import manifest/report to this path",
     )
     args = parser.parse_args(argv)
     report = run_historical_import(
         Path(args.source_directory),
         imported_by=args.imported_by,
-        commit=not args.no_commit,
+        mode="preview" if args.no_commit else args.mode,
         months=tuple(args.months),
     )
-    if not args.no_commit:
+    if args.mode == "insert-missing" and not args.no_commit:
         cache_delete_prefix("okr:dashboard")
     print(report.render_text())
+    if args.manifest:
+        args.manifest.parent.mkdir(parents=True, exist_ok=True)
+        args.manifest.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
     return 0 if report.complete else 1
 
 

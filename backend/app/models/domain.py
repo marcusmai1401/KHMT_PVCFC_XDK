@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Integer, JSON, String, Text, UniqueConstraint, func, text
+from sqlalchemy import Index, BigInteger, Boolean, DateTime, Integer, JSON, String, Text, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -19,6 +19,7 @@ class User(Base):
     must_change_password: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false"), nullable=False
     )
+    session_version: Mapped[int] = mapped_column(Integer, default=1, server_default=text("1"), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), onupdate=func.now())
@@ -38,6 +39,14 @@ class KRMappingModel(Base):
 
 class TeamReportModel(Base):
     __tablename__ = "team_reports"
+    __table_args__ = (
+        Index("uq_report_current_draft", "team", "report_month", "report_year", unique=True,
+              sqlite_where=text("is_current_version = true AND report_status = 'draft'"),
+              postgresql_where=text("is_current_version = true AND report_status = 'draft'")),
+        Index("uq_report_current_published", "team", "report_month", "report_year", unique=True,
+              sqlite_where=text("is_current_version = true AND report_status IN ('submitted', 'locked')"),
+              postgresql_where=text("is_current_version = true AND report_status IN ('submitted', 'locked')")),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     team: Mapped[str | None] = mapped_column(String, index=True)
@@ -47,6 +56,8 @@ class TeamReportModel(Base):
     file_path: Mapped[str] = mapped_column(Text, nullable=False)
     file_hash: Mapped[str] = mapped_column(String, nullable=False)
     version: Mapped[int] = mapped_column(Integer, default=1)
+    # Optimistic-concurrency token. ``version`` remains the business/report version.
+    revision: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"), nullable=False)
     replaced_report_id: Mapped[str | None] = mapped_column(String)
     is_current_version: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     uploaded_by: Mapped[str] = mapped_column(String, nullable=False)
@@ -152,6 +163,9 @@ class HistoricalSnapshotModel(Base):
 
 class SKCTKTModel(Base):
     __tablename__ = "sk_ctkt"
+    __table_args__ = (
+        Index("ix_fi_history_order", text("coalesce(created_at, submitted_at, updated_at) DESC"), text("id DESC")),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     sk_code: Mapped[str] = mapped_column(String, unique=True, nullable=False)
@@ -162,6 +176,7 @@ class SKCTKTModel(Base):
     content_description: Mapped[str] = mapped_column(Text, nullable=False)
     completion_plan: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    revision: Mapped[int] = mapped_column(Integer, default=1, server_default=text("1"), nullable=False)
     status_history: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     fi_coordinator_comments: Mapped[str | None] = mapped_column(Text)
     workshop_leader_conclusion: Mapped[str | None] = mapped_column(Text)
@@ -219,6 +234,33 @@ class FIMonthlyAllocationModel(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), onupdate=func.now())
 
 
+class FIPeriodWriteGuardModel(Base):
+    """One lock record for every FI/OKR team period that has been finalized."""
+
+    __tablename__ = "fi_period_write_guards"
+    __table_args__ = (UniqueConstraint("team", "month", "year", name="uq_fi_period_write_guard"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    team: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    month: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    is_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    revision: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"), nullable=False)
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    locked_by: Mapped[str | None] = mapped_column(String)
+    lock_reason: Mapped[str | None] = mapped_column(Text)
+
+
+class FITeamWriteGuardModel(Base):
+    """Stable lock/revision row for the FI candidate pool of one team."""
+
+    __tablename__ = "fi_team_write_guards"
+
+    team: Mapped[str] = mapped_column(String, primary_key=True)
+    revision: Mapped[int] = mapped_column(BigInteger, default=0, server_default=text("0"), nullable=False)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), onupdate=func.now())
+
+
 class SKImageModel(Base):
     __tablename__ = "sk_images"
 
@@ -241,6 +283,44 @@ class NotificationModel(Base):
     event: Mapped[str] = mapped_column(String, nullable=False)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class NotificationReceiptModel(Base):
+    __tablename__ = "notification_receipts"
+    __table_args__ = (UniqueConstraint("notification_id", "user_id", name="uq_notification_receipt_user"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    notification_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    read_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class IdempotencyKeyModel(Base):
+    __tablename__ = "idempotency_keys"
+    __table_args__ = (UniqueConstraint("actor", "scope", "key", name="uq_idempotency_actor_scope_key"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    actor: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    scope: Mapped[str] = mapped_column(String, nullable=False)
+    key: Mapped[str] = mapped_column(String, nullable=False)
+    request_hash: Mapped[str] = mapped_column(String, nullable=False)
+    response: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    status_code: Mapped[int] = mapped_column(Integer, nullable=False, default=200)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class UserFeedbackModel(Base):
+    __tablename__ = "user_feedback"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    feedback_type: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    context: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    build_id: Mapped[str | None] = mapped_column(String(100))
+    consent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="new", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 

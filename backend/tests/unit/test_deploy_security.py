@@ -32,13 +32,10 @@ def test_remote_deploy_verifies_archive_and_never_resets_existing_passwords():
     assert "reset_default_password_candidates" not in command
     assert "--reset-passwords" not in command
     assert "trap 'rm -f -- /tmp/okr-deploy-random.tar.gz' EXIT" in command
-    historical_import = (
-        "python scripts/import_historical.py /app/KHMT_Monthly "
-        "--months 5 6 --imported-by deploy-import"
-    )
-    assert historical_import in command
-    assert command.index("alembic upgrade head") < command.index(historical_import)
-    assert command.index(historical_import) < command.index("Checking services")
+    assert "import_historical.py" not in command
+    assert "seed_users_xuong_dk.py" not in command
+    assert "seed_et_personnel.py" not in command
+    assert "seed_pvcfc_knl.py" not in command
 
 
 def test_workflow_is_main_only_key_based_and_fail_closed_on_host_identity():

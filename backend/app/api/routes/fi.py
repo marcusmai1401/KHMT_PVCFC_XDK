@@ -1,17 +1,28 @@
+import hashlib
+from io import BytesIO
+import warnings
+from PIL import Image, UnidentifiedImageError
+from pillow_heif import register_heif_opener
+import json
 import mimetypes
+import os
 from pathlib import Path
+import tempfile
+import unicodedata
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, case, cast, String, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.concurrency import require_expected_revision
 from app.core.config import settings
 from app.core.security import Role, require_role
 from app.db.session import get_db
 from app.models.domain import SKCTKTModel, SKImageModel, User
 from app.schemas.common import KHMTAssignRequest, SKCreate, SKUpdate, TransitionRequest
-from app.services.cache import cache_delete_prefix, cache_get, cache_set
+from app.services.cache import cache_delete_prefix
 from app.services.fi.service import (
     AUTHOR_CONTENT_EDITABLE_STATUSES,
     AUTHOR_ROLES as FI_AUTHOR_ROLES,
@@ -32,10 +43,21 @@ from app.services.fi.service import (
     submitter_user_id,
     transition_sk_ctkt,
     update_sk_ctkt,
+    _fi_completion_filter,
+    _fi_decision_filter,
+    _fi_registration_period,
 )
+from app.services.fi.period_guard import assert_period_mutable, assert_period_state_mutable, lock_period_state
+from app.services.fi.team_guard import lock_fi_team
 from app.services.fi.workflow import SKStatus
-from app.services.repositories import audit, make_id, model_to_dict, sk_image_to_dict
-
+from app.services.repositories import (
+    audit,
+    idempotency_replay,
+    make_id,
+    model_to_dict,
+    remember_idempotency,
+    sk_image_to_dict,
+)
 router = APIRouter(prefix="/fi", tags=["fi"])
 
 ALLOWED_IMAGE_EXTENSIONS = {
@@ -52,6 +74,8 @@ ALLOWED_IMAGE_EXTENSIONS = {
     ".tiff",
     ".webp",
 }
+register_heif_opener()
+
 LENIENT_IMAGE_CONTENT_TYPES = {"", "application/octet-stream", "binary/octet-stream"}
 
 
@@ -60,6 +84,32 @@ def _record_or_404(db: Session, record_id: str) -> SKCTKTModel:
     if record is None:
         raise HTTPException(status_code=404, detail="SK-CTKT not found")
     return record
+
+
+def _lock_record_for_attachment_mutation(db: Session, record_id: str) -> SKCTKTModel:
+    """Lock team/period before the FI row for image-only mutations."""
+    preliminary = _record_or_404(db, record_id)
+    team = preliminary.team
+    lock_fi_team(db, team)
+    db.refresh(preliminary)
+    if preliminary.team != team:
+        raise HTTPException(status_code=409, detail={"code": "VERSION_CONFLICT", "message": "Đội của FI vừa thay đổi. Vui lòng tải lại."})
+    if preliminary.khmt_month is not None and preliminary.khmt_year is not None:
+        guard = lock_period_state(db, preliminary.team, int(preliminary.khmt_month), int(preliminary.khmt_year))
+        assert_period_state_mutable(guard, preliminary.team, int(preliminary.khmt_month), int(preliminary.khmt_year))
+        assert_period_mutable(db, preliminary.team, int(preliminary.khmt_month), int(preliminary.khmt_year))
+    return db.execute(
+        select(SKCTKTModel).where(SKCTKTModel.id == record_id).with_for_update().execution_options(populate_existing=True)
+    ).scalar_one()
+
+
+def _fold_search(value: object) -> str:
+    text = str(value or "").strip().casefold().replace("đ", "d")
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFD", text)
+        if unicodedata.category(character) != "Mn"
+    )
 
 
 def _safe_filename(filename: str | None) -> str:
@@ -101,8 +151,14 @@ def _user_display_name(user: User | None, user_id: str | None) -> str | None:
     return user.full_name or user.display_name or user.id
 
 
+def _request_hash(value: object) -> str:
+    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
 def _sk_to_dict(record: SKCTKTModel, db: Session, *, include_images: bool = False) -> dict:
     data = model_to_dict(record)
+    data["server_revision"] = record.revision
     raw_submitted_by = submitter_user_id(record)
     effective_author = effective_author_user_id(record, db)
     submitted_by = effective_submitter_user_id(record, db)
@@ -149,6 +205,7 @@ def _apply_selected_author(data: dict, principal: dict, db: Session) -> None:
 @router.post("/sk-ctkt")
 def create(
     payload: SKCreate,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
@@ -156,7 +213,51 @@ def create(
     _apply_selected_author(data, principal, db)
     if not data.get("author_name") or not data.get("team"):
         raise HTTPException(status_code=400, detail="Thiếu tác giả hoặc đội/tổ")
-    result = _sk_to_dict(create_sk_ctkt(db, data, principal["user_id"], submit_immediately=True), db)
+    request_hash = _request_hash(data)
+    if idempotency_key:
+        replay = idempotency_replay(
+            db,
+            actor=principal["user_id"],
+            scope="fi:create",
+            key=idempotency_key,
+            request_hash=request_hash,
+        )
+        if replay is not None:
+            return replay
+    try:
+        result = _sk_to_dict(
+            create_sk_ctkt(
+                db,
+                data,
+                principal["user_id"],
+                submit_immediately=True,
+                commit=not bool(idempotency_key),
+            ),
+            db,
+        )
+        if idempotency_key:
+            remember_idempotency(
+                db,
+                actor=principal["user_id"],
+                scope="fi:create",
+                key=idempotency_key,
+                request_hash=request_hash,
+                response=result,
+            )
+            db.commit()
+    except IntegrityError:
+        db.rollback()
+        if idempotency_key:
+            replay = idempotency_replay(
+                db,
+                actor=principal["user_id"],
+                scope="fi:create",
+                key=idempotency_key,
+                request_hash=request_hash,
+            )
+            if replay is not None:
+                return replay
+        raise
     cache_delete_prefix("fi:public_sk")
     cache_delete_prefix("okr:dashboard")
     return result
@@ -191,7 +292,7 @@ def list_sk(
         submitted_by = SKCTKTModel.status_history[0]["comments"]["submitted_by"].as_string()
         query = query.where(or_(SKCTKTModel.author_user_id == actor, submitted_by == actor))
     query = query.order_by(
-        func.coalesce(SKCTKTModel.updated_at, SKCTKTModel.submitted_at, SKCTKTModel.created_at).desc(),
+        func.coalesce(SKCTKTModel.created_at, SKCTKTModel.submitted_at, SKCTKTModel.updated_at).desc(),
         SKCTKTModel.id.desc(),
     )
     records = db.execute(query).scalars().all()
@@ -220,11 +321,6 @@ def public_sk(
     principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
-    namespace = "sandbox" if principal.get("sandbox") else "prod"
-    cache_key = f"fi:public_sk:v7:{namespace}:{team or ''}:{author or ''}:{khmt_month or ''}:{khmt_year or ''}:{q or ''}:{historical if historical is not None else ''}"
-    cached = cache_get(cache_key)
-    if cached is not None:
-        return cached
     query = select(SKCTKTModel).where(SKCTKTModel.status != SKStatus.DRAFT.value)
     if historical is not None:
         query = query.where(SKCTKTModel.is_historical_import.is_(historical))
@@ -245,9 +341,154 @@ def public_sk(
                 continue
         filtered.append(record)
     filtered.sort(key=lambda record: record.created_at, reverse=True)
-    data = [_sk_to_dict(record, db) for record in filtered]
-    cache_set(cache_key, data, 5 * 60)
-    return data
+    return [_sk_to_dict(record, db) for record in filtered]
+
+
+@router.get("/history")
+def fi_history(
+    team: str | None = None,
+    teams: str | None = None,
+    author: str | None = None,
+    authors: str | None = None,
+    q: str | None = None,
+    registration_month: int | None = Query(default=None, ge=1, le=12),
+    registration_months: str | None = None,
+    registration_year: int | None = Query(default=None, ge=2020, le=2100),
+    decisions: str | None = None,
+    khmt: str | None = None,
+    khmt_periods: str | None = None,
+    completion: str | None = None,
+    historical: bool | None = None,
+    submitters: str | None = None,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """Paginated, server-filtered FI history used by the mobile/desktop view."""
+    query = select(SKCTKTModel).where(SKCTKTModel.status != SKStatus.DRAFT.value)
+    if historical is not None:
+        query = query.where(SKCTKTModel.is_historical_import.is_(historical))
+    requested_teams = {item.strip() for item in (teams or "").split(",") if item.strip()}
+    if team:
+        requested_teams.add(team)
+    if requested_teams:
+        query = query.where(SKCTKTModel.team.in_(requested_teams))
+    query = query.order_by(
+        func.coalesce(SKCTKTModel.created_at, SKCTKTModel.submitted_at, SKCTKTModel.updated_at).desc(),
+        SKCTKTModel.id.desc(),
+    )
+    selected_decisions = {item.strip().lower() for item in (decisions or "").split(",") if item.strip()}
+    selected_khmt = {item.strip().lower() for item in (khmt or "").split(",") if item.strip()}
+    selected_periods = {item.strip() for item in (khmt_periods or "").split(",") if item.strip()}
+    selected_completion = {item.strip().lower() for item in (completion or "").split(",") if item.strip()}
+    selected_authors = {item.strip() for item in (authors or "").split(",") if item.strip()}
+    selected_submitters = {item.strip() for item in (submitters or "").split(",") if item.strip()}
+    selected_registration_months = {
+        int(item)
+        for item in (registration_months or "").split(",")
+        if item.strip().isdigit() and 1 <= int(item) <= 12
+    }
+    from app.services.fi.history_query import expressions, fold, person_filter
+    expr, directory = expressions(db)
+    # Facet choices describe the full visible history, never only the page.
+    facet_base = select(SKCTKTModel).where(SKCTKTModel.status != SKStatus.DRAFT.value)
+    if historical is not None:
+        facet_base = facet_base.where(SKCTKTModel.is_historical_import.is_(historical))
+    def facet_rows(*columns):
+        return db.execute(facet_base.with_only_columns(*columns, func.count().label("count")).group_by(*columns)).all()
+    facets = {
+        "teams": [{"value": row[0], "count": row[1]} for row in facet_rows(SKCTKTModel.team)],
+        "months": [{"value": int(row[0]), "count": row[1]} for row in facet_rows(expr["month"]) if row[0]],
+        "periods": [{"month": row[0], "year": row[1], "count": row[2]} for row in facet_rows(SKCTKTModel.khmt_month, SKCTKTModel.khmt_year) if row[0] and row[1]],
+    }
+    directory_names = {user.id: user.full_name or user.display_name or "" for user in directory}
+    submitter_fallback = case((SKCTKTModel.is_historical_import.is_(True), SKCTKTModel.author_name), else_="")
+    for kind, identity, name in [("authors", expr["author_id"], SKCTKTModel.author_name), ("submitters", expr["submitter_id"], submitter_fallback)]:
+        options = {}
+        for account_id, label, team_value, count in facet_rows(identity, name, SKCTKTModel.team):
+            if kind == "submitters" and account_id in directory_names:
+                label = directory_names[account_id]
+            label = label or account_id or "Hệ thống"
+            key = f"id:{account_id.lower()}" if account_id else f"name:{_fold_search(label)}:team:{_fold_search(team_value or '')}"
+            if key in options:
+                options[key]["count"] += count
+            else:
+                options[key] = {"key": key, "label": label, "accountId": account_id, "team": team_value, "count": count}
+        facets[kind] = sorted(options.values(), key=lambda row: (-row["count"], row["label"]))
+    if registration_month is not None: query = query.where(expr["month"] == registration_month)
+    if selected_registration_months: query = query.where(expr["month"].in_(selected_registration_months))
+    if registration_year is not None: query = query.where(expr["year"] == registration_year)
+    if selected_decisions: query = query.where(expr["decision"].in_(selected_decisions))
+    if selected_khmt: query = query.where(case((SKCTKTModel.consider_for_khmt.is_(True), "in"), else_="out").in_(selected_khmt))
+    if selected_periods:
+        period = cast(SKCTKTModel.khmt_year, String) + "-" + cast(SKCTKTModel.khmt_month, String)
+        period_match = and_(SKCTKTModel.consider_for_khmt.is_(True), period.in_(selected_periods))
+        query = query.where(or_(period_match, SKCTKTModel.consider_for_khmt.is_(False)) if "out" in selected_khmt else period_match)
+    if selected_completion: query = query.where(case((expr["done"], "done"), else_="pending").in_(selected_completion))
+    if author: query = query.where(fold(SKCTKTModel.author_name).contains(_fold_search(author), autoescape=True))
+    if q:
+        haystack = func.coalesce(SKCTKTModel.sk_code, "") + " " + SKCTKTModel.title + " " + SKCTKTModel.author_name + " " + SKCTKTModel.content_description
+        query = query.where(fold(haystack).contains(_fold_search(q), autoescape=True))
+    if selected_authors: query = query.where(person_filter(selected_authors, expr["author_id"], SKCTKTModel.author_name))
+    if selected_submitters: query = query.where(person_filter(selected_submitters, expr["submitter_id"], expr["submitter_name"]))
+    aggregates = {
+        "total": func.count(),
+        **{key: func.sum(case((expr["decision"] == key, 1), else_=0)) for key in ("approved", "rejected", "deferred", "pending")},
+        "completed_count": func.sum(case((expr["done"], 1), else_=0)),
+        "khmt_considered": func.sum(case((SKCTKTModel.consider_for_khmt.is_(True), 1), else_=0)),
+        "data_revision": func.max(SKCTKTModel.revision),
+    }
+    start = (page - 1) * page_size
+    # Window aggregates share the filtered scan and database snapshot with the
+    # page. Only the requested page is hydrated into ORM objects.
+    rows = db.execute(query.add_columns(*[value.over().label(key) for key, value in aggregates.items()]).offset(start).limit(page_size)).all()
+    items = [row[0] for row in rows]
+    if rows:
+        counts = dict(zip(aggregates, rows[0][1:]))
+    else:
+        # An out-of-range page has no row to carry its window totals.
+        summary_query = query.order_by(None).with_only_columns(*[func.coalesce(value, 0).label(key) for key, value in aggregates.items()])
+        counts = dict(db.execute(summary_query).mappings().one())
+    total = counts["total"]
+    total_pages = (total + page_size - 1) // page_size
+    completed_count = counts["completed_count"]
+    decision_counts = {key: counts[key] for key in ("approved", "rejected", "deferred", "pending")}
+    applied_filters = {
+        "teams": sorted(requested_teams),
+        "registration_month": registration_month,
+        "registration_months": sorted(selected_registration_months),
+        "registration_year": registration_year,
+        "author": author,
+        "authors": sorted(selected_authors),
+        "submitters": sorted(selected_submitters),
+        "decisions": sorted(selected_decisions),
+        "khmt": sorted(selected_khmt),
+        "khmt_periods": sorted(selected_periods),
+        "completion": sorted(selected_completion),
+        "historical": historical,
+        "q": q,
+    }
+    return {
+        "items": [_sk_to_dict(record, db) for record in items],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "has_next": start + page_size < total,
+        "total_pages": total_pages,
+        "summary": {
+            "total": total,
+            **decision_counts,
+            "khmt_considered": counts["khmt_considered"],
+            "khmt_missing": total - counts["khmt_considered"],
+            "completed_count": completed_count,
+            "not_completed": total - completed_count,
+        },
+        "applied_filters": applied_filters,
+        "sort": "created_at.desc,id.desc",
+        "data_revision": counts["data_revision"],
+        "facets": facets,
+    }
 
 
 @router.get("/sk-ctkt/{record_id}")
@@ -268,6 +509,7 @@ def update(
     principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
+    require_expected_revision(payload.expected_revision, "SK-CTKT update")
     try:
         result = _sk_to_dict(
             update_sk_ctkt(db, record_id, payload.model_dump(exclude_none=True), principal["user_id"], principal["role"]),
@@ -284,11 +526,13 @@ def update(
 @router.delete("/sk-ctkt/{record_id}")
 def delete(
     record_id: str,
+    expected_revision: int | None = Query(default=None, ge=0),
     principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
+    require_expected_revision(expected_revision, "SK-CTKT delete")
     try:
-        delete_sk_ctkt(db, record_id, principal["user_id"], principal["role"])
+        delete_sk_ctkt(db, record_id, principal["user_id"], principal["role"], expected_revision)
         cache_delete_prefix("fi:public_sk")
         cache_delete_prefix("okr:dashboard")
         return {"deleted": True}
@@ -300,6 +544,7 @@ def delete(
 
 def _transition(record_id: str, action: str, payload: TransitionRequest, principal: dict, db: Session):
     try:
+        require_expected_revision(payload.expected_revision, "SK-CTKT transition")
         result = _sk_to_dict(
             transition_sk_ctkt(
                 db,
@@ -309,6 +554,7 @@ def _transition(record_id: str, action: str, payload: TransitionRequest, princip
                 principal["role"],
                 note=payload.note,
                 comments=payload.comments,
+                expected_revision=payload.expected_revision,
             ),
             db,
         )
@@ -386,6 +632,7 @@ def assign(
     db: Session = Depends(get_db),
 ):
     try:
+        require_expected_revision(payload.expected_revision, "KHMT assignment")
         result = _sk_to_dict(
             assign_khmt(
                 db,
@@ -395,6 +642,7 @@ def assign(
                 principal["user_id"],
                 principal["role"],
                 principal_team=principal.get("team"),
+                expected_revision=payload.expected_revision,
             ),
             db,
         )
@@ -412,10 +660,12 @@ def assign(
 @router.delete("/sk-ctkt/{record_id}/assign-khmt")
 def clear_assignment(
     record_id: str,
+    expected_revision: int | None = Query(default=None, ge=0),
     principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
     try:
+        require_expected_revision(expected_revision, "KHMT unassignment")
         result = _sk_to_dict(
             clear_khmt(
                 db,
@@ -423,6 +673,7 @@ def clear_assignment(
                 principal["user_id"],
                 principal["role"],
                 principal_team=principal.get("team"),
+                expected_revision=expected_revision,
             ),
             db,
         )
@@ -438,21 +689,76 @@ def clear_assignment(
 
 
 @router.post("/sk-ctkt/{record_id}/images")
-def upload_image(record_id: str, file: UploadFile = File(...), principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.ADMIN)), db: Session = Depends(get_db)):
-    record = _record_or_404(db, record_id)
+def upload_image(
+    record_id: str,
+    file: UploadFile = File(...),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    expected_revision: int | None = Query(default=None, ge=0),
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    require_expected_revision(expected_revision, "SK image upload")
+    record = _lock_record_for_attachment_mutation(db, record_id)
     if principal["role"] in {Role.TEAM_ACCOUNT.value, Role.STAFF.value, Role.FI_COORDINATOR.value}:
         if not is_author_or_submitter(record, principal["user_id"], db) or record.status not in AUTHOR_CONTENT_EDITABLE_STATUSES:
             raise HTTPException(status_code=403, detail="Only owner can upload images for editable entries")
     safe_name = _safe_filename(file.filename)
     content_type = _validate_image_upload(safe_name, file.content_type)
-    data = file.file.read()
+    data = file.file.read(settings.max_image_upload_mb * 1024 * 1024 + 1)
     if len(data) > settings.max_image_upload_mb * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Image file is too large")
+    request_hash = _request_hash({"record_id": record_id, "filename": safe_name, "content_sha256": hashlib.sha256(data).hexdigest()})
+    if idempotency_key:
+        replay = idempotency_replay(
+            db,
+            actor=principal["user_id"],
+            scope=f"fi:image:{record_id}",
+            key=idempotency_key,
+            request_hash=request_hash,
+        )
+        if replay is not None:
+            return replay
+    if expected_revision is not None and record.revision != expected_revision:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "VERSION_CONFLICT",
+                "error_code": "VERSION_CONFLICT",
+                "message": "SK-CTKT đã được cập nhật ở nơi khác",
+                "current_revision": record.revision,
+            },
+        )
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(BytesIO(data), formats=["JPEG", "PNG", "GIF", "WEBP", "BMP", "TIFF", "AVIF", "HEIF"]) as decoded:
+                detected = Image.MIME.get(decoded.format, "image/heif")
+                declared = (file.content_type or "").lower()
+                aliases = {"image/jpg": "image/jpeg", "image/heic": "image/heif", "image/x-ms-bmp": "image/bmp"}
+                if declared not in LENIENT_IMAGE_CONTENT_TYPES and aliases.get(declared, declared) != aliases.get(detected, detected):
+                    raise ValueError("MIME does not match image content")
+                decoded.verify()
+            # Decode pixels as well; a header alone is not a valid image.
+            with Image.open(BytesIO(data)) as decoded:
+                decoded.load()
+            content_type = detected
+    except (OSError, ValueError, SyntaxError, UnidentifiedImageError, Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
+        raise HTTPException(status_code=400, detail="Ảnh bị hỏng hoặc nội dung không khớp định dạng khai báo") from exc
     image_dir = settings.storage_dir / "uploads" / "images"
     image_dir.mkdir(parents=True, exist_ok=True)
     image_id = make_id("img")
     path = image_dir / f"{image_id}-{safe_name}"
-    path.write_bytes(data)
+    from app.services.artifacts import register_artifact
+    register_artifact(path, "fi-image")
+    temp_fd, temp_name = tempfile.mkstemp(prefix=".upload-", suffix=".tmp", dir=image_dir)
+    os.close(temp_fd)
+    temp_path = Path(temp_name)
+    try:
+        temp_path.write_bytes(data)
+        os.replace(temp_path, path)
+    except OSError:
+        temp_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail="Could not stage image upload")
     image = SKImageModel(
         id=image_id,
         sk_ctkt_id=record_id,
@@ -463,9 +769,35 @@ def upload_image(record_id: str, file: UploadFile = File(...), principal: dict =
         uploaded_by=principal["user_id"],
     )
     db.add(image)
+    record.revision += 1
     audit(db, principal["user_id"], "SK_CTKT", record_id, "upload_image", sk_image_to_dict(image))
-    db.commit()
-    return sk_image_to_dict(image)
+    result = sk_image_to_dict(image) | {"server_revision": record.revision}
+    if idempotency_key:
+        remember_idempotency(
+            db,
+            actor=principal["user_id"],
+            scope=f"fi:image:{record_id}",
+            key=idempotency_key,
+            request_hash=request_hash,
+            response=result,
+        )
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        path.unlink(missing_ok=True)
+        if idempotency_key:
+            replay = idempotency_replay(
+                db,
+                actor=principal["user_id"],
+                scope=f"fi:image:{record_id}",
+                key=idempotency_key,
+                request_hash=request_hash,
+            )
+            if replay is not None:
+                return replay
+        raise
+    return result
 
 
 @router.get("/sk-ctkt/{record_id}/images")
@@ -492,8 +824,25 @@ def get_image_raw(record_id: str, image_id: str, principal: dict = Depends(requi
 
 
 @router.delete("/sk-ctkt/{record_id}/images/{image_id}")
-def delete_image(record_id: str, image_id: str, principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.ADMIN)), db: Session = Depends(get_db)):
-    record = _record_or_404(db, record_id)
+def delete_image(
+    record_id: str,
+    image_id: str,
+    expected_revision: int | None = Query(default=None, ge=0),
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    require_expected_revision(expected_revision, "SK image delete")
+    record = _lock_record_for_attachment_mutation(db, record_id)
+    if expected_revision is not None and record.revision != expected_revision:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "VERSION_CONFLICT",
+                "error_code": "VERSION_CONFLICT",
+                "message": "SK-CTKT đã được cập nhật ở nơi khác",
+                "current_revision": record.revision,
+            },
+        )
     image = db.get(SKImageModel, image_id)
     if image is None or image.sk_ctkt_id != record_id:
         raise HTTPException(status_code=404, detail="Image not found")
@@ -505,6 +854,7 @@ def delete_image(record_id: str, image_id: str, principal: dict = Depends(requir
     except OSError:
         pass
     db.delete(image)
+    record.revision += 1
     audit(db, principal["user_id"], "SK_CTKT", record_id, "delete_image", {"image_id": image_id})
     db.commit()
     return {"deleted": True}
@@ -525,6 +875,8 @@ def dashboard(
 
 @router.get("/reports/export")
 def export_reports(
+    q: str | None = None,
+    registration_year: int | None = Query(default=None, ge=2020, le=2100),
     teams: str | None = None,
     registration_months: str | None = None,
     decisions: str | None = None,
@@ -546,6 +898,7 @@ def export_reports(
 ):
     try:
         filters = build_fi_report_export_filters(
+            q=q, registration_year=registration_year,
             teams=teams,
             registration_months=registration_months,
             decisions=decisions,

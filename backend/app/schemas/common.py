@@ -51,16 +51,19 @@ class SKUpdate(BaseModel):
     completion_plan: str | None = None
     completion_done: bool | None = None
     completion_date: date | None = None
+    expected_revision: int | None = Field(default=None, ge=0)
 
 
 class TransitionRequest(BaseModel):
     note: str | None = None
     comments: str | None = None
+    expected_revision: int | None = Field(default=None, ge=0)
 
 
 class KHMTAssignRequest(BaseModel):
     month: int = Field(ge=1, le=12)
     year: int = Field(ge=2020, le=2100)
+    expected_revision: int | None = Field(default=None, ge=0)
 
 
 class WarningResolveRequest(BaseModel):

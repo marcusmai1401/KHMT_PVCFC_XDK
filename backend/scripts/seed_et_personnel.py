@@ -4,8 +4,8 @@ Run from the backend folder:
 
     python scripts/seed_et_personnel.py
 
-The seed is idempotent and non-destructive: it creates or updates snapshot
-rows by user_id, employee_code, or id, and does not delete other personnel.
+The seed is insert-only and non-destructive: existing rows are skipped by
+user_id, employee_code, or id, and other personnel are never deleted.
 """
 
 from __future__ import annotations
@@ -111,31 +111,7 @@ def seed_personnel(actor: str = "admin", seed_path: Path = SEED_PATH) -> dict[st
                 counts["created"] += 1
                 continue
 
-            before = {
-                field: getattr(existing, field)
-                for field in PERSONNEL_FIELDS
-                if hasattr(existing, field)
-            }
-            for field, value in payload.items():
-                setattr(existing, field, value)
-            _unhide_linked_user(db, existing.user_id)
-            after = {
-                field: getattr(existing, field)
-                for field in PERSONNEL_FIELDS
-                if hasattr(existing, field)
-            }
-            if before != after:
-                audit(
-                    db,
-                    audit_actor,
-                    "Personnel",
-                    existing.id,
-                    "seed_et_personnel_update",
-                    {"before": before, "after": after, "source": data.get("source")},
-                )
-                counts["updated"] += 1
-            else:
-                counts["skipped"] += 1
+            counts["skipped"] += 1
         db.commit()
     return counts
 

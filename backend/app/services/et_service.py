@@ -635,8 +635,8 @@ def personnel_population_summary(
             "reason_counts_are_mutually_exclusive": True,
             "hidden_rows_excluded": True,
             "definition": (
-                "Dashboard eligible = Personnel active, visible, có position_code và current_level. "
-                "Assessment ready = dashboard eligible và có competency framework active áp dụng."
+                "Được tính vào thống kê: nhân sự đang làm việc, không bị ẩn, đã có vị trí và bậc năng lực. "
+                "Sẵn sàng đánh giá: đã được tính vào thống kê và vị trí đó có khung năng lực đang áp dụng."
             ),
             "filter_scope": {
                 key: filters.get(key)

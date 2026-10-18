@@ -932,6 +932,12 @@ function MetricTable({ title, payload, visualId, kind }: { title: string; payloa
             </table>
           </div>
         ) : null}
+        {targetRate > 0 && teamsAtTarget < rows.length ? (
+          <p className="warning-inline metric-target-gap-note" role="note">
+            {rows.length - teamsAtTarget}/{rows.length} đội chưa đạt mục tiêu theo số liệu thực hiện. Kết quả ĐẠT/KHÔNG ĐẠT ở ma trận
+            tổng hợp lấy theo đánh giá chính thức trong báo cáo đội/tổ — nếu hai kết quả khác nhau, cần đối chiếu lại báo cáo.
+          </p>
+        ) : null}
         {notes.length ? (
           <div className="metric-note-block">
             <strong><ClipboardList size={13} /> Ghi chú</strong>

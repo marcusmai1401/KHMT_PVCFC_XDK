@@ -272,7 +272,7 @@ def upload_report(
     db: Session = Depends(get_db),
 ):
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
-        raise HTTPException(status_code=400, detail={"error_code": "INVALID_FILE_TYPE", "message": "Only .xlsx files are supported"})
+        raise HTTPException(status_code=400, detail={"error_code": "INVALID_FILE_TYPE", "message": "Chỉ hỗ trợ tệp Excel .xlsx"})
     if file.content_type and file.content_type not in {
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "application/octet-stream",
@@ -280,7 +280,7 @@ def upload_report(
         raise HTTPException(status_code=400, detail={"error_code": "INVALID_CONTENT_TYPE", "message": "Only Excel workbook uploads are supported"})
     data = file.file.read(settings.max_excel_upload_mb * 1024 * 1024 + 1)
     if len(data) > settings.max_excel_upload_mb * 1024 * 1024:
-        raise HTTPException(status_code=400, detail={"error_code": "FILE_TOO_LARGE", "message": "Excel file is too large"})
+        raise HTTPException(status_code=400, detail={"error_code": "FILE_TOO_LARGE", "message": "Tệp Excel vượt quá dung lượng cho phép"})
     upload_dir = settings.storage_dir / "uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
     file_hash = hashlib.sha256(data).hexdigest()
@@ -466,9 +466,9 @@ def public_kr_mapping(_: dict = Depends(require_role(*REFERENCE_VIEW_ROLES)), db
 def preview_report(report_id: str, _: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER)), db: Session = Depends(get_db)):
     report = db.get(TeamReportModel, report_id)
     if report is None:
-        raise HTTPException(status_code=404, detail="Report not found")
+        raise HTTPException(status_code=404, detail="Không tìm thấy báo cáo")
     if report.report_status not in {"submitted", "locked"}:
-        raise HTTPException(status_code=403, detail="Draft reports are only visible in the team input workspace")
+        raise HTTPException(status_code=403, detail="Bản nháp chỉ xem được trong màn Nhập liệu OKR của đội/tổ")
     return public_report_dict(report)
 
 
@@ -505,7 +505,7 @@ def resolve_warning(
 ):
     warning = db.get(WarningModel, warning_id)
     if warning is None:
-        raise HTTPException(status_code=404, detail="Warning not found")
+        raise HTTPException(status_code=404, detail="Không tìm thấy cảnh báo")
     before = model_to_dict(warning)
     warning.admin_action = payload.admin_action
     warning.admin_notes = payload.admin_notes
@@ -689,7 +689,7 @@ def import_snapshot(
     db: Session = Depends(get_db),
 ):
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
-        raise HTTPException(status_code=400, detail={"error_code": "INVALID_FILE_TYPE", "message": "Only .xlsx files are supported"})
+        raise HTTPException(status_code=400, detail={"error_code": "INVALID_FILE_TYPE", "message": "Chỉ hỗ trợ tệp Excel .xlsx"})
     if file.content_type and file.content_type not in {
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "application/octet-stream",
@@ -697,7 +697,7 @@ def import_snapshot(
         raise HTTPException(status_code=400, detail={"error_code": "INVALID_CONTENT_TYPE", "message": "Only Excel workbook uploads are supported"})
     data = file.file.read(settings.max_excel_upload_mb * 1024 * 1024 + 1)
     if len(data) > settings.max_excel_upload_mb * 1024 * 1024:
-        raise HTTPException(status_code=400, detail={"error_code": "FILE_TOO_LARGE", "message": "Excel file is too large"})
+        raise HTTPException(status_code=400, detail={"error_code": "FILE_TOO_LARGE", "message": "Tệp Excel vượt quá dung lượng cho phép"})
     try:
         result = import_historical_snapshot(
             db,

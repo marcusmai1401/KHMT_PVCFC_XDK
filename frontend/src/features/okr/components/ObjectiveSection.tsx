@@ -1,4 +1,5 @@
-import { ChevronRight, GraduationCap, ShieldCheck, Trophy, Wrench, Zap } from "lucide-react";
+import { ChevronDown, ChevronRight, GraduationCap, ShieldCheck, Trophy, Wrench, Zap } from "lucide-react";
+import { useState } from "react";
 import type React from "react";
 import type { ObjectiveSectionPayload, ObjectiveStatus } from "../types/dashboard";
 import { NoDataBlock, NoPlanBlock } from "./EmptyBlocks";
@@ -15,6 +16,13 @@ const objectiveIcons: Record<string, React.ReactNode> = {
   O6: <Trophy size={19} />,
 };
 
+// On phones the six objectives with all their charts ran to ~35 screens of
+// scrolling, so details start collapsed there and open on demand.
+function isPhoneViewport() {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function"
+    && window.matchMedia("(max-width: 640px)").matches;
+}
+
 export function ObjectiveSection({
   section,
   onDrillDown,
@@ -23,6 +31,7 @@ export function ObjectiveSection({
   onDrillDown?: (objectiveCode: string) => void;
 }) {
   const code = section.objective_code || "";
+  const [expanded, setExpanded] = useState(() => !isPhoneViewport());
   let visuals = section.visuals || [];
   const status: ObjectiveStatus = section.status || "no_data";
   const hasConclusion = Boolean(section.conclusion);
@@ -62,7 +71,7 @@ export function ObjectiveSection({
   }
 
   const report = section.report;
-  const hasReport = Boolean(report && ((report.krs?.length ?? 0) > 0 || (report.notes?.length ?? 0) > 0));
+  const hasReport = Boolean(report && ((report.krs ?? []).some((kr) => kr.lines?.length) || (report.notes?.length ?? 0) > 0));
   const hasContent = visuals.length > 0 || hasConclusion || hasReport;
 
   return (
@@ -90,8 +99,17 @@ export function ObjectiveSection({
             KR liên quan
           </button>
         ) : null}
+        <button
+          aria-expanded={expanded}
+          className="objective-expand-toggle"
+          onClick={() => setExpanded((value) => !value)}
+          type="button"
+        >
+          <ChevronDown size={16} />
+          {expanded ? "Thu gọn" : "Xem chi tiết"}
+        </button>
       </div>
-      <div className="objective-section-body">
+      <div className="objective-section-body" hidden={!expanded}>
         {section.conclusion ? <div className="objective-conclusion">{section.conclusion}</div> : null}
         {visuals.length ? (
           <div className="objective-visual-grid">

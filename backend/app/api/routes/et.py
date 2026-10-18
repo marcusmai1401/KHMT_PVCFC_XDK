@@ -54,10 +54,10 @@ def _safe_filename(filename: str | None) -> str:
 
 def _save_upload(file: UploadFile) -> Path:
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
-        raise HTTPException(status_code=400, detail="Only .xlsx files are supported")
+        raise HTTPException(status_code=400, detail="Chỉ hỗ trợ tệp Excel .xlsx")
     data = file.file.read(settings.max_excel_upload_mb * 1024 * 1024 + 1)
     if len(data) > settings.max_excel_upload_mb * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Excel file is too large")
+        raise HTTPException(status_code=400, detail="Tệp Excel vượt quá dung lượng cho phép")
     upload_dir = settings.storage_dir / "uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha256(data).hexdigest()
@@ -420,7 +420,7 @@ def list_assessments(
     if principal["role"] == Role.TEAM_ACCOUNT.value:
         own_ids = [row[0] for row in db.execute(select(Personnel.id).where(Personnel.user_id == principal["user_id"])).all()]
         if personnel_id and personnel_id not in own_ids:
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise HTTPException(status_code=403, detail="Tài khoản không có quyền xem dữ liệu này")
         if not own_ids:
             return []
         rows = []
@@ -455,7 +455,7 @@ def get_assessment(
     try:
         assessment = et_service.get_assessment(db, assessment_id)
         if not et_service.can_access_personnel(db, principal, assessment.personnel_id):
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise HTTPException(status_code=403, detail="Tài khoản không có quyền xem dữ liệu này")
         return et_service.serialize_assessment(assessment)
     except ETValidationError as exc:
         raise _handle_error(exc) from exc
@@ -531,7 +531,7 @@ def export_assessment(
     try:
         assessment = et_service.get_assessment(db, assessment_id)
         if not et_service.can_access_personnel(db, principal, assessment.personnel_id):
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise HTTPException(status_code=403, detail="Tài khoản không có quyền xem dữ liệu này")
         path = et_excel_service.export_assessment_to_excel(assessment)
         return FileResponse(path, filename=Path(path).name)
     except ETValidationError as exc:
@@ -545,7 +545,7 @@ def assessment_history(
     db: Session = Depends(get_db),
 ):
     if not et_service.can_access_personnel(db, principal, personnel_id):
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="Tài khoản không có quyền xem dữ liệu này")
     try:
         return [et_service.serialize_assessment(row, include_items=False) for row in et_service.get_assessment_history(db, personnel_id)]
     except ETValidationError as exc:
@@ -562,7 +562,7 @@ def list_learning_plans(
     if principal["role"] == Role.TEAM_ACCOUNT.value:
         own_ids = [row[0] for row in db.execute(select(Personnel.id).where(Personnel.user_id == principal["user_id"])).all()]
         if personnel_id and personnel_id not in own_ids:
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise HTTPException(status_code=403, detail="Tài khoản không có quyền xem dữ liệu này")
         rows = []
         for own_id in own_ids:
             rows.extend(et_service.list_learning_plans(db, {"personnel_id": own_id}))
@@ -595,7 +595,7 @@ def get_learning_plan(
     try:
         plan = et_service.get_learning_plan(db, plan_id)
         if not et_service.can_access_personnel(db, principal, plan.personnel_id):
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise HTTPException(status_code=403, detail="Tài khoản không có quyền xem dữ liệu này")
         return et_service.serialize_learning_plan(plan)
     except ETValidationError as exc:
         raise _handle_error(exc) from exc
@@ -659,7 +659,7 @@ def export_learning_plan(
     try:
         plan = et_service.get_learning_plan(db, plan_id)
         if not et_service.can_access_personnel(db, principal, plan.personnel_id):
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise HTTPException(status_code=403, detail="Tài khoản không có quyền xem dữ liệu này")
         path = et_excel_service.export_learning_plan_to_excel(plan)
         return FileResponse(path, filename=Path(path).name)
     except ETValidationError as exc:

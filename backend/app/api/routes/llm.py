@@ -258,7 +258,7 @@ def analyze_team(
 
     report = db.get(TeamReportModel, req.report_id)
     if report is None:
-        raise HTTPException(status_code=404, detail="Report not found")
+        raise HTTPException(status_code=404, detail="Không tìm thấy báo cáo")
     try:
         return analyze_team_report(model_to_dict(report))
     except Exception as exc:
@@ -276,12 +276,12 @@ def compare_reports(
 
     current = db.get(TeamReportModel, req.current_report_id)
     if current is None:
-        raise HTTPException(status_code=404, detail="Current report not found")
+        raise HTTPException(status_code=404, detail="Không tìm thấy báo cáo kỳ hiện tại")
     previous = None
     if req.previous_report_id:
         previous = db.get(TeamReportModel, req.previous_report_id)
         if previous is None:
-            raise HTTPException(status_code=404, detail="Previous report not found")
+            raise HTTPException(status_code=404, detail="Không tìm thấy báo cáo kỳ trước")
     try:
         return do_compare(model_to_dict(current), model_to_dict(previous) if previous else None)
     except Exception as exc:

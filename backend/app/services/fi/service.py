@@ -369,7 +369,7 @@ def can_view_sk(record: SKCTKTModel, principal: dict[str, str]) -> bool:
 
 def require_visible(record: SKCTKTModel, principal: dict[str, str]) -> None:
     if not can_view_sk(record, principal):
-        raise HTTPException(status_code=403, detail="Not allowed")
+        raise HTTPException(status_code=403, detail="Tài khoản không có quyền thực hiện thao tác này")
 
 
 def update_sk_ctkt(

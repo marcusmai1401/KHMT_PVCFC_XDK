@@ -123,3 +123,35 @@ def test_extract_dashboard_narratives_handles_missing_drawings():
         "extras": {},
         "report": {},
     }
+
+
+def test_chart_legend_lines_are_not_reported_as_notes():
+    from app.services.okr.historical_snapshot import is_report_legend_noise
+    from app.services.okr.objective_sections import _enrich_objective_report
+
+    assert is_report_legend_noise("Hoàn thành")
+    assert is_report_legend_noise(" Không  hoàn thành thành ")
+    assert not is_report_legend_noise("Hoàn thành 500/608 hạng mục, đạt 83%")
+
+    report = _enrich_objective_report(
+        {"krs": [], "notes": ["Hoàn thành", "Không hoàn thành thành", "Không ghi nhận vi phạm trong tháng 5."]},
+        [],
+    )
+    assert report["notes"] == ["Không ghi nhận vi phạm trong tháng 5."]
+
+
+def test_combo_rate_is_blank_for_months_without_plan_or_result():
+    from app.services.okr.objective_sections import _combo_payload
+
+    payload = _combo_payload(
+        labels=["T1", "T2", "T3"],
+        actual=[90, 0, None],
+        planned=[100, 0, None],
+        rate=[0.9, 0, 0],
+        target=[0.98, 0.98, 0.98],
+        source_reference="data!A1",
+        actual_label="Thực hiện",
+        planned_label="Kế hoạch",
+    )
+    rate = next(dataset for dataset in payload["datasets"] if dataset["label"] == "Tỷ lệ thực hiện")
+    assert rate["data"] == [0.9, None, None]

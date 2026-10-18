@@ -38,7 +38,7 @@ type Tab = "okr" | "et" | "fi" | "admin";
 const tabTitles: Record<Tab, string> = {
   okr: "OKR",
   et: "Năng lực ET",
-  fi: "Luồng SK-CTKT",
+  fi: "Sáng kiến FI (SK-CTKT)",
   admin: "Quản trị hệ thống",
 };
 

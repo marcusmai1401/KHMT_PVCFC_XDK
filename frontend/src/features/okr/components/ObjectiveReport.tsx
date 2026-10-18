@@ -62,7 +62,9 @@ function useDenseReportGrid() {
 }
 
 export function ObjectiveReport({ report }: { report: ObjectiveReportData }) {
-  const krs = Array.isArray(report.krs) ? report.krs : [];
+  // KR headings alone repeat the "KR liên quan" cards above; keep only KRs
+  // that carry narrative text from the source workbook.
+  const krs = (Array.isArray(report.krs) ? report.krs : []).filter((kr) => kr.lines.length);
   const notes = Array.isArray(report.notes) ? report.notes : [];
   const gridRef = useDenseReportGrid();
   if (!krs.length && !notes.length) return null;
@@ -87,15 +89,11 @@ export function ObjectiveReport({ report }: { report: ObjectiveReportData }) {
                   <p className="objective-report-kr-title">{name}</p>
                   {status ? <span className="objective-report-kr-status">{status}</span> : null}
                 </div>
-                {kr.lines.length ? (
-                  <ul className="objective-report-lines">
-                    {kr.lines.map((line, index) => (
-                      <li key={index}>{stripBullet(line)}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="objective-report-empty">Chưa có diễn giải chi tiết trong tệp nguồn.</p>
-                )}
+                <ul className="objective-report-lines">
+                  {kr.lines.map((line, index) => (
+                    <li key={index}>{stripBullet(line)}</li>
+                  ))}
+                </ul>
               </article>
             );
           })}

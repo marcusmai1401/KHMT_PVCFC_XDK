@@ -1524,6 +1524,9 @@ export function FIWorkspace({
   const canReview = REVIEWER_ROLES.includes(role);
   const defaultTab: FITab = canRegister ? "register" : canReview ? "review" : "dashboard";
   const [items, setItems] = useState<any[]>([]);
+  // Legacy (imported) FI still pending a decision are reviewed from the
+  // history tab; the review queue only lists records created in the app.
+  const [legacyPendingCount, setLegacyPendingCount] = useState(0);
   const [allHistoryItems, setAllHistoryItems] = useState<any[]>([]);
   const [historyQuery, setHistoryQuery] = useState("");
   const [historyYear, setHistoryYear] = useState("");
@@ -1664,6 +1667,14 @@ export function FIWorkspace({
       })
       .catch((err) => { if (epoch === reloadEpoch.current) setError(err.message); })
       .finally(() => { if (epoch === reloadEpoch.current) setDashboardLoading(false); });
+    if (canReview && activeTab !== "history") {
+      api.listSk({ include_historical: true, status: "Submitted" })
+        .then((list) => {
+          if (epoch !== reloadEpoch.current) return;
+          setLegacyPendingCount(list.filter((item) => item.is_historical_import).length);
+        })
+        .catch(() => undefined);
+    }
   };
 
   useEffect(() => {
@@ -2766,7 +2777,7 @@ export function FIWorkspace({
           không render để tránh nhấp nháy vị trí. */}
       {tabsHost &&
         createPortal(
-          <div className="segmented-control fi-topbar-tabs" role="tablist" aria-label="Luồng SK-CTKT">
+          <div className="segmented-control fi-topbar-tabs" role="tablist" aria-label="Sáng kiến FI (SK-CTKT)">
             {canRegister && (
               <button
                 aria-selected={activeTab === "register"}
@@ -3400,6 +3411,15 @@ export function FIWorkspace({
             </button>
           </div>
           {error && <p className="error" role="alert" tabIndex={-1}>{error}</p>}
+          {legacyPendingCount > 0 ? (
+            <div className="warning-inline fi-legacy-pending-note" role="note">
+              <span>
+                Còn {legacyPendingCount} SK nhập từ dữ liệu cũ đang chờ xét duyệt. Các hồ sơ này được xử lý ở tab Lịch sử FI
+                (bật Chỉnh sửa để đánh giá).
+              </span>
+              <button className="link-button" onClick={() => void selectTab("history")} type="button">Mở Lịch sử FI</button>
+            </div>
+          ) : null}
           <div className="list">
             {reviewQueue.map((item) => {
               const actions = visibleActionsForSk(role, currentUserId, item, editMode);

@@ -392,7 +392,7 @@ def update_template(
 ):
     record = db.get(TemplateModel, template_id)
     if record is None:
-        raise HTTPException(status_code=404, detail="Template not found")
+        raise HTTPException(status_code=404, detail="Không tìm thấy mẫu báo cáo")
     if payload.name is not None:
         record.name = payload.name
     record.definition = payload.definition

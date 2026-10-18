@@ -1447,9 +1447,9 @@ function DashboardView({
           </div>
         </div>
         <div className="web-input-controls">
-          <input placeholder="Team" value={filters.team} onChange={(event) => setFilters({ ...filters, team: event.target.value })} />
-          <input placeholder="Vị trí" value={filters.position} onChange={(event) => setFilters({ ...filters, position: event.target.value })} />
-          <input placeholder="Bậc" type="number" min={1} max={8} value={filters.level} onChange={(event) => setFilters({ ...filters, level: event.target.value })} />
+          <input aria-label="Lọc theo đội/tổ" placeholder="Đội/Tổ (vd: TBCH)" value={filters.team} onChange={(event) => setFilters({ ...filters, team: event.target.value })} />
+          <input aria-label="Lọc theo vị trí" placeholder="Vị trí" value={filters.position} onChange={(event) => setFilters({ ...filters, position: event.target.value })} />
+          <input aria-label="Lọc theo bậc" placeholder="Bậc" type="number" min={1} max={8} value={filters.level} onChange={(event) => setFilters({ ...filters, level: event.target.value })} />
           <select value={filters.result} onChange={(event) => setFilters({ ...filters, result: event.target.value })}>
             <option value="">Tất cả kết quả</option>
             <option>Đạt</option>
@@ -1462,10 +1462,10 @@ function DashboardView({
         {dashboard && (
           <>
             <div className="et-stats">
-              <div><strong>{population.personnel_count ?? dashboard.aggregate.total_active_personnel}</strong><span>Hồ sơ Personnel</span></div>
+              <div><strong>{population.personnel_count ?? dashboard.aggregate.total_active_personnel}</strong><span>Hồ sơ nhân sự</span></div>
               <div><strong>{population.linked_accounts_count ?? "—"}</strong><span>Tài khoản đã liên kết</span></div>
-              <div><strong>{population.dashboard_eligible_count ?? dashboard.aggregate.total_active_personnel}</strong><span>Đủ điều kiện dashboard</span></div>
-              <div><strong>{population.assessment_ready_count ?? "—"}</strong><span>Sẵn sàng tạo đánh giá</span></div>
+              <div><strong>{population.dashboard_eligible_count ?? dashboard.aggregate.total_active_personnel}</strong><span>Được tính vào thống kê</span></div>
+              <div><strong>{population.assessment_ready_count ?? "—"}</strong><span>Sẵn sàng đánh giá</span></div>
               <div><strong>{dashboard.aggregate.pass_count}</strong><span>Đạt ({dashboard.aggregate.pass_percentage}%)</span></div>
               <div><strong>{dashboard.aggregate.fail_count}</strong><span>Không đạt</span></div>
               <div><strong>{dashboard.aggregate.not_assessed_count}</strong><span>Chưa đánh giá</span></div>
@@ -1473,9 +1473,9 @@ function DashboardView({
             </div>
             <div className="et-population-explanation">
               <div>
-                <strong>Population kỳ này</strong>
-                <p>{population.definition || "Dashboard chỉ tính Personnel đang hoạt động, không ẩn, có vị trí và bậc."}</p>
-                <small>Các lý do bên dưới là nhóm loại trừ nhau; không cộng với nhau ngoài số hồ sơ chưa hoàn thiện.</small>
+                <strong>Phạm vi thống kê kỳ này</strong>
+                <p>{population.definition || "Chỉ tính nhân sự đang làm việc, không bị ẩn, đã có vị trí và bậc năng lực."}</p>
+                <small>Danh sách bên dưới là lý do một số hồ sơ chưa được tính; mỗi hồ sơ chỉ thuộc một lý do.</small>
               </div>
               {reasons.length > 0 && (
                 <ul>
@@ -1487,7 +1487,7 @@ function DashboardView({
               <>
                 <div className="matrix">
                   <table>
-                    <thead><tr><th>Team</th><th>Nhân sự</th><th>Bậc</th><th>Đạt</th><th>GAP</th><th>Tổng GAP</th><th>Kết quả</th></tr></thead>
+                    <thead><tr><th>Đội/Tổ</th><th>Nhân sự</th><th>Bậc</th><th>Đạt</th><th>GAP</th><th>Tổng GAP</th><th>Kết quả</th></tr></thead>
                     <tbody>
                       {dashboardRows.map((row: any) => (
                         <tr key={row.personnel_id}>

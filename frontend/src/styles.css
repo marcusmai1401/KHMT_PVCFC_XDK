@@ -11052,7 +11052,7 @@ pre {
     radial-gradient(120% 85% at 88% 2%, rgba(22, 144, 69, 0.1), transparent 55%),
     radial-gradient(100% 80% at 4% 100%, rgba(44, 57, 142, 0.1), transparent 58%),
     linear-gradient(180deg, #f6faf7 0%, #eef3fb 58%, #e8eff8 100%);
-  font-family: "Inter", "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  font-family: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
   color: var(--pv-slate);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -17053,4 +17053,54 @@ nav button.active {
 @media (max-width: 720px) {
   .et-population-explanation { flex-direction: column; gap: 10px; }
   .et-population-explanation ul { min-width: 0; width: 100%; }
+}
+
+/* Objective details collapse on phones (ObjectiveSection.tsx). */
+.objective-section-body[hidden] {
+  display: none;
+}
+
+.objective-expand-toggle {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .objective-expand-toggle {
+    align-items: center;
+    background: var(--bg-main);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--primary-light);
+    display: inline-flex;
+    font-weight: 600;
+    gap: 6px;
+    justify-content: center;
+    min-height: 40px;
+    padding: 8px 12px;
+    width: 100%;
+  }
+
+  .objective-expand-toggle[aria-expanded="true"] svg {
+    transform: rotate(180deg);
+  }
+}
+
+.fi-legacy-pending-note {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  justify-content: space-between;
+}
+
+.metric-target-gap-note,
+.fi-legacy-pending-note {
+  background: #fff8e6;
+  border: 1px solid #f3d9a4;
+  border-radius: var(--radius-sm);
+  color: #7a4b00;
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+  padding: 10px 12px;
 }

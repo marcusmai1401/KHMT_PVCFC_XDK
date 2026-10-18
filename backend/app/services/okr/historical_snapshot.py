@@ -514,6 +514,16 @@ _REPORT_AXIS_NOISE = {
     "et", "am", "pm", "fi", "oi", "she", "tcdk", "tbch", "tbdl", "tbhtdk",
     "tieu chi danh gia", "muc tieu", "ket qua",
 }
+# Status legends drawn next to Dashboard charts ("Hoàn thành" / "Không hoàn
+# thành") come through as loose text lines; they are never report content.
+_REPORT_LEGEND_NOISE = {
+    "hoan thanh", "khong hoan thanh", "khong hoan thanh thanh", "thanh",
+    "dat", "khong dat", "n/a", "#n/a",
+}
+
+
+def is_report_legend_noise(line: str) -> bool:
+    return " ".join(_plain_text(line).split()) in _REPORT_LEGEND_NOISE
 # A text box whose heading already renders as a dedicated chart is skipped so the
 # report does not duplicate it: the per-team additions ("Hạng mục phát sinh") that
 # the user does not want, and the STOP programme headers (shown as O3 charts).
@@ -528,7 +538,7 @@ def _is_report_noise(line: str) -> bool:
         return True
     if re.match(r"^\d+%\s*:", text):  # radar legend "25%: Xây dựng"
         return True
-    return _plain_text(text) in _REPORT_AXIS_NOISE
+    return _plain_text(text) in _REPORT_AXIS_NOISE or is_report_legend_noise(text)
 
 
 def _kr_number(code: str) -> int:

@@ -2,6 +2,7 @@ from collections import defaultdict
 from typing import Any
 
 from app.services.okr.constants import TEAM_DISPLAY_NAMES, TEAMS
+from app.services.okr.historical_snapshot import is_report_legend_noise
 from app.services.okr.team_normalizer import normalize_team_label
 from app.services.okr.objective_types import DataState, ObjectiveCode, ObjectiveSection, ObjectiveStatus, VisualBlock, VisualKind
 
@@ -219,6 +220,15 @@ def _metric_table_payload(
     }
 
 
+def _is_empty_or_zero(value: Any) -> bool:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return True
+    try:
+        return float(value) == 0
+    except (TypeError, ValueError):
+        return False
+
+
 def _combo_payload(
     *,
     labels: list[str],
@@ -236,6 +246,14 @@ def _combo_payload(
     left_y_axis_label: str = "Giá trị",
     right_y_axis_label: str = "Tỷ lệ (%)",
 ) -> dict[str, Any]:
+    # Workbook formulas yield 0% for months with neither plan nor result yet;
+    # plotting those drops the rate line to zero as if the period failed.
+    rate = [
+        None if _is_empty_or_zero(actual[index] if index < len(actual) else None)
+        and _is_empty_or_zero(planned[index] if index < len(planned) else None)
+        else value
+        for index, value in enumerate(rate)
+    ]
     return {
         "labels": labels,
         "datasets": [
@@ -897,7 +915,8 @@ def _enrich_objective_report(section_report: dict[str, Any], visuals: list[Visua
     return {
         **section_report,
         "krs": enriched_krs,
-        "notes": list(section_report.get("notes") or []),
+        # Stored snapshots predate the legend filter, so clean them on read too.
+        "notes": [note for note in section_report.get("notes") or [] if not is_report_legend_noise(str(note))],
     }
 
 

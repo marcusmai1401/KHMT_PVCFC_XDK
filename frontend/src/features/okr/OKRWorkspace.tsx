@@ -9,7 +9,7 @@ import { ObjectiveDashboard } from "./components/ObjectiveDashboard";
 import { PeriodSelector } from "./components/PeriodSelector";
 import { exportDashboardElementAsPng } from "./exportDashboardPng";
 import { readLastSelectedPeriod, writeLastSelectedPeriod } from "./lastSelectedPeriod";
-import type { DashboardColumn, DashboardPayload, DashboardTeamRow, KRSummary } from "./types/dashboard";
+import type { DashboardColumn, DashboardPayload, DashboardTeamRow, KRSummary, LeaderKPIAllocation } from "./types/dashboard";
 
 function krSortKey(code: string): [number, number, string] {
   const match = /^O(\d+)\.KR(\d+)$/i.exec(code || "");
@@ -305,9 +305,9 @@ export function OKRWorkspace({ role, editMode = true }: { role: string; editMode
         <>
           {dashboard?.monthly_history?.length ? (
             <MonthlyHistoryHeatmap
-              allocations={dashboard.leader_kpi_allocations}
+              allocations={effectiveAllocations(dashboard.teams ?? [])}
               history={dashboard.monthly_history}
-              summary={dashboard.kpi_allocation_summary}
+              summary={effectiveAllocationSummary(dashboard.teams ?? [])}
             />
           ) : null}
           <ObjectiveDashboard
@@ -622,6 +622,37 @@ function ObjectiveExecutiveCell({
   );
 }
 
+// Manual A1/A2 entries override the rule-based allocation field by field, so
+// every block on the dashboard shows the same number for a team.
+function effectiveAllocation(team: DashboardTeamRow) {
+  const manual = team.leader_kpi_manual_allocation;
+  const rule = team.leader_kpi_allocation;
+  const manualA1 = manual?.a1 ?? null;
+  const manualA2 = manual?.a2 ?? null;
+  return {
+    a1: manualA1 ?? rule?.a1 ?? 0,
+    a2: manualA2 ?? rule?.a2 ?? 0,
+    manual: manualA1 !== null || manualA2 !== null,
+  };
+}
+
+function effectiveAllocations(teams: DashboardTeamRow[]): LeaderKPIAllocation[] {
+  return teams
+    .filter((team) => hasTeamReport(team))
+    .map((team) => {
+      const effective = effectiveAllocation(team);
+      return { ...(team.leader_kpi_allocation ?? {}), team: team.team, team_name: team.team_name, a1: effective.a1, a2: effective.a2 };
+    });
+}
+
+function effectiveAllocationSummary(teams: DashboardTeamRow[]) {
+  const rows = effectiveAllocations(teams);
+  return {
+    A1: rows.reduce((sum, row) => sum + (row.a1 ?? 0), 0),
+    A2: rows.reduce((sum, row) => sum + (row.a2 ?? 0), 0),
+  };
+}
+
 function allocationText(value: number | null | undefined) {
   return value === null || value === undefined ? "" : String(value);
 }
@@ -648,9 +679,10 @@ function LeaderKpiCompactRow({
   onChangeA1: (val: string) => void;
   onChangeA2: (val: string) => void;
 }) {
-  const allocation = team.leader_kpi_manual_allocation;
-  const initialA1 = allocationText(allocation?.a1);
-  const initialA2 = allocationText(allocation?.a2);
+  const effective = effectiveAllocation(team);
+  const ruleA1 = allocationText(team.leader_kpi_allocation?.a1 ?? 0);
+  const ruleA2 = allocationText(team.leader_kpi_allocation?.a2 ?? 0);
+  const sourceTitle = effective.manual ? "Đã điều chỉnh thủ công" : "Tính tự động theo quy tắc xét A1/A2";
 
   if (!hasTeamReport(team)) {
     return (
@@ -663,10 +695,10 @@ function LeaderKpiCompactRow({
 
   if (!canEdit) {
     return (
-      <div className="kpi-team-compact readonly">
+      <div className="kpi-team-compact readonly" title={sourceTitle}>
         <span className="team-code">{team.team}</span>
-        <span className="kpi-value-pill">A2: <b>{initialA2 || "0"}</b></span>
-        <span className="kpi-value-pill">A1: <b>{initialA1 || "0"}</b></span>
+        <span className="kpi-value-pill">A2: <b>{effective.a2}</b></span>
+        <span className="kpi-value-pill">A1: <b>{effective.a1}</b></span>
       </div>
     );
   }
@@ -682,6 +714,8 @@ function LeaderKpiCompactRow({
             inputMode="numeric"
             min={0}
             onChange={(event) => onChangeA2(event.target.value)}
+            placeholder={ruleA2}
+            title={`Để trống để dùng giá trị theo quy tắc (${ruleA2})`}
             type="number"
             value={a2Text}
           />
@@ -693,6 +727,8 @@ function LeaderKpiCompactRow({
             inputMode="numeric"
             min={0}
             onChange={(event) => onChangeA1(event.target.value)}
+            placeholder={ruleA1}
+            title={`Để trống để dùng giá trị theo quy tắc (${ruleA1})`}
             type="number"
             value={a1Text}
           />

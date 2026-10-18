@@ -121,12 +121,12 @@ def _validate_image_upload(safe_name: str, content_type: str | None) -> str:
     suffix = Path(safe_name).suffix.lower()
     normalized_content_type = (content_type or "").lower()
     if suffix and suffix not in ALLOWED_IMAGE_EXTENSIONS:
-        raise HTTPException(status_code=400, detail="Only image files are supported")
+        raise HTTPException(status_code=400, detail="Chỉ hỗ trợ tệp ảnh (ví dụ JPG, PNG, HEIC)")
     if normalized_content_type == "image/svg+xml":
-        raise HTTPException(status_code=400, detail="SVG images are not supported")
+        raise HTTPException(status_code=400, detail="Không hỗ trợ ảnh SVG")
     if normalized_content_type and not normalized_content_type.startswith("image/"):
         if normalized_content_type not in LENIENT_IMAGE_CONTENT_TYPES:
-            raise HTTPException(status_code=400, detail="Only image files are supported")
+            raise HTTPException(status_code=400, detail="Chỉ hỗ trợ tệp ảnh (ví dụ JPG, PNG, HEIC)")
     guessed_content_type, _ = mimetypes.guess_type(safe_name)
     return normalized_content_type if normalized_content_type.startswith("image/") else guessed_content_type or "application/octet-stream"
 
@@ -701,12 +701,12 @@ def upload_image(
     record = _lock_record_for_attachment_mutation(db, record_id)
     if principal["role"] in {Role.TEAM_ACCOUNT.value, Role.STAFF.value, Role.FI_COORDINATOR.value}:
         if not is_author_or_submitter(record, principal["user_id"], db) or record.status not in AUTHOR_CONTENT_EDITABLE_STATUSES:
-            raise HTTPException(status_code=403, detail="Only owner can upload images for editable entries")
+            raise HTTPException(status_code=403, detail="Chỉ người đăng ký mới được thêm ảnh cho hồ sơ đang chỉnh sửa")
     safe_name = _safe_filename(file.filename)
     content_type = _validate_image_upload(safe_name, file.content_type)
     data = file.file.read(settings.max_image_upload_mb * 1024 * 1024 + 1)
     if len(data) > settings.max_image_upload_mb * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Image file is too large")
+        raise HTTPException(status_code=400, detail="Ảnh vượt quá dung lượng cho phép")
     request_hash = _request_hash({"record_id": record_id, "filename": safe_name, "content_sha256": hashlib.sha256(data).hexdigest()})
     if idempotency_key:
         replay = idempotency_replay(
@@ -758,7 +758,7 @@ def upload_image(
         os.replace(temp_path, path)
     except OSError:
         temp_path.unlink(missing_ok=True)
-        raise HTTPException(status_code=500, detail="Could not stage image upload")
+        raise HTTPException(status_code=500, detail="Không lưu được ảnh, vui lòng thử lại")
     image = SKImageModel(
         id=image_id,
         sk_ctkt_id=record_id,
@@ -816,10 +816,10 @@ def get_image_raw(record_id: str, image_id: str, principal: dict = Depends(requi
     require_visible(record, principal)
     image = db.get(SKImageModel, image_id)
     if image is None or image.sk_ctkt_id != record_id:
-        raise HTTPException(status_code=404, detail="Image not found")
+        raise HTTPException(status_code=404, detail="Không tìm thấy ảnh")
     file_path = Path(image.file_path)
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Image file not found on disk")
+        raise HTTPException(status_code=404, detail="Tệp ảnh không còn trên máy chủ")
     return FileResponse(file_path, media_type=image.content_type or "application/octet-stream", filename=image.file_name)
 
 
@@ -845,10 +845,10 @@ def delete_image(
         )
     image = db.get(SKImageModel, image_id)
     if image is None or image.sk_ctkt_id != record_id:
-        raise HTTPException(status_code=404, detail="Image not found")
+        raise HTTPException(status_code=404, detail="Không tìm thấy ảnh")
     if principal["role"] in {Role.TEAM_ACCOUNT.value, Role.STAFF.value, Role.FI_COORDINATOR.value}:
         if not is_author_or_submitter(record, principal["user_id"], db) or record.status not in AUTHOR_CONTENT_EDITABLE_STATUSES:
-            raise HTTPException(status_code=403, detail="Only owner can delete images for editable entries")
+            raise HTTPException(status_code=403, detail="Chỉ người đăng ký mới được xóa ảnh của hồ sơ đang chỉnh sửa")
     try:
         Path(image.file_path).unlink(missing_ok=True)
     except OSError:

@@ -10,6 +10,7 @@ import {
   matchesHistoryKhmtFilters,
   ownershipBucketForItem,
   recordSubmitterId,
+  isPlanOnlyEdit,
   visibleActionsForSk,
 } from "./FIWorkspace";
 
@@ -157,10 +158,14 @@ describe("FI action visibility", () => {
     expect(visibleActionsForSk("Staff", "other", legacySubmitted)).toEqual([]);
   });
 
-  it("does not allow owners to edit SK after the decision is Approved", () => {
+  it("lets owners update only the completion plan after the decision is Approved", () => {
     const approved = { status: "Approved", author_user_id: "u1" };
 
-    expect(visibleActionsForSk("Staff", "u1", approved)).toEqual([]);
+    expect(visibleActionsForSk("Staff", "u1", approved)).toEqual(["edit"]);
+    expect(isPlanOnlyEdit(approved)).toBe(true);
+    expect(visibleActionsForSk("Staff", "u2", approved)).toEqual([]);
+    expect(visibleActionsForSk("Staff", "u1", { ...approved, status: "Completed" })).toEqual([]);
+    expect(isPlanOnlyEdit({ ...approved, status: "Deferred" })).toBe(false);
   });
 
   it("shows one review decision action for FI_Coordinator on Submitted items", () => {
@@ -191,11 +196,12 @@ describe("FI action visibility", () => {
 
     expect(visibleActionsForSk("Admin", "admin", approved)).toEqual(["reviewDecision", "assignKhmt", "delete"]);
     expect(visibleActionsForSk("Admin", "admin", { ...approved, author_user_id: "admin" })).toEqual([
+      "edit",
       "reviewDecision",
       "assignKhmt",
       "delete",
     ]);
-    expect(visibleActionsForSk("Team_Account", "TBCH", approved)).toEqual(["assignKhmt"]);
+    expect(visibleActionsForSk("Team_Account", "TBCH", approved)).toEqual(["edit", "assignKhmt"]);
     expect(visibleActionsForSk("Team_Account", "TBĐL", approved)).toEqual([]);
     expect(visibleActionsForSk("Workshop_Leader", "leader", approved)).toEqual([]);
   });
@@ -204,7 +210,7 @@ describe("FI action visibility", () => {
     const approved = { status: "Approved", author_user_id: "TBCH", team: "TBCH" };
 
     expect(visibleActionsForSk("Admin", "admin", approved, false)).toEqual([]);
-    expect(visibleActionsForSk("Team_Account", "TBCH", approved, false)).toEqual(["assignKhmt"]);
+    expect(visibleActionsForSk("Team_Account", "TBCH", approved, false)).toEqual(["edit", "assignKhmt"]);
   });
 
   it("allows admin and the owning team account to choose KHMT month", () => {

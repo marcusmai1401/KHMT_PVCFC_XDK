@@ -1,5 +1,5 @@
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -59,11 +59,29 @@ EDITABLE_AFTER_SUBMIT_STATUSES = {
     SKStatus.DEFERRED.value,
 }
 AUTHOR_CONTENT_EDITABLE_STATUSES = {SKStatus.DRAFT.value, *EDITABLE_AFTER_SUBMIT_STATUSES}
+# Sau khi được Đồng ý, nội dung đã duyệt giữ nguyên; tác giả chỉ cập nhật tiến
+# độ thực hiện. KHMT xét theo approved_at nên đổi kế hoạch không ảnh hưởng phân bổ.
+COMPLETION_PLAN_FIELDS = {"completion_date", "completion_done", "completion_plan"}
+PLAN_ONLY_EDITABLE_STATUSES = {SKStatus.APPROVED.value}
 IMPORT_ACTOR_IDS = {"historical-import", "deploy-import"}
 
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _factory_today() -> date:
+    # Người dùng ở Việt Nam (UTC+7); so theo ngày địa phương để không chặn nhầm
+    # một ngày hoàn thành "hôm nay" trong khoảng 0h-7h sáng.
+    return (_utc_now() + timedelta(hours=7)).date()
+
+
+def _assert_completion_not_in_future(payload: dict[str, Any]) -> None:
+    completed_on = payload.get("completion_date")
+    if isinstance(completed_on, datetime):
+        completed_on = completed_on.date()
+    if payload.get("completion_done") and isinstance(completed_on, date) and completed_on > _factory_today():
+        raise HTTPException(status_code=400, detail="Ngày hoàn thành không được sau ngày hôm nay")
 
 
 def _assert_revision(record: SKCTKTModel, expected_revision: int | None) -> None:
@@ -388,14 +406,21 @@ def update_sk_ctkt(
         raise PermissionError("Chỉ tác giả hoặc người gửi hộ mới được chỉnh sửa")
     if record.status in {SKStatus.CANCELLED.value, SKStatus.COMPLETED.value}:
         raise PermissionError("SK đã hoàn tất hoặc đã hủy, không chỉnh sửa được nội dung")
-    if record.status not in AUTHOR_CONTENT_EDITABLE_STATUSES:
+    plan_only_edit = record.status in PLAN_ONLY_EDITABLE_STATUSES
+    if plan_only_edit:
+        if not requested_fields or not requested_fields <= COMPLETION_PLAN_FIELDS:
+            raise PermissionError("SK đã được Đồng ý chỉ cho cập nhật Kế hoạch hoàn thành")
+    elif record.status not in AUTHOR_CONTENT_EDITABLE_STATUSES:
         raise PermissionError("Trạng thái hiện tại không cho phép chỉnh sửa nội dung")
     if not shared_content_edit:
         raise PermissionError("Tác giả chỉ được cập nhật tiêu đề, nội dung đăng ký và kế hoạch thực hiện")
+    _assert_completion_not_in_future(payload)
     before = model_to_dict(record)
     if "team" in payload and payload["team"] != record.team:
         raise PermissionError("Tài khoản không được đổi đội/tổ của SK")
     previous_status = record.status
+    previous_plan = record.completion_plan
+    previous_completed_at = record.completed_at
     for field in ["title", "content_description", "completion_plan"]:
         if field in payload:
             setattr(record, field, payload[field])
@@ -405,9 +430,34 @@ def update_sk_ctkt(
             fallback=record.created_at or _utc_now(),
             existing=record.completed_at,
         )
-    record.updated_at = _utc_now()
+    now = _utc_now()
+    record.updated_at = now
     record.revision += 1
-    audit(db, actor, "SK_CTKT", record_id, "update", {"before": before, "after": model_to_dict(record)})
+    if plan_only_edit:
+        record.status_history = [
+            *record.status_history,
+            {
+                "from_status": record.status,
+                "to_status": record.status,
+                "changed_by": actor,
+                "changed_at": now.isoformat(),
+                "reason": "completion_plan_update",
+                "comments": {
+                    "previous_completion_plan": previous_plan,
+                    "completion_plan": record.completion_plan,
+                    "previous_completed_at": previous_completed_at.isoformat() if previous_completed_at else None,
+                    "completed_at": record.completed_at.isoformat() if record.completed_at else None,
+                },
+            },
+        ]
+    audit(
+        db,
+        actor,
+        "SK_CTKT",
+        record_id,
+        "update_completion_plan" if plan_only_edit else "update",
+        {"before": before, "after": model_to_dict(record)},
+    )
     # Nếu tác giả chỉnh sửa SK đã gửi duyệt thì gửi noti cho FI_Coordinator +
     # Admin để xét duyệt lại.
     if previous_status in EDITABLE_AFTER_SUBMIT_STATUSES:

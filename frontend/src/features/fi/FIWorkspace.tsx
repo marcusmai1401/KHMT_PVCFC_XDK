@@ -62,6 +62,17 @@ const AUTHOR_EDITABLE_STATUSES = [
   "Rejected",
   "Deferred",
 ];
+// SK đã Đồng ý: nội dung đã duyệt giữ nguyên, tác giả/người gửi hộ chỉ cập
+// nhật Kế hoạch hoàn thành; trạng thái không đổi và không cần xét duyệt lại.
+const PLAN_ONLY_EDITABLE_STATUSES = ["Approved"];
+export function isPlanOnlyEdit(item: any) {
+  return PLAN_ONLY_EDITABLE_STATUSES.includes(item?.status);
+}
+function editActionTitle(item: any) {
+  if (isPlanOnlyEdit(item)) return "Cập nhật kế hoạch hoàn thành";
+  if (item?.status !== "Draft") return "Chỉnh sửa (sẽ gửi thông báo xét duyệt lại)";
+  return "Chỉnh sửa nội dung/kế hoạch";
+}
 const OWNER_DELETABLE_STATUSES = ["Draft", "Submitted", "NeedMoreInfo"];
 const OWNERSHIP_PREVIEW_LIMIT = 5;
 const OWNERSHIP_PENDING_STATUSES = new Set(["Draft", "Submitted", "NeedMoreInfo"]);
@@ -406,6 +417,7 @@ async function uploadWithRetry(skId: string, file: File, idempotencyKey: string,
 }
 
 function historyActionLabel(history: any) {
+  if (history.reason === "completion_plan_update") return "Cập nhật kế hoạch hoàn thành";
   if (!history.from_status && history.to_status === "Draft") return "Ghi nhận đăng ký";
   if (!history.from_status && history.to_status === "Submitted") return "Đăng ký xét duyệt";
   if (!history.from_status) return displayStatus(history.to_status);
@@ -437,6 +449,11 @@ function historyDetail(history: any) {
     const year = structuredComments?.khmt_year;
     return { label: "KHMT", text: month && year ? `Đã xem xét vào KHMT T${month}/${year}` : "Đã xem xét vào KHMT" };
   }
+  if (reason === "completion_plan_update") {
+    const previous = String(structuredComments?.previous_completion_plan || "Chưa ghi");
+    const next = String(structuredComments?.completion_plan || "Chưa ghi");
+    return { label: "Kế hoạch", text: `${previous} → ${next}` };
+  }
   if (reason === "khmt_unassignment") {
     const month = structuredComments?.previous_khmt_month;
     const year = structuredComments?.previous_khmt_year;
@@ -450,6 +467,11 @@ function historyDetail(history: any) {
   if (history.to_status === "NeedMoreInfo") return { label: "Yêu cầu bổ sung", text: reason };
   if (["Approved", "Completed"].includes(history.to_status)) return { label: "Ghi chú quyết định", text: reason };
   return { label: "Ghi chú", text: reason };
+}
+
+function planUpdateHistory(item: any) {
+  const history = Array.isArray(item?.status_history) ? item.status_history : [];
+  return history.filter((entry: any) => entry?.reason === "completion_plan_update");
 }
 
 function formatHistoryTime(value: string | null | undefined) {
@@ -674,7 +696,7 @@ export function visibleActionsForSk(role: string, currentUserId: string, item: a
   // đã đánh giá) miễn là chưa hoàn tất/hủy. Legacy import được map về account
   // tác giả thật ở backend nên vẫn đi theo cùng quyền owner.
   // Sau khi sửa, FI/Admin sẽ nhận noti SK_CONTENT_EDITED để xét duyệt lại.
-  const canEdit = canManageAsOwner && AUTHOR_EDITABLE_STATUSES.includes(item.status);
+  const canEdit = canManageAsOwner && (AUTHOR_EDITABLE_STATUSES.includes(item.status) || isPlanOnlyEdit(item));
   // FI_Coordinator không được xét duyệt SK do chính mình đăng ký (xung đột lợi ích).
   const canReviewDecision =
     REVIEWER_ROLES.includes(role) &&
@@ -2129,24 +2151,34 @@ export function FIWorkspace({
 
   const handleEditSave = async () => {
     if (!editTarget || savingEdit || loadingEdit) return;
+    if (editForm.completion_done && editForm.completion_plan_date > isoDateInput(new Date())) {
+      setError("Ngày hoàn thành không được sau ngày hôm nay.");
+      return;
+    }
     setSavingEdit(true);
     setError("");
     setNotice("");
     const wasSubmitted = editTarget.status && editTarget.status !== "Draft";
+    const planOnly = isPlanOnlyEdit(editTarget);
+    const planFields = {
+      completion_plan: formatCompletionPlan(editForm.completion_done, editForm.completion_plan_date),
+      completion_done: editForm.completion_done,
+      completion_date: editForm.completion_plan_date,
+    };
     try {
-      const updated = await api.updateSkRevision(editTarget.id, {
+      const updated = await api.updateSkRevision(editTarget.id, planOnly ? planFields : {
+        ...planFields,
         content_description: editForm.content_description,
-        completion_plan: formatCompletionPlan(editForm.completion_done, editForm.completion_plan_date),
-        completion_done: editForm.completion_done,
-        completion_date: editForm.completion_plan_date,
         title: editForm.title,
       }, {
         expectedRevision: editTarget.server_revision ?? editTarget.revision ?? 0,
       });
       setNotice(
-        wasSubmitted
-          ? "Đã cập nhật SK. Đầu mối FI và Quản trị đã nhận thông báo để xem xét lại."
-          : "Đã cập nhật nội dung SK-CTKT."
+        planOnly
+          ? "Đã cập nhật kế hoạch hoàn thành. Trạng thái Đồng ý được giữ nguyên."
+          : wasSubmitted
+            ? "Đã cập nhật SK. Đầu mối FI và Quản trị đã nhận thông báo để xem xét lại."
+            : "Đã cập nhật nội dung SK-CTKT."
       );
       setEditTarget(null);
       setSelectedItem((current: any) => current?.id === updated.id ? { ...current, ...updated } : current);
@@ -2658,7 +2690,6 @@ export function FIWorkspace({
       <div className="list">
       {visibleRows.map((item) => {
         const actions = visibleActionsForSk(role, currentUserId, item, editMode);
-        const editedAfterSubmit = item.status !== "Draft" && AUTHOR_EDITABLE_STATUSES.includes(item.status);
         const submitterId = recordSubmitterId(item);
         const authorId = recordAuthorId(item);
         return (
@@ -2683,7 +2714,7 @@ export function FIWorkspace({
               {actions.includes("edit") && (
                 <button
                   aria-label={`Sửa ${item.sk_code || item.title}`}
-                  title={editedAfterSubmit ? "Chỉnh sửa (sẽ gửi noti xét duyệt lại)" : "Chỉnh sửa nội dung/kế hoạch"}
+                  title={editActionTitle(item)}
                   onClick={() => openEdit(item)}
                   type="button"
                 >
@@ -2848,7 +2879,7 @@ export function FIWorkspace({
             <div className="fi-edit-modal-head">
               <div className="fi-edit-modal-title">
                 <div className="fi-edit-modal-title-row">
-                  <h2 id="fi-edit-modal-title">Chỉnh sửa SK-CTKT</h2>
+                  <h2 id="fi-edit-modal-title">{isPlanOnlyEdit(editTarget) ? "Cập nhật kế hoạch hoàn thành" : "Chỉnh sửa SK-CTKT"}</h2>
                   {editTarget.status && (
                     <span className={`fi-status-pill ${statusTone(editTarget.status)}`}>
                       {displayStatus(editTarget.status)}
@@ -2874,12 +2905,24 @@ export function FIWorkspace({
             </div>
             <div className="fi-edit-modal-body">
               {loadingEdit && <p role="status">Đang tải bản hiện tại…</p>}
-              {editTarget.status && editTarget.status !== "Draft" && (
+              {isPlanOnlyEdit(editTarget) ? (
+                <div className="fi-edit-modal-alert">
+                  <Info size={16} />
+                  <span>SK đã được Đồng ý nên chỉ cập nhật được Kế hoạch hoàn thành. Trạng thái giữ nguyên, thay đổi được ghi vào lịch sử.</span>
+                </div>
+              ) : editTarget.status && editTarget.status !== "Draft" && (
                 <div className="fi-edit-modal-alert">
                   <Info size={16} />
                   <span>FI/Admin sẽ nhận thông báo để xem xét lại sau khi lưu.</span>
                 </div>
               )}
+              {isPlanOnlyEdit(editTarget) ? (
+                <div className="fi-edit-readonly-summary">
+                  <strong>{editForm.title}</strong>
+                  <p>{editForm.content_description}</p>
+                </div>
+              ) : (
+              <>
               <div className="fi-edit-field">
                 <label htmlFor="fi-edit-title">Tên SK-CTKT</label>
                 <input
@@ -2901,6 +2944,8 @@ export function FIWorkspace({
                   rows={10}
                 />
               </div>
+              </>
+              )}
               <div className="fi-edit-plan-panel">
                 <div className="fi-edit-plan-copy">
                   <strong>Tiến độ thực hiện</strong>
@@ -2937,6 +2982,7 @@ export function FIWorkspace({
                     định dạng tháng/năm chuẩn.
                   </small>
                 )}
+              {!isPlanOnlyEdit(editTarget) && (
               <div className="fi-edit-images-panel">
                 <div className="fi-edit-images-head">
                   <div>
@@ -2989,6 +3035,7 @@ export function FIWorkspace({
                   </div>
                 )}
               </div>
+              )}
               {error && <p className="error" role="alert" tabIndex={-1}>{error}</p>}
             </div>
             <div className="fi-edit-modal-actions">
@@ -3511,12 +3558,12 @@ export function FIWorkspace({
               {selectedActions.includes("edit") && (
                 <button
                   className="fi-detail-action"
-                  title="Chỉnh sửa nội dung/kế hoạch"
+                  title={editActionTitle(selectedItem)}
                   type="button"
                   onClick={() => openEdit(selectedItem)}
                 >
                   <Pencil size={17} />
-                  Chỉnh sửa
+                  {isPlanOnlyEdit(selectedItem) ? "Cập nhật kế hoạch" : "Chỉnh sửa"}
                 </button>
               )}
               {selectedActions.includes("delete") && (
@@ -4288,7 +4335,7 @@ export function FIWorkspace({
                           <button
                             aria-label={`Sửa ${item.sk_code || item.title}`}
                             className="legacy-icon-action"
-                            title="Chỉnh sửa nội dung/kế hoạch"
+                            title={editActionTitle(item)}
                             onClick={() => openEdit(item)}
                             type="button"
                           >
@@ -4379,6 +4426,22 @@ export function FIWorkspace({
                           <span>Đã xem xét vào KHMT</span>
                           <p>{khmtLabel(detail)}</p>
                         </section>
+                        {planUpdateHistory(detail).length > 0 && (
+                          <section className="legacy-plan-history">
+                            <span>Lịch sử cập nhật kế hoạch</span>
+                            <ul>
+                              {planUpdateHistory(detail).map((history: any, index: number) => (
+                                <li key={`${history.changed_at}-${index}`}>
+                                  <time>{formatHistoryTime(history.changed_at)}</time>
+                                  {" · "}
+                                  {displayUser(history.changed_by)}
+                                  {": "}
+                                  {historyDetail(history)?.text}
+                                </li>
+                              ))}
+                            </ul>
+                          </section>
+                        )}
                       </div>
                       <div className="legacy-evidence">
                         <div className="legacy-evidence-head">

@@ -17104,3 +17104,32 @@ nav button.active {
   margin: 0;
   padding: 10px 12px;
 }
+
+/* Plan-only edit of an approved FI: approved content is shown read-only. */
+.fi-edit-readonly-summary {
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+  padding: 12px 14px;
+}
+
+.fi-edit-readonly-summary p {
+  color: #607087;
+  margin: 0;
+  white-space: pre-line;
+}
+
+.legacy-plan-history ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.legacy-plan-history time {
+  font-variant-numeric: tabular-nums;
+}

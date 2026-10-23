@@ -1,6 +1,7 @@
 from datetime import date
 
 import pytest
+from fastapi import HTTPException
 
 from app.services.fi.service import (
     _fi_export_record_matches,
@@ -596,6 +597,76 @@ def test_author_cannot_edit_approved_sk_content(db_session):
 
     with pytest.raises(PermissionError):
         update_sk_ctkt(db_session, record.id, {"content_description": "Không được sửa"}, "cunghv", "Staff")
+
+
+def test_author_can_update_only_completion_plan_of_approved_sk(db_session):
+    record = create_sk_ctkt(
+        db_session,
+        {
+            "author_name": "Hữu Văn Cưng",
+            "team": "TBCH",
+            "title": "Title",
+            "content_description": "Content",
+            "completion_plan": "Dự kiến hoàn thành 30/10/2026",
+            "year": 2026,
+        },
+        "cunghv",
+    )
+    transition_sk_ctkt(db_session, record.id, "submit", "cunghv", "Staff")
+    approved = transition_sk_ctkt(db_session, record.id, "approve", "fi1", "FI_Coordinator")
+    approved_at = approved.approved_at
+    history_length = len(approved.status_history)
+    db_session.execute(NotificationModel.__table__.delete())
+    db_session.commit()
+
+    with pytest.raises(PermissionError, match="chỉ cho cập nhật Kế hoạch hoàn thành"):
+        update_sk_ctkt(
+            db_session,
+            record.id,
+            {"title": "Đổi tên", "completion_plan": "Dự kiến hoàn thành 30/11/2026"},
+            "cunghv",
+            "Staff",
+        )
+    with pytest.raises(PermissionError, match="Chỉ tác giả"):
+        update_sk_ctkt(db_session, record.id, {"completion_plan": "Dự kiến hoàn thành 30/11/2026"}, "linhln", "Staff")
+
+    updated = update_sk_ctkt(
+        db_session,
+        record.id,
+        {
+            "completion_plan": "Đã hoàn thành 20/10/2026",
+            "completion_done": True,
+            "completion_date": date(2026, 10, 20),
+        },
+        "cunghv",
+        "Staff",
+    )
+
+    assert updated.status == "Approved"
+    assert updated.approved_at == approved_at
+    assert updated.title == "Title"
+    assert updated.completion_plan == "Đã hoàn thành 20/10/2026"
+    assert updated.completed_at is not None and updated.completed_at.date() == date(2026, 10, 20)
+    assert len(updated.status_history) == history_length + 1
+    entry = updated.status_history[-1]
+    assert entry["reason"] == "completion_plan_update"
+    assert entry["from_status"] == entry["to_status"] == "Approved"
+    assert entry["comments"]["previous_completion_plan"] == "Dự kiến hoàn thành 30/10/2026"
+    assert entry["comments"]["completion_plan"] == "Đã hoàn thành 20/10/2026"
+    # Approved content is unchanged, so reviewers are not asked to review again.
+    assert db_session.execute(
+        select(NotificationModel).where(NotificationModel.event == "SK_CONTENT_EDITED")
+    ).first() is None
+
+    with pytest.raises(HTTPException) as future_done:
+        update_sk_ctkt(
+            db_session,
+            record.id,
+            {"completion_plan": "Đã hoàn thành 01/01/2099", "completion_done": True, "completion_date": date(2099, 1, 1)},
+            "cunghv",
+            "Staff",
+        )
+    assert future_done.value.status_code == 400
 
 
 def test_fi_coordinator_can_set_deferred_from_submitted(db_session):

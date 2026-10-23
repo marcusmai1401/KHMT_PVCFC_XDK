@@ -66,6 +66,7 @@ def test_remote_deploy_migrates_before_starting_new_code_and_prunes_backups():
     assert "exec -T backend alembic" not in command
     assert 'gzip -t "/backup/okr/okr_${stamp}.sql.gz"' in command
     assert "tail -n +21" in command
+    assert start < command.index("docker-compose.prod.yml restart caddy")
     assert "-printf '%T@ %p\\n'" in command
 
 

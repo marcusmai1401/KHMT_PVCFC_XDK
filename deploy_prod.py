@@ -213,6 +213,9 @@ log "Running migrations before switching traffic to the new code"
 {compose} run --rm -T backend alembic upgrade head
 log "Starting containers"
 {compose} up -d
+# The Caddyfile is bind-mounted and replaced on every deploy; Caddy keeps the
+# old file until its container restarts, so new headers would never apply.
+{compose} restart caddy
 log "Checking services"
 {compose} ps
 curl -fsS http://127.0.0.1/health

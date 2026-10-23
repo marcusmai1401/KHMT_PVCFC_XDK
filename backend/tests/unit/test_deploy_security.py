@@ -74,3 +74,10 @@ def test_backend_trusts_proxy_headers_for_client_ip():
 
     assert '"--proxy-headers"' in dockerfile
     assert '"--forwarded-allow-ips", "*"' in dockerfile
+
+
+def test_deploy_workflow_runs_backend_tests_through_isolation_harness():
+    workflow = (ROOT / ".github" / "workflows" / "deploy.yml").read_text(encoding="utf-8")
+
+    assert "python scripts/run_isolated_checks.py --suite postgres-ci" in workflow
+    assert "python -m pytest" not in workflow

@@ -45,7 +45,8 @@ jobs:
     name: Backend checks
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Matches ci.yml: the isolated PostgreSQL suite takes about 20 minutes.
+    timeout-minutes: 40
     services:
       postgres:
         image: postgres:16-alpine
@@ -77,12 +78,14 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
+      # tests/conftest.py refuses to run without the isolation manifest, so the
+      # suite must go through the same harness as ci.yml.
       - name: Run backend tests
         working-directory: backend
-        env:
-          OKR_DATABASE_URL: postgresql+psycopg://okr:ci-only-password@localhost:5432/okr_automation_test
-          OKR_JWT_SECRET: ci-only-jwt-secret-not-used-in-production
-        run: python -m pytest -q
+        run: |
+          set -euo pipefail
+          python scripts/test_isolation_guard.py
+          python scripts/run_isolated_checks.py --suite postgres-ci
 
       - name: Build backend Docker image
         run: docker build --file backend/Dockerfile --tag okr-backend-ci:${{ github.sha }} .

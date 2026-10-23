@@ -87,7 +87,7 @@ test("FI mobile filters collapse and searching does not download the full list",
   await expect(page.locator("#fi-history-toolbar")).toBeHidden();
   await toggle.click();
   const before = fullListCalls;
-  await page.getByPlaceholder("Tìm mã, tên, nội dung, tác giả…").fill("missing synthetic FI");
+  await page.getByLabel("Năm đăng ký").selectOption(String(new Date().getFullYear()));
   await expect(page.getByText(/Không có kết quả phù hợp với 1 bộ lọc/)).toBeVisible();
   expect(fullListCalls).toBe(before);
   await toggle.click();

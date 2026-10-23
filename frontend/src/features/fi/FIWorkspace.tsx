@@ -24,7 +24,6 @@ import {
   PieChart,
   RefreshCw,
   Save,
-  Search,
   Send,
   SlidersHorizontal,
   Trash2,
@@ -4039,16 +4038,6 @@ export function FIWorkspace({
             role="group"
             aria-label="Bộ lọc lịch sử FI"
           >
-            <label className="fi-history-search">
-              <Search size={15} aria-hidden="true" />
-              <input
-                type="search"
-                aria-label="Tìm SK-CTKT"
-                placeholder="Tìm mã, tên, nội dung, tác giả…"
-                value={historyQuery}
-                onChange={(event) => setHistoryQuery(event.target.value)}
-              />
-            </label>
             <label className={`fi-history-select-chip ${historyYear ? "is-active" : ""}`}>
               <CalendarDays size={14} aria-hidden="true" />
               <span>Năm</span>

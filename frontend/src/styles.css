@@ -16988,37 +16988,6 @@ nav button.active {
   z-index: 31;
 }
 
-.fi-history-search {
-  align-items: center;
-  background: #ffffff;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  color: #64748b;
-  display: inline-flex;
-  flex: 1 1 240px;
-  gap: 8px;
-  max-width: 360px;
-  min-height: 36px;
-  padding: 0 10px;
-}
-
-.fi-history-search:focus-within {
-  border-color: #2c398e;
-  box-shadow: 0 0 0 3px rgba(44, 57, 142, 0.12);
-}
-
-.fi-history-search input {
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  flex: 1;
-  font-size: 13px;
-  min-height: 34px;
-  min-width: 0;
-  outline: none;
-  padding: 0;
-}
-
 .fi-history-select-chip {
   align-items: center;
   background: #ffffff;
@@ -17113,11 +17082,6 @@ nav button.active {
   .fi-history-toolbar.is-collapsed,
   .fi-history-summary.is-collapsed {
     display: none;
-  }
-
-  .fi-history-search {
-    flex-basis: 100%;
-    max-width: none;
   }
 
   .fi-history-summary {
@@ -17236,4 +17200,81 @@ nav button.active {
 
 .legacy-plan-history time {
   font-variant-numeric: tabular-nums;
+}
+
+/* Feedback dialog (shared/feedback/FeedbackDialog.tsx). */
+.feedback-dialog {
+  display: grid;
+  gap: 16px;
+}
+
+.feedback-dialog h2 {
+  margin: 0;
+}
+
+.feedback-field {
+  display: grid;
+  gap: 8px;
+}
+
+.feedback-label {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.feedback-required {
+  color: #dc2626;
+}
+
+.feedback-type-group {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.feedback-type-group button {
+  background: #ffffff;
+  border: 1px solid var(--border, #d7dce5);
+  border-radius: 10px;
+  color: #334155;
+  font-weight: 600;
+  min-height: 40px;
+  padding: 8px 10px;
+}
+
+.feedback-type-group button.active {
+  background: #eef2ff;
+  border-color: #2c398e;
+  color: #2c398e;
+}
+
+.feedback-dialog textarea {
+  border: 1px solid var(--border, #d7dce5);
+  border-radius: 10px;
+  font: inherit;
+  line-height: 1.5;
+  min-height: 140px;
+  padding: 10px 12px;
+  resize: vertical;
+  width: 100%;
+}
+
+.feedback-dialog textarea:focus {
+  border-color: #2c398e;
+  box-shadow: 0 0 0 3px rgba(44, 57, 142, 0.12);
+  outline: none;
+}
+
+.feedback-counter {
+  color: #94a3b8;
+  font-size: 12px;
+  justify-self: end;
+}
+
+.feedback-note {
+  color: #64748b;
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 0;
 }

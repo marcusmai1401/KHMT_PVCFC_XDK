@@ -317,19 +317,6 @@ export function App() {
     });
   };
 
-  const revokeAllSessions = () => {
-    if (sandbox || !confirm("Đăng xuất tất cả thiết bị? Bạn sẽ cần đăng nhập lại.")) return;
-    void requestNavigation("đăng xuất tất cả thiết bị").then((allowed) => {
-      if (!allowed) return;
-      api.revokeAllSessions()
-        .then((response) => {
-          setNotice(response.message);
-          logout();
-        })
-        .catch((err) => setError(friendlyError(err.message)));
-    });
-  };
-
   const login = (event?: React.FormEvent) => {
     if (event) event.preventDefault();
     if (submitting || !userId.trim() || !password) return;
@@ -920,17 +907,6 @@ export function App() {
                     <span>Thoát kiểm thử</span>
                   </button>
                 )}
-                {!sandbox && (
-                  <button
-                    className="account-action"
-                    onClick={revokeAllSessions}
-                    title="Đăng xuất tất cả thiết bị"
-                    type="button"
-                  >
-                    <LogOut size={14} />
-                    <span>Đăng xuất mọi thiết bị</span>
-                  </button>
-                )}
                 <button
                   className="account-action logout-btn"
                   onClick={logout}
@@ -999,17 +975,6 @@ export function App() {
                   type="button"
                 >
                   <Undo2 size={16} />
-                </button>
-              )}
-              {!sandbox && (
-                <button
-                  aria-label="Đăng xuất tất cả thiết bị"
-                  className="mobile-account-button"
-                  onClick={revokeAllSessions}
-                  title="Đăng xuất tất cả thiết bị"
-                  type="button"
-                >
-                  <LogOut size={16} />
                 </button>
               )}
               <button

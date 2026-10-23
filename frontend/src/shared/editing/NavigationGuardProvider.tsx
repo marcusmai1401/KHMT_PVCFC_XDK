@@ -5,6 +5,10 @@ type Guard = {
   isDirty: () => boolean;
   save?: () => void | Promise<void>;
   discard?: () => void;
+  /** What happens to the work, in the user's words (shown in the dialog). */
+  message?: string;
+  saveLabel?: string;
+  discardLabel?: string;
 };
 
 type PendingNavigation = {
@@ -96,6 +100,9 @@ export function NavigationGuardProvider({ children }: { children: ReactNode }) {
         <UnsavedChangesDialog
           actionLabel={pending.actionLabel}
           busy={saving}
+          message={pending.guard.message}
+          saveLabel={pending.guard.saveLabel}
+          discardLabel={pending.guard.discardLabel}
           onStay={() => settle(false)}
           onDiscard={() => { pending.guard.discard?.(); settle(true); }}
           onSaveAndGo={saveAndGo}

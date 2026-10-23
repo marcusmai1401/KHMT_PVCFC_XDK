@@ -24,6 +24,7 @@ import {
   PieChart,
   RefreshCw,
   Save,
+  Search,
   Send,
   SlidersHorizontal,
   Trash2,
@@ -231,6 +232,17 @@ function reviewDecisionLabel(value: ReviewDecision) {
 
 function reviewDecisionRequiresNote(value: ReviewDecision) {
   return value === "defer" || value === "reject";
+}
+
+function todayIsoDate() {
+  return isoDateInput(new Date());
+}
+
+// The plan date defaults to one month ahead; ticking "Đã hoàn thành" without
+// touching it used to record a completion date in the future.
+function completionDateForDone(done: boolean, current: string) {
+  const today = todayIsoDate();
+  return done && (!current || current > today) ? today : current;
 }
 
 function isoDateInput(date: Date) {
@@ -1553,6 +1565,16 @@ export function FIWorkspace({
   const [historyQuery, setHistoryQuery] = useState("");
   const [historyYear, setHistoryYear] = useState("");
   const [historyPage, setHistoryPage] = useState(1);
+  // Phones start with the filter bar folded behind a "Bộ lọc" button; desktop
+  // always shows it (the toggle is hidden by CSS there).
+  const [historyFiltersOpen, setHistoryFiltersOpen] = useState(
+    () => typeof window === "undefined" || window.innerWidth > 760,
+  );
+  const historyPanelRef = useRef<HTMLElement | null>(null);
+  const goToHistoryPage = (page: number) => {
+    setHistoryPage(page);
+    historyPanelRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
   const [historyPageSize, setHistoryPageSize] = useState<25 | 50>(25);
   const [historyMeta, setHistoryMeta] = useState<any>(null);
   const [dashboard, setDashboard] = useState<any>(null);
@@ -1631,10 +1653,14 @@ export function FIWorkspace({
   const [recoveryWarning, setRecoveryWarning] = useState("");
   const [operation, setOperation] = useState<any>(null);
   const operationRef = useRef<any>(null);
-  const formBaseline = useRef(JSON.stringify(form));
   const navigationSaved = useRef(false);
   const { registerGuard, requestNavigation } = useNavigationGuard();
-  const formDirty = JSON.stringify(form) !== formBaseline.current || evidenceFiles.length > 0 || Boolean(operation);
+  // Only what the user typed or attached counts as unsaved work. Author, team
+  // and dates are filled in automatically after mount, so comparing the whole
+  // form with its first render flagged an untouched form as changed.
+  const formDirty = Boolean(form.title.trim() || form.content_description.trim())
+    || evidenceFiles.length > 0
+    || Boolean(operation);
   const persist = (nextOperation = operationRef.current) => {
     const result = recoveryStore.write({ form, operation: nextOperation, files: evidenceFiles.map((file) => file.name) }, null, 1);
     if (!result.ok) setRecoveryWarning(result.warning ?? "");
@@ -1643,13 +1669,15 @@ export function FIWorkspace({
   useEffect(() => { navigationSaved.current = false; if (formDirty && !recovery) persist(); }, [form, evidenceFiles, operation, recovery]);
   useEffect(() => registerGuard(`fi-register:${currentUserId}`, {
     isDirty: () => creating || (formDirty && !navigationSaved.current),
+    message: "Phiếu đăng ký đang nhập chưa được gửi duyệt. Bạn có thể giữ bản nháp trên máy này để quay lại nhập tiếp, hoặc xóa nội dung đã nhập.",
+    saveLabel: "Giữ bản nháp",
+    discardLabel: "Xóa nội dung",
     save: async () => { const result = persist(); if (result.ok) navigationSaved.current = true; },
     discard: () => { recoveryStore.remove(); resetRegistration(); navigationSaved.current = true; },
   }), [registerGuard, currentUserId, formDirty, creating, form, evidenceFiles]);
   const resetRegistration = () => {
     recoveryStore.remove(); setRecovery(null); setOperation(null); operationRef.current = null;
-    const next = { ...form, title: "", content_description: "" };
-    formBaseline.current = JSON.stringify(next); setForm(next); setEvidenceFiles([]);
+    setForm((current) => ({ ...current, title: "", content_description: "" })); setEvidenceFiles([]);
   };
   const reloadEpoch = useRef(0);
   const reload = () => {
@@ -1866,6 +1894,12 @@ export function FIWorkspace({
     }
     if (missing.length > 0) {
       setError(`Vui lòng nhập: ${missing.join(", ")}.`);
+      setNotice("");
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('[role="alert"]')?.focus());
+      return;
+    }
+    if (form.completion_done && form.completion_plan_date > todayIsoDate()) {
+      setError("Ngày hoàn thành không được sau ngày hôm nay.");
       setNotice("");
       requestAnimationFrame(() => document.querySelector<HTMLElement>('[role="alert"]')?.focus());
       return;
@@ -2151,7 +2185,7 @@ export function FIWorkspace({
 
   const handleEditSave = async () => {
     if (!editTarget || savingEdit || loadingEdit) return;
-    if (editForm.completion_done && editForm.completion_plan_date > isoDateInput(new Date())) {
+    if (editForm.completion_done && editForm.completion_plan_date > todayIsoDate()) {
       setError("Ngày hoàn thành không được sau ngày hôm nay.");
       return;
     }
@@ -2957,7 +2991,11 @@ export function FIWorkspace({
                     disabled={loadingEdit || savingEdit}
                     type="checkbox"
                     checked={editForm.completion_done}
-                    onChange={(e) => setEditForm({ ...editForm, completion_done: e.target.checked })}
+                    onChange={(e) => setEditForm({
+                      ...editForm,
+                      completion_done: e.target.checked,
+                      completion_plan_date: completionDateForDone(e.target.checked, editForm.completion_plan_date),
+                    })}
                   />
                   Đã hoàn thành
                 </label>
@@ -2969,6 +3007,7 @@ export function FIWorkspace({
                     id="fi-edit-plan-date"
                     disabled={loadingEdit || savingEdit}
                     required
+                    max={editForm.completion_done ? todayIsoDate() : undefined}
                     type="date"
                     value={editForm.completion_plan_date}
                     onChange={(e) => setEditForm({ ...editForm, completion_plan_date: e.target.value })}
@@ -3272,7 +3311,11 @@ export function FIWorkspace({
                   id="fi-completion-done"
                   type="checkbox"
                   checked={form.completion_done}
-                  onChange={(e) => setForm({ ...form, completion_done: e.target.checked })}
+                  onChange={(e) => setForm({
+                    ...form,
+                    completion_done: e.target.checked,
+                    completion_plan_date: completionDateForDone(e.target.checked, form.completion_plan_date),
+                  })}
                 />
                 Đã hoàn thành
               </label>
@@ -3282,6 +3325,7 @@ export function FIWorkspace({
               <input
                 id="fi-plan-date"
                 required
+                max={form.completion_done ? todayIsoDate() : undefined}
                 type="date"
                 value={form.completion_plan_date}
                 onChange={(e) => setForm({ ...form, completion_plan_date: e.target.value })}
@@ -3975,17 +4019,46 @@ export function FIWorkspace({
       )}
 
       {activeTab === "history" && (
-      <section className="panel wide legacy-sk-panel fi-history-panel">
+      <section className="panel wide legacy-sk-panel fi-history-panel" ref={historyPanelRef}>
         <div className="legacy-sticky-controls fi-history-controls">
-          <details className="fi-history-filter-panel" open={typeof window !== "undefined" && window.innerWidth > 760}>
-          <summary>Bộ lọc {historyActiveFilterCount > 0 ? `(${historyActiveFilterCount})` : ""} · {historyMeta?.total ?? historyItems.length} FI</summary>
-          <div className="fi-history-toolbar" role="group" aria-label="Bộ lọc lịch sử FI">
-            <label>Tìm FI<input type="search" placeholder="Mã FI, tên, nội dung, tác giả" value={historyQuery} onChange={event => setHistoryQuery(event.target.value)} /></label>
-            <label>Năm đăng ký<select value={historyYear} onChange={event => setHistoryYear(event.target.value)}><option value="">Tất cả năm</option>{Array.from({length: new Date().getFullYear() - 2019}, (_, index) => new Date().getFullYear() - index).map(year => <option key={year} value={year}>{year}</option>)}</select></label>
-            <span className="fi-history-toolbar-lead" aria-hidden="true">
-              <SlidersHorizontal size={14} />
-              <span>Bộ lọc</span>
-            </span>
+          <button
+            type="button"
+            className="fi-history-filter-toggle"
+            aria-expanded={historyFiltersOpen}
+            aria-controls="fi-history-toolbar"
+            onClick={() => setHistoryFiltersOpen((open) => !open)}
+          >
+            <SlidersHorizontal size={15} />
+            <span>Bộ lọc{historyActiveFilterCount > 0 ? ` (${historyActiveFilterCount})` : ""}</span>
+            <small>{historyMeta?.total ?? historyItems.length} SK-CTKT</small>
+            <ChevronDown size={15} className="fi-history-filter-toggle-icon" />
+          </button>
+          <div
+            id="fi-history-toolbar"
+            className={`fi-history-toolbar ${historyFiltersOpen ? "" : "is-collapsed"}`}
+            role="group"
+            aria-label="Bộ lọc lịch sử FI"
+          >
+            <label className="fi-history-search">
+              <Search size={15} aria-hidden="true" />
+              <input
+                type="search"
+                aria-label="Tìm SK-CTKT"
+                placeholder="Tìm mã, tên, nội dung, tác giả…"
+                value={historyQuery}
+                onChange={(event) => setHistoryQuery(event.target.value)}
+              />
+            </label>
+            <label className={`fi-history-select-chip ${historyYear ? "is-active" : ""}`}>
+              <CalendarDays size={14} aria-hidden="true" />
+              <span>Năm</span>
+              <select aria-label="Năm đăng ký" value={historyYear} onChange={(event) => setHistoryYear(event.target.value)}>
+                <option value="">Tất cả</option>
+                {Array.from({ length: new Date().getFullYear() - 2019 }, (_, index) => new Date().getFullYear() - index).map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </label>
             <FilterChip<string>
               label="Đội/tổ"
               icon={<Users2 size={14} />}
@@ -3997,7 +4070,6 @@ export function FIWorkspace({
               selected={historyTeams}
               onChange={selectHistoryTeams}
               emptyLabel="Tất cả"
-              prominent
             />
             <FilterChip<number>
               label="Tháng"
@@ -4109,20 +4181,6 @@ export function FIWorkspace({
                   <span className="fi-history-filter-reset-count">{historyActiveFilterCount}</span>
                   </button>
               )}
-              <label className="fi-history-page-size">
-                <span>Số dòng</span>
-                <select
-                  value={historyPageSize}
-                  onChange={(event) => {
-                    setHistoryPageSize(Number(event.target.value) as 25 | 50);
-                    setHistoryPage(1);
-                  }}
-                  aria-label="Số dòng lịch sử FI mỗi trang"
-                >
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                </select>
-              </label>
               <span className="fi-history-toolbar-count" aria-live="polite">
                 {historyActiveFilterCount > 0 ? (
                   <>
@@ -4156,8 +4214,6 @@ export function FIWorkspace({
               </button>
             </div>
           </div>
-
-          </details>
           {historyTeamSummary && (() => {
             const passed = reviewPassedCount(historyTeamSummary);
             const failed = reviewFailedCount(historyTeamSummary);
@@ -4166,9 +4222,7 @@ export function FIWorkspace({
             const notCompleted = historyTeamSummary.not_completed ?? 0;
             const totalForRate = historyTeamSummary.total ?? 0;
             return (
-              <details className="fi-history-summary-panel" open={typeof window !== "undefined" && window.innerWidth > 760}>
-              <summary>Thống kê · {formatCount(passed)} đã xét đồng ý · {formatCount(historyTeamSummary.pending ?? 0)} chưa duyệt</summary>
-              <div className="fi-history-summary" role="group" aria-label="Tóm tắt — nhấn để lọc nhanh">
+              <div className={`fi-history-summary ${historyFiltersOpen ? "" : "is-collapsed"}`} role="group" aria-label="Tóm tắt — nhấn để lọc nhanh">
                 <button
                   type="button"
                   className={`fi-history-stat tone-total is-quickfilter ${historyActiveFilterCount === 0 ? "is-active" : ""}`}
@@ -4244,31 +4298,9 @@ export function FIWorkspace({
                   <small>/ {formatCount(notCompleted)} chưa xong</small>
                 </button>
               </div>
-              </details>
             );
           })()}
         </div>
-        {historyMeta && historyMeta.total_pages > 1 && (
-          <div className="fi-history-pagination" role="navigation" aria-label="Phân trang lịch sử FI">
-            <button
-              type="button"
-              className="fi-history-reload"
-              disabled={historyPage <= 1 || dashboardLoading}
-              onClick={() => setHistoryPage((page) => Math.max(1, page - 1))}
-            >
-              <ChevronLeft size={16} /> Trước
-            </button>
-            <span>Trang {historyMeta.page}/{historyMeta.total_pages}</span>
-            <button
-              type="button"
-              className="fi-history-reload"
-              disabled={!historyMeta.has_next || dashboardLoading}
-              onClick={() => setHistoryPage((page) => page + 1)}
-            >
-              Sau <ChevronRight size={16} />
-            </button>
-          </div>
-        )}
         <div className="legacy-list">
           {groupedHistoryItems.map((group) => (
             <div
@@ -4494,6 +4526,49 @@ export function FIWorkspace({
             {historyActiveFilterCount > 0 && <button type="button" onClick={resetHistoryFilters}>Xóa bộ lọc</button>}
           </div>}
         </div>
+        {historyMeta && historyMeta.total > 0 && (
+          <div className="fi-history-footer" role="navigation" aria-label="Phân trang lịch sử FI">
+            <span className="fi-history-range">
+              Hiển thị <strong>{(historyMeta.page - 1) * historyPageSize + 1}–{Math.min(historyMeta.page * historyPageSize, historyMeta.total)}</strong>
+              {" "}/ {historyMeta.total} SK-CTKT
+            </span>
+            <label className="fi-history-page-size">
+              <span>Số dòng mỗi trang</span>
+              <select
+                value={historyPageSize}
+                onChange={(event) => {
+                  setHistoryPageSize(Number(event.target.value) as 25 | 50);
+                  goToHistoryPage(1);
+                }}
+                aria-label="Số dòng lịch sử FI mỗi trang"
+              >
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+            </label>
+            {historyMeta.total_pages > 1 && (
+              <div className="fi-history-pager">
+                <button
+                  type="button"
+                  className="fi-history-reload"
+                  disabled={historyPage <= 1 || dashboardLoading}
+                  onClick={() => goToHistoryPage(Math.max(1, historyPage - 1))}
+                >
+                  <ChevronLeft size={16} /> Trước
+                </button>
+                <span>Trang {historyMeta.page}/{historyMeta.total_pages}</span>
+                <button
+                  type="button"
+                  className="fi-history-reload"
+                  disabled={!historyMeta.has_next || dashboardLoading}
+                  onClick={() => goToHistoryPage(historyPage + 1)}
+                >
+                  Sau <ChevronRight size={16} />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </section>
       )}
 

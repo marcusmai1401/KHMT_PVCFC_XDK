@@ -16975,9 +16975,8 @@ nav button.active {
 @media (prefers-reduced-motion: reduce) {
   .save-status-spin { animation: none; }
 }
-/* Audit remediation: only the compact filter toolbar stays pinned. The KPI
-   summary remains in document flow so it cannot consume the viewport while
-   browsing long history lists. */
+/* FI history controls: one filter bar (sticky on desktop), KPI quick filters
+   below it in normal flow, pagination at the end of the list. */
 .legacy-sticky-controls.fi-history-controls {
   position: static;
   top: auto;
@@ -16989,47 +16988,152 @@ nav button.active {
   z-index: 31;
 }
 
-.legacy-sticky-controls.fi-history-controls > .fi-history-summary {
-  position: static;
-}
-
-.fi-history-pagination {
+.fi-history-search {
   align-items: center;
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  padding: 10px 12px 0;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: #64748b;
+  display: inline-flex;
+  flex: 1 1 240px;
+  gap: 8px;
+  max-width: 360px;
+  min-height: 36px;
+  padding: 0 10px;
 }
 
-.fi-history-filter-panel > summary, .fi-history-summary-panel > summary {
-  cursor: pointer;
-  padding: 12px;
-  min-height: 44px;
-  font-weight: 700;
-  background: var(--surface, #fff);
-  border: 1px solid #dbe4ef;
-  border-radius: 10px;
+.fi-history-search:focus-within {
+  border-color: #2c398e;
+  box-shadow: 0 0 0 3px rgba(44, 57, 142, 0.12);
 }
-.fi-history-filter-panel .fi-history-toolbar { position: static; }
+
+.fi-history-search input {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  flex: 1;
+  font-size: 13px;
+  min-height: 34px;
+  min-width: 0;
+  outline: none;
+  padding: 0;
+}
+
+.fi-history-select-chip {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: #475569;
+  display: inline-flex;
+  font-size: 12.5px;
+  font-weight: 600;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 4px 0 10px;
+}
+
+.fi-history-select-chip.is-active {
+  background: #eef2ff;
+  border-color: #9aacd4;
+  color: #2c398e;
+}
+
+.fi-history-select-chip select {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: #0f172a;
+  font-weight: 700;
+  min-height: 32px;
+  padding: 0 4px;
+}
+
+.fi-history-filter-toggle {
+  display: none;
+}
+
+.fi-history-footer {
+  align-items: center;
+  border-top: 1px solid #eef2f6;
+  color: #607087;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 10px 20px;
+  justify-content: space-between;
+  padding: 12px 16px 16px;
+}
+
+.fi-history-range strong {
+  color: #0f172a;
+}
+
+.fi-history-pager {
+  align-items: center;
+  display: inline-flex;
+  gap: 10px;
+}
+
+.fi-history-pager > span {
+  color: #334155;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 @media (max-width: 760px) {
-  .fi-history-panel .fi-history-table thead { position: static; }
-  .fi-history-filter-panel .fi-history-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    max-height: 60dvh;
-    overflow: auto;
+  .legacy-sticky-controls.fi-history-controls > .fi-history-toolbar {
+    position: static;
   }
-  .fi-history-filter-panel .fi-history-toolbar > label {
-    min-width: 0;
+
+  .fi-history-filter-toggle {
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: #0f172a;
+    display: flex;
+    font-weight: 700;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 12px;
     width: 100%;
   }
-  .fi-history-filter-panel input { max-width: 100%; }
-}
 
-.fi-history-pagination > span {
-  color: #64748b;
-  font-size: 13px;
-  font-weight: 700;
+  .fi-history-filter-toggle small {
+    color: #64748b;
+    font-weight: 500;
+    margin-left: auto;
+  }
+
+  .fi-history-filter-toggle[aria-expanded="true"] .fi-history-filter-toggle-icon {
+    transform: rotate(180deg);
+  }
+
+  .fi-history-toolbar.is-collapsed,
+  .fi-history-summary.is-collapsed {
+    display: none;
+  }
+
+  .fi-history-search {
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  .fi-history-summary {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+  }
+
+  .fi-history-summary > .fi-history-stat {
+    flex: 0 0 150px;
+    scroll-snap-align: start;
+  }
+
+  .fi-history-footer {
+    justify-content: center;
+  }
 }
 
 .et-population-explanation {

@@ -306,6 +306,7 @@ def create_sk_ctkt(
     submit_immediately: bool = False,
     commit: bool = True,
 ) -> SKCTKTModel:
+    _assert_completion_not_in_future(payload)
     now = _utc_now()
     team = payload["team"]
     year = _int_or_default(payload.get("year") or payload.get("registration_year"), now.year)

@@ -17278,3 +17278,302 @@ nav button.active {
   line-height: 1.5;
   margin: 0;
 }
+
+/* Completion plan status (FIWorkspace CompletionPill / CompletionPlanDialog). */
+.fi-completion-pill {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 6px;
+  line-height: 1.2;
+  padding: 5px 10px;
+  width: fit-content;
+}
+
+.fi-completion-pill strong {
+  font-weight: 700;
+}
+
+.fi-completion-pill.is-compact {
+  font-size: 11.5px;
+  gap: 4px;
+  padding: 2px 8px;
+}
+
+.fi-completion-pill.tone-done {
+  background: #ecfdf3;
+  border-color: #a6e9c2;
+  color: #067647;
+}
+
+.fi-completion-pill.tone-planned {
+  background: #eff4ff;
+  border-color: #c3d4fb;
+  color: #2c398e;
+}
+
+.fi-completion-pill.tone-overdue {
+  background: #fef3f2;
+  border-color: #fbc8c3;
+  color: #b42318;
+}
+
+.fi-completion-pill.tone-unknown {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #64748b;
+}
+
+.fi-completion-note {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.fi-completion-update {
+  align-items: center;
+  background: #2c398e;
+  border: 1px solid #2c398e;
+  border-radius: 8px;
+  color: #ffffff;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 6px;
+  justify-content: center;
+  min-height: 34px;
+  padding: 6px 12px;
+  width: fit-content;
+}
+
+.fi-completion-update:hover {
+  background: #232e74;
+}
+
+.fi-completion-update.is-inline {
+  min-height: 32px;
+  white-space: nowrap;
+}
+
+.fi-plan-dialog {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.25);
+  display: grid;
+  gap: 16px;
+  max-height: calc(100dvh - 32px);
+  max-width: 520px;
+  overflow: auto;
+  padding: 22px 24px;
+  width: calc(100% - 32px);
+}
+
+.fi-plan-dialog-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.fi-plan-dialog-head h2 {
+  font-size: 18px;
+  margin: 0 0 4px;
+}
+
+.fi-plan-dialog-head p {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.fi-plan-dialog-current {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding: 10px 12px;
+}
+
+.fi-plan-dialog-current > span {
+  color: #64748b;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.fi-plan-dialog-current small {
+  color: #64748b;
+  flex-basis: 100%;
+  font-size: 12px;
+}
+
+.fi-plan-options {
+  display: grid;
+  gap: 10px;
+}
+
+.fi-plan-option {
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  display: grid;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.fi-plan-option.selected.tone-done {
+  background: #f6fef9;
+  border-color: #12b76a;
+}
+
+.fi-plan-option.selected.tone-planned {
+  background: #f5f8ff;
+  border-color: #2c398e;
+}
+
+.fi-plan-option-choice {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #475569;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  text-align: left;
+  width: 100%;
+}
+
+.fi-plan-option.selected.tone-done .fi-plan-option-choice svg {
+  color: #12b76a;
+}
+
+.fi-plan-option.selected.tone-planned .fi-plan-option-choice svg {
+  color: #2c398e;
+}
+
+.fi-plan-option-choice span {
+  display: grid;
+  gap: 2px;
+}
+
+.fi-plan-option-choice strong {
+  color: #0f172a;
+  font-size: 14.5px;
+}
+
+.fi-plan-option-choice small {
+  color: #64748b;
+  font-size: 12.5px;
+}
+
+.fi-plan-option-date {
+  align-items: center;
+  border-top: 1px dashed #d0d9e6;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  justify-content: space-between;
+  margin: 0 16px;
+  padding: 12px 0 14px;
+}
+
+.fi-plan-option-date span {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.fi-plan-option-date input {
+  min-height: 38px;
+  min-width: 170px;
+}
+
+.fi-plan-dialog-note {
+  align-items: flex-start;
+  color: #64748b;
+  display: flex;
+  font-size: 12.5px;
+  gap: 6px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.fi-plan-dialog-note svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.fi-plan-dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* Completion band (FIWorkspace CompletionBand): full-width row under the
+   detail facts so progress and its action are easy to spot. */
+.fi-completion-band {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-left-width: 4px;
+  border-radius: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  justify-content: space-between;
+  padding: 12px 16px;
+}
+
+.fi-completion-band.tone-done { border-left-color: #12b76a; }
+.fi-completion-band.tone-planned { border-left-color: #2c398e; }
+.fi-completion-band.tone-overdue { border-left-color: #d92d20; background: #fffbfa; }
+.fi-completion-band.tone-unknown { border-left-color: #94a3b8; }
+
+.fi-completion-band-main {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  min-width: 0;
+}
+
+.fi-completion-band-label {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.fi-completion-band .fi-completion-note {
+  flex-basis: 100%;
+}
+
+.fi-completion-update {
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .fi-completion-band .fi-completion-update {
+    justify-content: center;
+    width: 100%;
+  }
+}
+
+.fi-completion-hint {
+  color: #64748b;
+  font-size: 12.5px;
+  font-style: italic;
+}
+
+/* The shared modal backdrop stretches children on phones (built for the full
+   edit form); the progress dialog is short, so keep it content-sized. */
+.fi-edit-modal-backdrop > .fi-plan-dialog {
+  align-content: start;
+  align-self: center;
+  height: auto;
+}

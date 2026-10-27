@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  AlertTriangle,
   BarChart3,
   CalendarDays,
   CheckCircle2,
@@ -356,6 +357,192 @@ function formatDateForPlan(isoDate: string): string {
   return `${day}/${month}/${year}`;
 }
 
+type CompletionTone = "done" | "planned" | "overdue" | "unknown";
+
+export function completionState(item: any, today = todayIsoDate()): {
+  tone: CompletionTone;
+  label: string;
+  date: string | null;
+  /** Date as shown to users: dd/mm/yyyy, or Tm/yyyy when the source only gave a month. */
+  dateText: string | null;
+  note: string | null;
+} {
+  const raw = String(item?.completion_plan ?? "").trim();
+  const parsed = parseCompletionPlan(raw, item?.completed_at);
+  if (!parsed) {
+    // Free-text legacy plans ("Thực hiện khi dừng máy") are shown verbatim.
+    return { tone: "unknown", label: raw || "Chưa ghi kế hoạch", date: null, dateText: null, note: null };
+  }
+  const hasFullDate = Boolean(item?.completed_at) || /\b\d{1,2}\s*[./-]\s*\d{1,2}\s*[./-]\s*20\d{2}\b/.test(raw);
+  const [year, month] = parsed.date.split("-");
+  const dateText = hasFullDate ? formatDateForPlan(parsed.date) : `T${Number(month)}/${year}`;
+  const note = /^(đã hoàn thành|dự kiến hoàn thành)\s+\d{1,2}\/\d{1,2}\/\d{4}$/i.test(raw) ? null : raw || null;
+  if (parsed.done) return { tone: "done", label: "Đã hoàn thành", date: parsed.date, dateText, note };
+  const overdue = hasFullDate ? parsed.date < today : `${year}-${month}` < today.slice(0, 7);
+  if (overdue) return { tone: "overdue", label: "Quá hạn", date: parsed.date, dateText, note };
+  return { tone: "planned", label: "Dự kiến", date: parsed.date, dateText, note };
+}
+
+function CompletionPill({ item, compact = false }: { item: any; compact?: boolean }) {
+  const state = completionState(item);
+  const icon = state.tone === "done"
+    ? <CheckCircle2 size={compact ? 12 : 14} />
+    : state.tone === "overdue"
+      ? <AlertTriangle size={compact ? 12 : 14} />
+      : <Clock3 size={compact ? 12 : 14} />;
+  return (
+    <span className={`fi-completion-pill tone-${state.tone} ${compact ? "is-compact" : ""}`}>
+      {icon}
+      <span>{state.label}</span>
+      {state.dateText && <strong>{state.dateText}</strong>}
+    </span>
+  );
+}
+
+function CompletionBand({ item, canUpdate, onUpdate, hint }: { item: any; canUpdate: boolean; onUpdate: () => void; hint?: string }) {
+  const state = completionState(item);
+  return (
+    <section className={`fi-completion-band tone-${state.tone}`} aria-label="Tiến độ thực hiện">
+      <div className="fi-completion-band-main">
+        <span className="fi-completion-band-label">Tiến độ thực hiện</span>
+        <CompletionPill item={item} />
+        {state.note && <small className="fi-completion-note">Ghi chú gốc: {state.note}</small>}
+      </div>
+      {canUpdate ? (
+        <button className="fi-completion-update" onClick={onUpdate} type="button">
+          <CheckCircle2 size={16} />
+          Cập nhật tiến độ
+        </button>
+      ) : hint ? (
+        <small className="fi-completion-hint">{hint}</small>
+      ) : null}
+    </section>
+  );
+}
+
+function CompletionPlanDialog({
+  item,
+  onClose,
+  onSaved,
+}: {
+  item: any;
+  onClose: () => void;
+  onSaved: (updated: any) => void;
+}) {
+  const current = completionState(item);
+  const today = todayIsoDate();
+  // Most updates on an approved FI are "it is done now", so offer that first.
+  const [done, setDone] = useState(current.tone !== "unknown");
+  const [doneDate, setDoneDate] = useState(current.tone === "done" && current.date ? current.date : today);
+  const [plannedDate, setPlannedDate] = useState(
+    current.date && current.tone !== "done" && current.date >= today ? current.date : isoDateInput(addMonths(new Date(), 1)),
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const save = async () => {
+    const date = done ? doneDate : plannedDate;
+    if (!date) {
+      setError(done ? "Vui lòng chọn ngày hoàn thành." : "Vui lòng chọn ngày dự kiến hoàn thành.");
+      return;
+    }
+    if (done && date > today) {
+      setError("Ngày hoàn thành không được sau ngày hôm nay.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const updated = await api.updateSkRevision(item.id, {
+        completion_plan: formatCompletionPlan(done, date),
+        completion_done: done,
+        completion_date: date,
+      }, {
+        expectedRevision: item.server_revision ?? item.revision ?? 0,
+      });
+      onSaved(updated);
+    } catch (err: any) {
+      setError(err?.message || "Không lưu được tiến độ.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className="fi-edit-modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !saving) onClose();
+      }}
+    >
+      <section aria-labelledby="fi-plan-dialog-title" aria-modal="true" className="fi-plan-dialog" role="dialog">
+        <header className="fi-plan-dialog-head">
+          <div>
+            <h2 id="fi-plan-dialog-title">Cập nhật tiến độ thực hiện</h2>
+            <p>{item.sk_code ? `${item.sk_code} · ` : ""}{item.title}</p>
+          </div>
+          <button aria-label="Đóng" className="fi-edit-modal-close" disabled={saving} onClick={onClose} type="button">
+            <X size={18} />
+          </button>
+        </header>
+
+        <div className="fi-plan-dialog-current">
+          <span>Hiện tại</span>
+          <CompletionPill item={item} />
+          {current.note && <small>{current.note}</small>}
+        </div>
+
+        <div className="fi-plan-options" role="radiogroup" aria-label="Tiến độ thực hiện">
+          <div className={`fi-plan-option tone-done ${done ? "selected" : ""}`}>
+            <button aria-checked={done} className="fi-plan-option-choice" disabled={saving} onClick={() => setDone(true)} role="radio" type="button">
+              <CheckCircle2 size={20} />
+              <span>
+                <strong>Đã hoàn thành</strong>
+                <small>Sáng kiến đã được áp dụng xong</small>
+              </span>
+            </button>
+            {done && (
+              <label className="fi-plan-option-date">
+                <span>Ngày hoàn thành</span>
+                <input disabled={saving} max={today} onChange={(event) => setDoneDate(event.target.value)} type="date" value={doneDate} />
+              </label>
+            )}
+          </div>
+          <div className={`fi-plan-option tone-planned ${!done ? "selected" : ""}`}>
+            <button aria-checked={!done} className="fi-plan-option-choice" disabled={saving} onClick={() => setDone(false)} role="radio" type="button">
+              <Clock3 size={20} />
+              <span>
+                <strong>Đang thực hiện</strong>
+                <small>Chưa xong, cập nhật ngày dự kiến</small>
+              </span>
+            </button>
+            {!done && (
+              <label className="fi-plan-option-date">
+                <span>Ngày dự kiến hoàn thành</span>
+                <input disabled={saving} onChange={(event) => setPlannedDate(event.target.value)} type="date" value={plannedDate} />
+              </label>
+            )}
+          </div>
+        </div>
+
+        <p className="fi-plan-dialog-note">
+          <Info size={14} />
+          Trạng thái xét duyệt và KHMT giữ nguyên. Lần cập nhật này được ghi vào lịch sử của sáng kiến.
+        </p>
+        {error && <p className="error" role="alert">{error}</p>}
+
+        <footer className="fi-plan-dialog-actions">
+          <button className="btn-secondary" disabled={saving} onClick={onClose} type="button">Hủy</button>
+          <button className="btn-primary" disabled={saving} onClick={() => void save()} type="button">
+            {saving ? "Đang lưu…" : "Lưu tiến độ"}
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -707,7 +894,10 @@ export function visibleActionsForSk(role: string, currentUserId: string, item: a
   // đã đánh giá) miễn là chưa hoàn tất/hủy. Legacy import được map về account
   // tác giả thật ở backend nên vẫn đi theo cùng quyền owner.
   // Sau khi sửa, FI/Admin sẽ nhận noti SK_CONTENT_EDITED để xét duyệt lại.
-  const canEdit = canManageAsOwner && (AUTHOR_EDITABLE_STATUSES.includes(item.status) || isPlanOnlyEdit(item));
+  const canEdit = canManageAsOwner && AUTHOR_EDITABLE_STATUSES.includes(item.status);
+  // Approved FI: the author/submitter (or Admin in edit mode) records progress
+  // through the completion-plan dialog instead of the full content editor.
+  const canUpdatePlan = isPlanOnlyEdit(item) && (canManageAsOwner || role === ADMIN_ROLE);
   // FI_Coordinator không được xét duyệt SK do chính mình đăng ký (xung đột lợi ích).
   const canReviewDecision =
     REVIEWER_ROLES.includes(role) &&
@@ -721,6 +911,7 @@ export function visibleActionsForSk(role: string, currentUserId: string, item: a
     role === ADMIN_ROLE ||
     (!item.is_historical_import && isAuthor && canManageAsOwner && OWNER_DELETABLE_STATUSES.includes(item.status));
   if (canEdit) actions.push("edit");
+  if (canUpdatePlan) actions.push("updatePlan");
   if (canReviewDecision) actions.push("reviewDecision");
   if (canAssign) actions.push("assignKhmt");
   if (canDelete) actions.push("delete");
@@ -1613,6 +1804,7 @@ export function FIWorkspace({
   const [actionTarget, setActionTarget] = useState<{ id: string; label: string; decision: ReviewDecision; revision: number } | null>(null);
   const [actionNote, setActionNote] = useState("");
   const [editTarget, setEditTarget] = useState<any>(null);
+  const [planTarget, setPlanTarget] = useState<any>(null);
   const [editForm, setEditForm] = useState({
     title: "",
     content_description: "",
@@ -2744,6 +2936,17 @@ export function FIWorkspace({
               </small>
             </button>
             <div className="toolbar">
+              {actions.includes("updatePlan") && (
+                <button
+                  className="fi-completion-update is-inline"
+                  onClick={() => setPlanTarget(item)}
+                  title="Cập nhật tiến độ thực hiện"
+                  type="button"
+                >
+                  <CheckCircle2 size={15} />
+                  Cập nhật tiến độ
+                </button>
+              )}
               {actions.includes("edit") && (
                 <button
                   aria-label={`Sửa ${item.sk_code || item.title}`}
@@ -3661,16 +3864,18 @@ export function FIWorkspace({
               <strong>{registrationMonthLabel(selectedItem)}</strong>
             </div>
             <div className="fi-meta-item">
-              <Flag size={17} />
-              <span>Kế hoạch hoàn thành</span>
-              <strong>{selectedItem.completion_plan}</strong>
-            </div>
-            <div className="fi-meta-item">
               <ClipboardCheck size={17} />
               <span>KHMT</span>
               <strong>{khmtLabel(selectedItem)}</strong>
             </div>
           </div>
+
+          <CompletionBand
+            item={selectedItem}
+            canUpdate={selectedActions.includes("updatePlan")}
+            onUpdate={() => setPlanTarget(selectedItem)}
+            hint={role === ADMIN_ROLE && !editMode && isPlanOnlyEdit(selectedItem) ? "Bật “Chỉnh sửa” ở góc trên để cập nhật tiến độ" : undefined}
+          />
 
           <div className="fi-detail-content">
             <div className="fi-content-section primary">
@@ -4340,7 +4545,7 @@ export function FIWorkspace({
                         <span>Người đăng ký: {displaySubmitter(item)}</span>
                       </div>
                       <div className="legacy-row-meta">
-                        <small>Kế hoạch: {item.completion_plan || "Chưa ghi"}</small>
+                        <CompletionPill item={item} compact />
                         {isKhmtConsidered(item) && <small>{khmtLabel(item)}</small>}
                       </div>
                     </button>
@@ -4404,10 +4609,6 @@ export function FIWorkspace({
                           <strong>{displaySubmitter(detail)}</strong>
                         </div>
                         <div>
-                          <span>Kế hoạch hoàn thành</span>
-                          <strong>{detail.completion_plan || "Chưa ghi"}</strong>
-                        </div>
-                        <div>
                           <span>Trạng thái</span>
                           <strong>{displayHistoryStatus(detail)}</strong>
                         </div>
@@ -4420,6 +4621,12 @@ export function FIWorkspace({
                           <strong>{khmtLabel(detail)}</strong>
                         </div>
                       </div>
+                      <CompletionBand
+                        item={detail}
+                        canUpdate={actions.includes("updatePlan")}
+                        onUpdate={() => setPlanTarget(detail)}
+                        hint={role === ADMIN_ROLE && !editMode && isPlanOnlyEdit(detail) ? "Bật “Chỉnh sửa” ở góc trên để cập nhật tiến độ" : undefined}
+                      />
                       <div className="legacy-expanded-content">
                         <section>
                           <span>Nội dung đăng ký</span>
@@ -4559,6 +4766,19 @@ export function FIWorkspace({
           </div>
         )}
       </section>
+      )}
+
+      {planTarget && (
+        <CompletionPlanDialog
+          item={planTarget}
+          onClose={() => setPlanTarget(null)}
+          onSaved={(updated) => {
+            setPlanTarget(null);
+            setSelectedItem((current: any) => current?.id === updated.id ? { ...current, ...updated } : current);
+            setNotice(`Đã cập nhật tiến độ: ${completionState(updated).label}${completionState(updated).dateText ? ` ${completionState(updated).dateText}` : ""}.`);
+            reload();
+          }}
+        />
       )}
 
       {/* Global image viewer — works from both Register and History tabs */}

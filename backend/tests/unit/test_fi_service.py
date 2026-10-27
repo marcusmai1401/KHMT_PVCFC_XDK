@@ -668,6 +668,19 @@ def test_author_can_update_only_completion_plan_of_approved_sk(db_session):
         )
     assert future_done.value.status_code == 400
 
+    with pytest.raises(PermissionError, match="Chỉ tác giả"):
+        update_sk_ctkt(db_session, record.id, {"title": "Admin đổi tên"}, "admin", "Admin")
+    by_admin = update_sk_ctkt(
+        db_session,
+        record.id,
+        {"completion_plan": "Đã hoàn thành 21/10/2026", "completion_done": True, "completion_date": date(2026, 10, 21)},
+        "admin",
+        "Admin",
+    )
+    assert by_admin.status == "Approved"
+    assert by_admin.completion_plan == "Đã hoàn thành 21/10/2026"
+    assert by_admin.status_history[-1]["changed_by"] == "admin"
+
 
 def test_fi_coordinator_can_set_deferred_from_submitted(db_session):
     record = create_sk_ctkt(

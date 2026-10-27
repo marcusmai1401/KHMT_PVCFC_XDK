@@ -10,6 +10,7 @@ import {
   matchesHistoryKhmtFilters,
   ownershipBucketForItem,
   recordSubmitterId,
+  completionState,
   isPlanOnlyEdit,
   visibleActionsForSk,
 } from "./FIWorkspace";
@@ -158,10 +159,27 @@ describe("FI action visibility", () => {
     expect(visibleActionsForSk("Staff", "other", legacySubmitted)).toEqual([]);
   });
 
+  it("labels completion progress for the history cards", () => {
+    const today = "2026-10-23";
+    expect(completionState({ completion_plan: "Đã hoàn thành 20/10/2026", completed_at: "2026-10-20T00:00:00" }, today))
+      .toMatchObject({ tone: "done", date: "2026-10-20", dateText: "20/10/2026", note: null });
+    expect(completionState({ completion_plan: "Dự kiến hoàn thành 30/10/2026" }, today))
+      .toMatchObject({ tone: "planned", date: "2026-10-30" });
+    expect(completionState({ completion_plan: "Dự kiến hoàn thành 15/10/2026" }, today))
+      .toMatchObject({ tone: "overdue", label: "Quá hạn" });
+    expect(completionState({ completion_plan: "Thực hiện khi dừng máy" }, today))
+      .toMatchObject({ tone: "unknown", label: "Thực hiện khi dừng máy", dateText: null });
+    expect(completionState({ completion_plan: "Đã thực hiện T6/2024" }, today))
+      .toMatchObject({ tone: "done", dateText: "T6/2024" });
+    expect(completionState({ completion_plan: "Dự kiến T10/2026" }, today))
+      .toMatchObject({ tone: "planned", dateText: "T10/2026" });
+    expect(completionState({ completion_plan: "" }, today)).toMatchObject({ tone: "unknown", label: "Chưa ghi kế hoạch" });
+  });
+
   it("lets owners update only the completion plan after the decision is Approved", () => {
     const approved = { status: "Approved", author_user_id: "u1" };
 
-    expect(visibleActionsForSk("Staff", "u1", approved)).toEqual(["edit"]);
+    expect(visibleActionsForSk("Staff", "u1", approved)).toEqual(["updatePlan"]);
     expect(isPlanOnlyEdit(approved)).toBe(true);
     expect(visibleActionsForSk("Staff", "u2", approved)).toEqual([]);
     expect(visibleActionsForSk("Staff", "u1", { ...approved, status: "Completed" })).toEqual([]);
@@ -186,6 +204,7 @@ describe("FI action visibility", () => {
     expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Submitted", is_historical_import: true })).toEqual(["reviewDecision"]);
     expect(visibleActionsForSk("Workshop_Leader", "leader", { status: "Deferred", is_historical_import: true })).toEqual([]);
     expect(visibleActionsForSk("Admin", "admin", { status: "Approved", is_historical_import: true })).toEqual([
+      "updatePlan",
       "reviewDecision",
       "delete",
     ]);
@@ -194,14 +213,14 @@ describe("FI action visibility", () => {
   it("keeps direct KHMT assignment on the owning team account", () => {
     const approved = { status: "Approved", author_user_id: "TBCH", team: "TBCH" };
 
-    expect(visibleActionsForSk("Admin", "admin", approved)).toEqual(["reviewDecision", "assignKhmt", "delete"]);
+    expect(visibleActionsForSk("Admin", "admin", approved)).toEqual(["updatePlan", "reviewDecision", "assignKhmt", "delete"]);
     expect(visibleActionsForSk("Admin", "admin", { ...approved, author_user_id: "admin" })).toEqual([
-      "edit",
+      "updatePlan",
       "reviewDecision",
       "assignKhmt",
       "delete",
     ]);
-    expect(visibleActionsForSk("Team_Account", "TBCH", approved)).toEqual(["edit", "assignKhmt"]);
+    expect(visibleActionsForSk("Team_Account", "TBCH", approved)).toEqual(["updatePlan", "assignKhmt"]);
     expect(visibleActionsForSk("Team_Account", "TBĐL", approved)).toEqual([]);
     expect(visibleActionsForSk("Workshop_Leader", "leader", approved)).toEqual([]);
   });
@@ -210,7 +229,7 @@ describe("FI action visibility", () => {
     const approved = { status: "Approved", author_user_id: "TBCH", team: "TBCH" };
 
     expect(visibleActionsForSk("Admin", "admin", approved, false)).toEqual([]);
-    expect(visibleActionsForSk("Team_Account", "TBCH", approved, false)).toEqual(["edit", "assignKhmt"]);
+    expect(visibleActionsForSk("Team_Account", "TBCH", approved, false)).toEqual(["updatePlan", "assignKhmt"]);
   });
 
   it("allows admin and the owning team account to choose KHMT month", () => {

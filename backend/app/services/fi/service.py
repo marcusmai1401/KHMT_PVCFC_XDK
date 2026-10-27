@@ -403,11 +403,14 @@ def update_sk_ctkt(
     _assert_revision(record, expected_revision)
     requested_fields = set(payload)
     shared_content_edit = bool(requested_fields) and requested_fields <= SHARED_CONTENT_EDIT_FIELDS
-    if not is_author_or_submitter(record, actor, db):
+    plan_only_edit = record.status in PLAN_ONLY_EDITABLE_STATUSES
+    # Admin may record progress on an approved FI (plan fields only), e.g. when
+    # the author reports completion in person; content stays author-only.
+    admin_plan_update = plan_only_edit and role == Role.ADMIN.value and requested_fields <= COMPLETION_PLAN_FIELDS
+    if not is_author_or_submitter(record, actor, db) and not admin_plan_update:
         raise PermissionError("Chỉ tác giả hoặc người gửi hộ mới được chỉnh sửa")
     if record.status in {SKStatus.CANCELLED.value, SKStatus.COMPLETED.value}:
         raise PermissionError("SK đã hoàn tất hoặc đã hủy, không chỉnh sửa được nội dung")
-    plan_only_edit = record.status in PLAN_ONLY_EDITABLE_STATUSES
     if plan_only_edit:
         if not requested_fields or not requested_fields <= COMPLETION_PLAN_FIELDS:
             raise PermissionError("SK đã được Đồng ý chỉ cho cập nhật Kế hoạch hoàn thành")

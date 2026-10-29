@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  AlertTriangle,
   BarChart3,
   CalendarDays,
   CheckCircle2,
@@ -198,9 +197,7 @@ function historyDecisionBadge(item: any): { label: string; tone: string } {
 
 function completionFilterForItem(item: any): HistoryCompletionFilter {
   if (item?.status === "Completed") return "done";
-  if (item?.completed_at) return "done";
-  const parsed = parseCompletionPlan(item?.completion_plan, item?.completed_at);
-  return parsed?.done ? "done" : "pending";
+  return completionState(item).tone === "done" ? "done" : "pending";
 }
 
 function displayStatus(value: string) {
@@ -238,11 +235,26 @@ function todayIsoDate() {
   return isoDateInput(new Date());
 }
 
-// The plan date defaults to one month ahead; ticking "Đã hoàn thành" without
-// touching it used to record a completion date in the future.
-function completionDateForDone(done: boolean, current: string) {
+function tomorrowIsoDate() {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return isoDateInput(date);
+}
+
+// Keep the date valid for the chosen state: a completion date cannot be in the
+// future, and a planned date must still be ahead (reaching it counts as done).
+function completionDateFor(done: boolean, current: string) {
   const today = todayIsoDate();
-  return done && (!current || current > today) ? today : current;
+  if (done) return !current || current > today ? today : current;
+  return current && current > today ? current : isoDateInput(addMonths(new Date(), 1));
+}
+
+function completionPlanError(done: boolean, date: string) {
+  if (done && date > todayIsoDate()) return "Ngày hoàn thành không được sau ngày hôm nay.";
+  if (!done && date <= todayIsoDate()) {
+    return "Ngày dự kiến phải sau hôm nay. Nếu sáng kiến đã xong, chọn “Đã hoàn thành”.";
+  }
+  return "";
 }
 
 function isoDateInput(date: Date) {
@@ -357,7 +369,22 @@ function formatDateForPlan(isoDate: string): string {
   return `${day}/${month}/${year}`;
 }
 
-type CompletionTone = "done" | "planned" | "overdue" | "unknown";
+type CompletionTone = "done" | "planned" | "unknown";
+
+const PLAN_HISTORY_REASONS = ["completion_plan_update", "completion_auto_done", "completion_auto_planned"];
+
+function lastPlanHistoryReason(item: any): string | null {
+  const history = Array.isArray(item?.status_history) ? item.status_history : [];
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    if (PLAN_HISTORY_REASONS.includes(history[index]?.reason)) return history[index].reason;
+  }
+  return null;
+}
+
+function endOfMonthIso(isoDate: string) {
+  const [year, month] = isoDate.split("-").map(Number);
+  return isoDateInput(new Date(year, month, 0));
+}
 
 export function completionState(item: any, today = todayIsoDate()): {
   tone: CompletionTone;
@@ -366,32 +393,49 @@ export function completionState(item: any, today = todayIsoDate()): {
   /** Date as shown to users: dd/mm/yyyy, or Tm/yyyy when the source only gave a month. */
   dateText: string | null;
   note: string | null;
+  /** Ghi nhận hoàn thành do tới ngày dự kiến, không phải do tác giả xác nhận. */
+  auto: boolean;
 } {
   const raw = String(item?.completion_plan ?? "").trim();
   const parsed = parseCompletionPlan(raw, item?.completed_at);
   if (!parsed) {
     // Free-text legacy plans ("Thực hiện khi dừng máy") are shown verbatim.
-    return { tone: "unknown", label: raw || "Chưa ghi kế hoạch", date: null, dateText: null, note: null };
+    return { tone: "unknown", label: raw || "Chưa ghi kế hoạch", date: null, dateText: null, note: null, auto: false };
   }
   const hasFullDate = Boolean(item?.completed_at) || /\b\d{1,2}\s*[./-]\s*\d{1,2}\s*[./-]\s*20\d{2}\b/.test(raw);
   const [year, month] = parsed.date.split("-");
   const dateText = hasFullDate ? formatDateForPlan(parsed.date) : `T${Number(month)}/${year}`;
   const note = /^(đã hoàn thành|dự kiến hoàn thành)\s+\d{1,2}\/\d{1,2}\/\d{4}$/i.test(raw) ? null : raw || null;
-  if (parsed.done) return { tone: "done", label: "Đã hoàn thành", date: parsed.date, dateText, note };
-  const overdue = hasFullDate ? parsed.date < today : `${year}-${month}` < today.slice(0, 7);
-  if (overdue) return { tone: "overdue", label: "Quá hạn", date: parsed.date, dateText, note };
-  return { tone: "planned", label: "Dự kiến", date: parsed.date, dateText, note };
+  // Same rule as the backend schedule: a planned date that has arrived counts as
+  // done, while a "done" date in the future was a mistake and is still planned.
+  if (parsed.done && parsed.date <= today) {
+    const auto = lastPlanHistoryReason(item) === "completion_auto_done";
+    return { tone: "done", label: "Đã hoàn thành", date: parsed.date, dateText, note, auto };
+  }
+  const dueDate = hasFullDate ? parsed.date : endOfMonthIso(parsed.date);
+  if (!parsed.done && dueDate <= today && item?.status !== "Cancelled") {
+    return { tone: "done", label: "Đã hoàn thành", date: dueDate, dateText: formatDateForPlan(dueDate), note, auto: true };
+  }
+  return { tone: "planned", label: "Dự kiến", date: dueDate, dateText, note, auto: false };
+}
+
+// Form values that already follow the completion rule (see completionState).
+function completionFormValues(item: any) {
+  const state = completionState(item);
+  const done = state.tone === "done";
+  return { completion_done: done, completion_plan_date: completionDateFor(done, state.date ?? "") };
 }
 
 function CompletionPill({ item, compact = false }: { item: any; compact?: boolean }) {
   const state = completionState(item);
   const icon = state.tone === "done"
     ? <CheckCircle2 size={compact ? 12 : 14} />
-    : state.tone === "overdue"
-      ? <AlertTriangle size={compact ? 12 : 14} />
-      : <Clock3 size={compact ? 12 : 14} />;
+    : <Clock3 size={compact ? 12 : 14} />;
   return (
-    <span className={`fi-completion-pill tone-${state.tone} ${compact ? "is-compact" : ""}`}>
+    <span
+      className={`fi-completion-pill tone-${state.tone} ${compact ? "is-compact" : ""}`}
+      title={state.auto ? "Hệ thống tự ghi nhận khi tới ngày dự kiến" : undefined}
+    >
       {icon}
       <span>{state.label}</span>
       {state.dateText && <strong>{state.dateText}</strong>}
@@ -407,6 +451,12 @@ function CompletionBand({ item, canUpdate, onUpdate, hint }: { item: any; canUpd
         <span className="fi-completion-band-label">Tiến độ thực hiện</span>
         <CompletionPill item={item} />
         {state.note && <small className="fi-completion-note">Ghi chú gốc: {state.note}</small>}
+        {state.auto && (
+          <small className="fi-completion-auto">
+            Hệ thống tự ghi nhận hoàn thành khi tới ngày dự kiến.
+            {canUpdate && " Nếu thực tế chưa xong, bấm “Cập nhật tiến độ” để đặt ngày dự kiến mới."}
+          </small>
+        )}
       </div>
       {canUpdate ? (
         <button className="fi-completion-update" onClick={onUpdate} type="button">
@@ -417,6 +467,70 @@ function CompletionBand({ item, canUpdate, onUpdate, hint }: { item: any; canUpd
         <small className="fi-completion-hint">{hint}</small>
       ) : null}
     </section>
+  );
+}
+
+function CompletionPlanField({
+  idPrefix,
+  done,
+  date,
+  disabled = false,
+  onChange,
+}: {
+  idPrefix: string;
+  done: boolean;
+  date: string;
+  disabled?: boolean;
+  onChange: (next: { done: boolean; date: string }) => void;
+}) {
+  const choose = (nextDone: boolean) => {
+    if (nextDone !== done) onChange({ done: nextDone, date: completionDateFor(nextDone, date) });
+  };
+  return (
+    <fieldset className="fi-plan-field" disabled={disabled}>
+      <legend>
+        Tiến độ thực hiện <span className="fi-required">*</span>
+      </legend>
+      <div className="fi-plan-segment" role="radiogroup" aria-label="Tiến độ thực hiện">
+        <button
+          aria-checked={!done}
+          className={`fi-plan-segment-option tone-planned ${!done ? "selected" : ""}`}
+          onClick={() => choose(false)}
+          role="radio"
+          type="button"
+        >
+          <Clock3 size={16} />
+          Đang thực hiện
+        </button>
+        <button
+          aria-checked={done}
+          className={`fi-plan-segment-option tone-done ${done ? "selected" : ""}`}
+          onClick={() => choose(true)}
+          role="radio"
+          type="button"
+        >
+          <CheckCircle2 size={16} />
+          Đã hoàn thành
+        </button>
+      </div>
+      <div className="fi-plan-field-date">
+        <label htmlFor={`${idPrefix}-date`}>{done ? "Ngày hoàn thành" : "Ngày dự kiến hoàn thành"}</label>
+        <input
+          id={`${idPrefix}-date`}
+          max={done ? todayIsoDate() : undefined}
+          min={done ? undefined : tomorrowIsoDate()}
+          onChange={(event) => onChange({ done, date: event.target.value })}
+          required
+          type="date"
+          value={date}
+        />
+      </div>
+      <small className="fi-plan-field-hint">
+        {done
+          ? "Chọn ngày sáng kiến đã áp dụng xong (không sau hôm nay)."
+          : "Tới ngày dự kiến, hệ thống tự ghi nhận “Đã hoàn thành”. Nếu chưa xong, bạn cập nhật lại ngày dự kiến sau."}
+      </small>
+    </fieldset>
   );
 }
 
@@ -435,7 +549,7 @@ function CompletionPlanDialog({
   const [done, setDone] = useState(current.tone !== "unknown");
   const [doneDate, setDoneDate] = useState(current.tone === "done" && current.date ? current.date : today);
   const [plannedDate, setPlannedDate] = useState(
-    current.date && current.tone !== "done" && current.date >= today ? current.date : isoDateInput(addMonths(new Date(), 1)),
+    current.date && current.tone === "planned" && current.date > today ? current.date : isoDateInput(addMonths(new Date(), 1)),
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -446,8 +560,9 @@ function CompletionPlanDialog({
       setError(done ? "Vui lòng chọn ngày hoàn thành." : "Vui lòng chọn ngày dự kiến hoàn thành.");
       return;
     }
-    if (done && date > today) {
-      setError("Ngày hoàn thành không được sau ngày hôm nay.");
+    const invalid = completionPlanError(done, date);
+    if (invalid) {
+      setError(invalid);
       return;
     }
     setSaving(true);
@@ -520,7 +635,8 @@ function CompletionPlanDialog({
             {!done && (
               <label className="fi-plan-option-date">
                 <span>Ngày dự kiến hoàn thành</span>
-                <input disabled={saving} onChange={(event) => setPlannedDate(event.target.value)} type="date" value={plannedDate} />
+                <input disabled={saving} min={tomorrowIsoDate()} onChange={(event) => setPlannedDate(event.target.value)} type="date" value={plannedDate} />
+                <small>Tới ngày này hệ thống tự ghi nhận “Đã hoàn thành”.</small>
               </label>
             )}
           </div>
@@ -616,6 +732,8 @@ async function uploadWithRetry(skId: string, file: File, idempotencyKey: string,
 
 function historyActionLabel(history: any) {
   if (history.reason === "completion_plan_update") return "Cập nhật kế hoạch hoàn thành";
+  if (history.reason === "completion_auto_done") return "Tự ghi nhận hoàn thành (tới ngày dự kiến)";
+  if (history.reason === "completion_auto_planned") return "Chuyển về dự kiến (ngày hoàn thành ở tương lai)";
   if (!history.from_status && history.to_status === "Draft") return "Ghi nhận đăng ký";
   if (!history.from_status && history.to_status === "Submitted") return "Đăng ký xét duyệt";
   if (!history.from_status) return displayStatus(history.to_status);
@@ -629,6 +747,7 @@ function actorLabel(actor: string | null | undefined) {
     fi: "Đầu mối SK",
     leader: "Lãnh đạo Xưởng",
     test: "Tài khoản kiểm thử",
+    system: "Hệ thống",
     "historical-import": "Hệ thống",
     "deploy-import": "Hệ thống",
   };
@@ -647,7 +766,7 @@ function historyDetail(history: any) {
     const year = structuredComments?.khmt_year;
     return { label: "KHMT", text: month && year ? `Đã xem xét vào KHMT T${month}/${year}` : "Đã xem xét vào KHMT" };
   }
-  if (reason === "completion_plan_update") {
+  if (PLAN_HISTORY_REASONS.includes(reason)) {
     const previous = String(structuredComments?.previous_completion_plan || "Chưa ghi");
     const next = String(structuredComments?.completion_plan || "Chưa ghi");
     return { label: "Kế hoạch", text: `${previous} → ${next}` };
@@ -669,7 +788,7 @@ function historyDetail(history: any) {
 
 function planUpdateHistory(item: any) {
   const history = Array.isArray(item?.status_history) ? item.status_history : [];
-  return history.filter((entry: any) => entry?.reason === "completion_plan_update");
+  return history.filter((entry: any) => PLAN_HISTORY_REASONS.includes(entry?.reason));
 }
 
 function formatHistoryTime(value: string | null | undefined) {
@@ -895,9 +1014,10 @@ export function visibleActionsForSk(role: string, currentUserId: string, item: a
   // tác giả thật ở backend nên vẫn đi theo cùng quyền owner.
   // Sau khi sửa, FI/Admin sẽ nhận noti SK_CONTENT_EDITED để xét duyệt lại.
   const canEdit = canManageAsOwner && AUTHOR_EDITABLE_STATUSES.includes(item.status);
-  // Approved FI: the author/submitter (or Admin in edit mode) records progress
-  // through the completion-plan dialog instead of the full content editor.
-  const canUpdatePlan = isPlanOnlyEdit(item) && (canManageAsOwner || role === ADMIN_ROLE);
+  // Progress has its own quick dialog: on an approved FI it is the only edit
+  // (author/submitter, or Admin in edit mode); before that the owner may use it
+  // too, e.g. to reset a plan the system marked done when its date arrived.
+  const canUpdatePlan = (isPlanOnlyEdit(item) && (canManageAsOwner || role === ADMIN_ROLE)) || (canEdit && item.status !== "Draft");
   // FI_Coordinator không được xét duyệt SK do chính mình đăng ký (xung đột lợi ích).
   const canReviewDecision =
     REVIEWER_ROLES.includes(role) &&
@@ -1868,7 +1988,14 @@ export function FIWorkspace({
   }), [registerGuard, currentUserId, formDirty, creating, form, evidenceFiles]);
   const resetRegistration = () => {
     recoveryStore.remove(); setRecovery(null); setOperation(null); operationRef.current = null;
-    setForm((current) => ({ ...current, title: "", content_description: "" })); setEvidenceFiles([]);
+    setForm((current) => ({
+      ...current,
+      title: "",
+      content_description: "",
+      completion_done: false,
+      completion_plan_date: isoDateInput(addMonths(new Date(), 1)),
+    }));
+    setEvidenceFiles([]);
   };
   const reloadEpoch = useRef(0);
   const reload = () => {
@@ -2089,8 +2216,9 @@ export function FIWorkspace({
       requestAnimationFrame(() => document.querySelector<HTMLElement>('[role="alert"]')?.focus());
       return;
     }
-    if (form.completion_done && form.completion_plan_date > todayIsoDate()) {
-      setError("Ngày hoàn thành không được sau ngày hôm nay.");
+    const planError = completionPlanError(form.completion_done, form.completion_plan_date);
+    if (planError) {
+      setError(planError);
       setNotice("");
       requestAnimationFrame(() => document.querySelector<HTMLElement>('[role="alert"]')?.focus());
       return;
@@ -2161,11 +2289,13 @@ export function FIWorkspace({
       if (failedFiles.length > 0) {
         setError(`Đã đăng ký xét duyệt nhưng ${failedFiles.length}/${filesToUpload.length} ảnh chưa tải lên được. Có thể thử tải lại trong phần chi tiết hồ sơ.`);
       } else {
-        setNotice(filesToUpload.length > 0 ? `Đã đăng ký xét duyệt và tải lên ${filesToUpload.length} ảnh bằng chứng.` : "Đã đăng ký xét duyệt.");
-        // Keep the created record until an explicit new-registration action.
-        currentOperation.complete = currentOperation.images.every((entry: any) => entry.status === "done");
-        setOperation({ ...currentOperation });
-        persist(currentOperation);
+        // Everything was received: clear the form so it is ready for the next
+        // registration and leaving the tab does not ask about unsaved work.
+        resetRegistration();
+        const code = created.sk_code ? ` ${created.sk_code}` : "";
+        setNotice(filesToUpload.length > 0
+          ? `Đã đăng ký xét duyệt${code} và tải lên ${filesToUpload.length} ảnh bằng chứng.`
+          : `Đã đăng ký xét duyệt${code}.`);
       }
     } catch (err: any) {
       setError(err.message);
@@ -2312,13 +2442,10 @@ export function FIWorkspace({
     setKhmtTarget(null);
     setEditTarget(item);
     const raw = item.completion_plan || "";
-    const parsed = parseCompletionPlan(raw, item.completed_at);
-    const today = new Date();
     setEditForm({
       title: item.title || "",
       content_description: item.content_description || "",
-      completion_done: parsed?.done ?? Boolean(item.completed_at),
-      completion_plan_date: parsed?.date ?? isoDateInput(addMonths(today, 1)),
+      ...completionFormValues(item),
       completion_plan_raw: raw,
     });
     setError("");
@@ -2329,13 +2456,11 @@ export function FIWorkspace({
         setEditTarget((current: any) => current?.id === item.id ? full : current);
         setEditForm((current) => {
           const nextRaw = full.completion_plan || "";
-          const nextParsed = parseCompletionPlan(nextRaw, full.completed_at);
           return {
             ...current,
             title: full.title || "",
             content_description: full.content_description || "",
-            completion_done: nextParsed?.done ?? Boolean(full.completed_at),
-            completion_plan_date: nextParsed?.date ?? current.completion_plan_date,
+            ...completionFormValues(full),
             completion_plan_raw: nextRaw,
           };
         });
@@ -2376,8 +2501,9 @@ export function FIWorkspace({
 
   const handleEditSave = async () => {
     if (!editTarget || savingEdit || loadingEdit) return;
-    if (editForm.completion_done && editForm.completion_plan_date > todayIsoDate()) {
-      setError("Ngày hoàn thành không được sau ngày hôm nay.");
+    const planError = completionPlanError(editForm.completion_done, editForm.completion_plan_date);
+    if (planError) {
+      setError(planError);
       return;
     }
     setSavingEdit(true);
@@ -2936,7 +3062,7 @@ export function FIWorkspace({
               </small>
             </button>
             <div className="toolbar">
-              {actions.includes("updatePlan") && (
+              {actions.includes("updatePlan") && !actions.includes("edit") && (
                 <button
                   className="fi-completion-update is-inline"
                   onClick={() => setPlanTarget(item)}
@@ -3182,40 +3308,13 @@ export function FIWorkspace({
               </div>
               </>
               )}
-              <div className="fi-edit-plan-panel">
-                <div className="fi-edit-plan-copy">
-                  <strong>Tiến độ thực hiện</strong>
-                  <span>{formatCompletionPlan(editForm.completion_done, editForm.completion_plan_date)}</span>
-                </div>
-                <label className="fi-check-option fi-edit-done-option" htmlFor="fi-edit-completion-done">
-                  <input
-                    id="fi-edit-completion-done"
-                    disabled={loadingEdit || savingEdit}
-                    type="checkbox"
-                    checked={editForm.completion_done}
-                    onChange={(e) => setEditForm({
-                      ...editForm,
-                      completion_done: e.target.checked,
-                      completion_plan_date: completionDateForDone(e.target.checked, editForm.completion_plan_date),
-                    })}
-                  />
-                  Đã hoàn thành
-                </label>
-                <div className="fi-edit-date-field">
-                  <label htmlFor="fi-edit-plan-date">
-                    {editForm.completion_done ? "Ngày hoàn thành" : "Ngày dự kiến hoàn thành"}
-                  </label>
-                  <input
-                    id="fi-edit-plan-date"
-                    disabled={loadingEdit || savingEdit}
-                    required
-                    max={editForm.completion_done ? todayIsoDate() : undefined}
-                    type="date"
-                    value={editForm.completion_plan_date}
-                    onChange={(e) => setEditForm({ ...editForm, completion_plan_date: e.target.value })}
-                  />
-                </div>
-              </div>
+              <CompletionPlanField
+                date={editForm.completion_plan_date}
+                disabled={loadingEdit || savingEdit}
+                done={editForm.completion_done}
+                idPrefix="fi-edit-plan"
+                onChange={(next) => setEditForm({ ...editForm, completion_done: next.done, completion_plan_date: next.date })}
+              />
               {editForm.completion_plan_raw &&
                 !parseCompletionPlan(editForm.completion_plan_raw) && (
                   <small className="fi-edit-legacy-note">
@@ -3506,33 +3605,12 @@ export function FIWorkspace({
               value={form.content_description}
               onChange={(e) => setForm({ ...form, content_description: e.target.value })}
             />
-            <div className="fi-completion-row">
-              <span className="fi-completion-title">Kế hoạch hoàn thành</span>
-              <label className="fi-check-option" htmlFor="fi-completion-done">
-                <input
-                  id="fi-completion-done"
-                  type="checkbox"
-                  checked={form.completion_done}
-                  onChange={(e) => setForm({
-                    ...form,
-                    completion_done: e.target.checked,
-                    completion_plan_date: completionDateForDone(e.target.checked, form.completion_plan_date),
-                  })}
-                />
-                Đã hoàn thành
-              </label>
-              <label htmlFor="fi-plan-date">
-                {form.completion_done ? "Ngày hoàn thành" : "Ngày dự kiến hoàn thành"} <span style={{ color: "#dc2626" }}>*</span>
-              </label>
-              <input
-                id="fi-plan-date"
-                required
-                max={form.completion_done ? todayIsoDate() : undefined}
-                type="date"
-                value={form.completion_plan_date}
-                onChange={(e) => setForm({ ...form, completion_plan_date: e.target.value })}
-              />
-            </div>
+            <CompletionPlanField
+              date={form.completion_plan_date}
+              done={form.completion_done}
+              idPrefix="fi-plan"
+              onChange={(next) => setForm({ ...form, completion_done: next.done, completion_plan_date: next.date })}
+            />
             <label>
               Ảnh bằng chứng FI <span className="muted">(tùy chọn — có thể thêm sau khi đăng ký xét duyệt)</span>
             </label>

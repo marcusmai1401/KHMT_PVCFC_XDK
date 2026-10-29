@@ -1418,8 +1418,7 @@ h2 {
   gap: 7px;
 }
 
-.fi-edit-field label,
-.fi-edit-date-field label {
+.fi-edit-field label {
   color: #334155;
   font-size: 13px;
   font-weight: 700;
@@ -1427,8 +1426,7 @@ h2 {
 }
 
 .fi-edit-field input,
-.fi-edit-field textarea,
-.fi-edit-date-field input {
+.fi-edit-field textarea {
   width: 100%;
 }
 
@@ -1438,40 +1436,9 @@ h2 {
   resize: vertical;
 }
 
-.fi-edit-plan-panel {
-  align-items: end;
-  background: #f8fafc;
-  border: 1px solid #dbe4ee;
-  border-radius: 8px;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(180px, 1fr) max-content minmax(190px, .8fr);
-  padding: 12px;
-}
-
-.fi-edit-plan-copy {
-  display: grid;
-  gap: 4px;
-}
-
-.fi-edit-plan-copy strong {
-  color: #0f172a;
-  font-size: 13px;
-}
-
-.fi-edit-plan-copy span,
 .fi-edit-legacy-note {
   color: #607087;
   font-size: 12px;
-}
-
-.fi-edit-date-field {
-  display: grid;
-  gap: 6px;
-}
-
-.fi-edit-done-option {
-  min-height: 38px;
 }
 
 .fi-edit-images-panel {
@@ -1570,14 +1537,9 @@ h2 {
     padding: 14px;
   }
 
-  .fi-edit-modal-meta,
-  .fi-edit-plan-panel {
+  .fi-edit-modal-meta {
     align-items: stretch;
     grid-template-columns: 1fr;
-  }
-
-  .fi-edit-plan-panel {
-    gap: 10px;
   }
 
   .fi-edit-images-head {
@@ -4161,54 +4123,6 @@ th {
   line-height: 1.2;
   margin: 0;
   white-space: nowrap;
-}
-
-.fi-completion-row {
-  align-items: center;
-  background: #f8fafc;
-  border: 1px solid #dbe4ee;
-  border-radius: 8px;
-  display: grid;
-  gap: 8px 12px;
-  grid-template-columns: max-content max-content minmax(0, 1fr) minmax(170px, 180px);
-  max-width: 100%;
-  min-width: 0;
-  padding: 10px;
-}
-
-.fi-completion-title {
-  color: #0f172a;
-  font-size: 13px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.fi-completion-row > label:not(.fi-check-option) {
-  color: #334155;
-  font-size: 13px;
-  font-weight: 700;
-  margin: 0;
-}
-
-.fi-check-option {
-  align-items: center;
-  color: #0f172a;
-  display: inline-flex;
-  font-size: 13px;
-  font-weight: 700;
-  gap: 8px;
-  margin: 0;
-  white-space: nowrap;
-}
-
-.fi-check-option input {
-  flex: 0 0 auto;
-  min-height: auto;
-  width: 16px;
-}
-
-.fi-completion-row input[type="date"] {
-  min-width: 0;
 }
 
 .fi-dashboard-shell {
@@ -7156,14 +7070,6 @@ th {
 
   .fi-registration-period label {
     grid-column: 1 / -1;
-  }
-
-  .fi-completion-row {
-    grid-template-columns: 1fr;
-  }
-
-  .fi-completion-row input[type="date"] {
-    min-width: 0;
   }
 
   .image-viewer-backdrop {
@@ -17315,12 +17221,6 @@ nav button.active {
   color: #2c398e;
 }
 
-.fi-completion-pill.tone-overdue {
-  background: #fef3f2;
-  border-color: #fbc8c3;
-  color: #b42318;
-}
-
 .fi-completion-pill.tone-unknown {
   background: #f8fafc;
   border-color: #e2e8f0;
@@ -17494,6 +17394,12 @@ nav button.active {
   min-width: 170px;
 }
 
+.fi-plan-option-date small {
+  color: #64748b;
+  flex-basis: 100%;
+  font-size: 12px;
+}
+
 .fi-plan-dialog-note {
   align-items: flex-start;
   color: #64748b;
@@ -17532,7 +17438,6 @@ nav button.active {
 
 .fi-completion-band.tone-done { border-left-color: #12b76a; }
 .fi-completion-band.tone-planned { border-left-color: #2c398e; }
-.fi-completion-band.tone-overdue { border-left-color: #d92d20; background: #fffbfa; }
 .fi-completion-band.tone-unknown { border-left-color: #94a3b8; }
 
 .fi-completion-band-main {
@@ -17576,4 +17481,132 @@ nav button.active {
   align-content: start;
   align-self: center;
   height: auto;
+}
+
+/* Completion plan field (FIWorkspace CompletionPlanField): one explicit choice
+   between "in progress" and "done" instead of a checkbox next to a date. */
+.fi-plan-field {
+  background: #f8fafc;
+  border: 1px solid #dbe4ee;
+  border-radius: 10px;
+  display: grid;
+  gap: 10px 16px;
+  grid-template-columns: minmax(0, auto) minmax(180px, 220px);
+  margin: 0;
+  min-width: 0;
+  padding: 12px 14px 12px;
+}
+
+.fi-plan-field legend {
+  color: #0f172a;
+  float: left;
+  font-size: 13px;
+  font-weight: 800;
+  grid-column: 1 / -1;
+  padding: 0;
+  width: 100%;
+}
+
+.fi-required {
+  color: #dc2626;
+}
+
+.fi-plan-segment {
+  align-self: end;
+  background: #e8edf5;
+  border-radius: 9px;
+  display: inline-grid;
+  gap: 4px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 4px;
+}
+
+.fi-plan-segment-option {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  box-shadow: none;
+  color: #475569;
+  display: inline-flex;
+  font-size: 13.5px;
+  font-weight: 700;
+  gap: 7px;
+  justify-content: center;
+  min-height: 38px;
+  padding: 6px 14px;
+  white-space: nowrap;
+}
+
+.fi-plan-segment-option:hover:not(:disabled):not(.selected) {
+  background: rgba(255, 255, 255, 0.6);
+  color: #0f172a;
+}
+
+.fi-plan-segment-option.selected {
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+
+.fi-plan-segment-option.tone-planned.selected {
+  border-color: #c3d4fb;
+  color: #2c398e;
+}
+
+.fi-plan-segment-option.tone-done.selected {
+  border-color: #a6e9c2;
+  color: #067647;
+}
+
+.fi-plan-segment-option:focus-visible {
+  outline: 2px solid #2c398e;
+  outline-offset: 1px;
+}
+
+.fi-plan-field-date {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.fi-plan-field-date label {
+  color: #334155;
+  font-size: 12.5px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.fi-plan-field-date input {
+  min-height: 38px;
+  min-width: 0;
+  width: 100%;
+}
+
+.fi-plan-field-hint {
+  color: #64748b;
+  font-size: 12.5px;
+  grid-column: 1 / -1;
+  line-height: 1.45;
+}
+
+.fi-completion-auto {
+  color: #475569;
+  flex-basis: 100%;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+@media (max-width: 640px) {
+  .fi-plan-field {
+    grid-template-columns: 1fr;
+  }
+
+  .fi-plan-segment {
+    display: grid;
+    width: 100%;
+  }
+
+  .fi-plan-segment-option {
+    padding: 6px 8px;
+  }
 }

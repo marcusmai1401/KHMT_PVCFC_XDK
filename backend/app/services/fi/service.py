@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.security import Role
 from app.models.domain import SKCTKTModel, SKCodeSequenceModel, SKImageModel, User
+from app.services.fi.auto_completion import format_plan
 from app.services.fi.completion import (
     completion_date_to_datetime,
     completion_plan_completed_at,
@@ -82,6 +83,17 @@ def _assert_completion_not_in_future(payload: dict[str, Any]) -> None:
         completed_on = completed_on.date()
     if payload.get("completion_done") and isinstance(completed_on, date) and completed_on > _factory_today():
         raise HTTPException(status_code=400, detail="Ngày hoàn thành không được sau ngày hôm nay")
+
+
+def _normalize_completion_payload(payload: dict[str, Any]) -> None:
+    # Cùng quy ước với apply_completion_schedule: ngày dự kiến đã tới thì coi
+    # như đã hoàn thành.
+    planned_on = payload.get("completion_date")
+    if isinstance(planned_on, datetime):
+        planned_on = planned_on.date()
+    if payload.get("completion_done") is False and isinstance(planned_on, date) and planned_on <= _factory_today():
+        payload["completion_done"] = True
+        payload["completion_plan"] = format_plan(True, planned_on)
 
 
 def _assert_revision(record: SKCTKTModel, expected_revision: int | None) -> None:
@@ -307,6 +319,7 @@ def create_sk_ctkt(
     commit: bool = True,
 ) -> SKCTKTModel:
     _assert_completion_not_in_future(payload)
+    _normalize_completion_payload(payload)
     now = _utc_now()
     team = payload["team"]
     year = _int_or_default(payload.get("year") or payload.get("registration_year"), now.year)
@@ -419,6 +432,9 @@ def update_sk_ctkt(
     if not shared_content_edit:
         raise PermissionError("Tác giả chỉ được cập nhật tiêu đề, nội dung đăng ký và kế hoạch thực hiện")
     _assert_completion_not_in_future(payload)
+    _normalize_completion_payload(payload)
+    # Chỉ đổi tiến độ (ở mọi trạng thái được sửa): ghi lịch sử, không cần xét duyệt lại.
+    plan_update = requested_fields <= COMPLETION_PLAN_FIELDS
     before = model_to_dict(record)
     if "team" in payload and payload["team"] != record.team:
         raise PermissionError("Tài khoản không được đổi đội/tổ của SK")
@@ -437,7 +453,7 @@ def update_sk_ctkt(
     now = _utc_now()
     record.updated_at = now
     record.revision += 1
-    if plan_only_edit:
+    if plan_update:
         record.status_history = [
             *record.status_history,
             {
@@ -459,12 +475,12 @@ def update_sk_ctkt(
         actor,
         "SK_CTKT",
         record_id,
-        "update_completion_plan" if plan_only_edit else "update",
+        "update_completion_plan" if plan_update else "update",
         {"before": before, "after": model_to_dict(record)},
     )
     # Nếu tác giả chỉnh sửa SK đã gửi duyệt thì gửi noti cho FI_Coordinator +
     # Admin để xét duyệt lại.
-    if previous_status in EDITABLE_AFTER_SUBMIT_STATUSES:
+    if previous_status in EDITABLE_AFTER_SUBMIT_STATUSES and not plan_update:
         _notify_content_edit(db, record, actor)
     db.commit()
     db.refresh(record)

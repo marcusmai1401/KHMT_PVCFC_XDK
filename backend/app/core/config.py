@@ -106,6 +106,8 @@ class Settings(BaseSettings):
             "LLM_MAX_RETRIES",
         ),
     )
+    # Chu kỳ (giây) áp quy ước ngày hoàn thành FI; 0 = tắt (bộ test tự gọi trực tiếp).
+    fi_completion_schedule_seconds: int = 900
     llm_enabled: bool = Field(
         default=True,
         validation_alias=AliasChoices("OKR_LLM_ENABLED", "LLM_ENABLED"),

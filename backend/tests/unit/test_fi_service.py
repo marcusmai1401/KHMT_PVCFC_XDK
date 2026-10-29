@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from fastapi import HTTPException
@@ -17,6 +17,7 @@ from app.services.fi.service import (
     update_sk_ctkt,
 )
 from app.models.domain import NotificationModel, SKCTKTModel, User
+from app.services.fi.auto_completion import apply_completion_schedule, factory_today
 from sqlalchemy import select
 
 
@@ -197,9 +198,9 @@ def test_create_sk_keeps_future_completion_plan_not_completed(db_session):
             "team": "TBCH",
             "title": "Future plan",
             "content_description": "Content",
-            "completion_plan": "Dự kiến hoàn thành 10/06/2026",
+            "completion_plan": "Dự kiến hoàn thành (tương lai)",
             "completion_done": False,
-            "completion_date": date(2026, 6, 10),
+            "completion_date": factory_today() + timedelta(days=30),
             "registration_month": 5,
             "registration_year": 2026,
         },
@@ -1065,3 +1066,139 @@ def test_historical_approved_can_be_revised_by_fi_coordinator(db_session):
     assert updated.is_public is False
     assert updated.consider_for_khmt is False
     assert updated.is_counted_for_okr is False
+
+
+def test_create_sk_treats_reached_planned_date_as_done(db_session):
+    planned_on = factory_today() - timedelta(days=3)
+    record = create_sk_ctkt(
+        db_session,
+        {
+            "author_name": "A",
+            "team": "TBCH",
+            "title": "Plan already reached",
+            "content_description": "Content",
+            "completion_plan": "Dự kiến hoàn thành",
+            "completion_done": False,
+            "completion_date": planned_on,
+            "year": planned_on.year,
+        },
+        "u1",
+    )
+
+    assert record.completed_at is not None and record.completed_at.date() == planned_on
+    assert record.completion_plan == f"Đã hoàn thành {planned_on.strftime('%d/%m/%Y')}"
+
+
+def _plan_record(record_id: str, status: str, plan: str, completed_at: datetime | None = None) -> SKCTKTModel:
+    return SKCTKTModel(
+        id=record_id,
+        sk_code=f"FI/10/2026-TBCH-{record_id}",
+        title="Plan",
+        author_name="A",
+        author_user_id="u1",
+        team="TBCH",
+        content_description="Content",
+        completion_plan=plan,
+        status=status,
+        status_history=[{"from_status": None, "to_status": status, "changed_by": "u1"}],
+        completed_at=completed_at,
+    )
+
+
+def test_completion_schedule_follows_planned_dates(db_session):
+    today = date(2026, 10, 29)
+    db_session.add_all(
+        [
+            _plan_record("due", "Approved", "Dự kiến hoàn thành 15/09/2026"),
+            _plan_record("due-today", "Submitted", "Dự kiến hoàn thành 29/10/2026"),
+            _plan_record("upcoming", "Submitted", "Dự kiến hoàn thành 30/12/2026"),
+            _plan_record("month", "Approved", "Chưa thực hiện\nDự kiến  T08.2026"),
+            _plan_record("this-month", "Approved", "Dự kiến T10/2026"),
+            _plan_record("free-text", "Approved", "Thực hiện khi dừng máy"),
+            _plan_record("cancelled", "Cancelled", "Dự kiến hoàn thành 15/09/2026"),
+            _plan_record(
+                "future-done",
+                "Submitted",
+                "Đã hoàn thành 23/11/2026",
+                completed_at=datetime(2026, 11, 23, tzinfo=timezone.utc),
+            ),
+            _plan_record(
+                "done",
+                "Approved",
+                "Đã hoàn thành 20/10/2026",
+                completed_at=datetime(2026, 10, 20, tzinfo=timezone.utc),
+            ),
+        ]
+    )
+    db_session.commit()
+
+    assert apply_completion_schedule(db_session, today=today) == 4
+
+    def get(record_id: str) -> SKCTKTModel:
+        return db_session.get(SKCTKTModel, record_id)
+
+    assert get("due").completion_plan == "Đã hoàn thành 15/09/2026"
+    assert get("due").completed_at.date() == date(2026, 9, 15)
+    assert get("due").status == "Approved"
+    assert get("due-today").completed_at.date() == today
+    # A month-only plan is due at the end of that month.
+    assert get("month").completed_at.date() == date(2026, 8, 31)
+    assert get("this-month").completed_at is None
+    assert get("upcoming").completed_at is None
+    assert get("free-text").completed_at is None
+    assert get("cancelled").completed_at is None
+    assert get("future-done").completed_at is None
+    assert get("future-done").completion_plan == "Dự kiến hoàn thành 23/11/2026"
+    assert get("done").completion_plan == "Đã hoàn thành 20/10/2026"
+
+    entry = get("due").status_history[-1]
+    assert entry["reason"] == "completion_auto_done"
+    assert entry["changed_by"] == "system"
+    assert entry["from_status"] == entry["to_status"] == "Approved"
+    assert entry["comments"]["previous_completion_plan"] == "Dự kiến hoàn thành 15/09/2026"
+    assert get("future-done").status_history[-1]["reason"] == "completion_auto_planned"
+    assert get("due").revision == 2
+
+    # Idempotent: nothing left to change on the same day.
+    assert apply_completion_schedule(db_session, today=today) == 0
+    # The upcoming plan is ticked once its date arrives, as is the corrected one.
+    assert apply_completion_schedule(db_session, today=date(2026, 12, 30)) == 3
+    assert get("upcoming").completed_at.date() == date(2026, 12, 30)
+    assert get("future-done").completed_at.date() == date(2026, 11, 23)
+
+
+def test_author_can_reset_auto_completed_plan_on_pending_sk(db_session):
+    record = create_sk_ctkt(
+        db_session,
+        {
+            "author_name": "A",
+            "team": "TBCH",
+            "title": "Title",
+            "content_description": "Content",
+            "completion_plan": "Đã hoàn thành 01/09/2026",
+            "completion_done": True,
+            "completion_date": date(2026, 9, 1),
+            "year": 2026,
+        },
+        "u1",
+    )
+    transition_sk_ctkt(db_session, record.id, "submit", "u1", "Team_Account")
+    db_session.execute(NotificationModel.__table__.delete())
+    db_session.commit()
+    next_month = factory_today() + timedelta(days=31)
+
+    updated = update_sk_ctkt(
+        db_session,
+        record.id,
+        {"completion_plan": "Dự kiến hoàn thành", "completion_done": False, "completion_date": next_month},
+        "u1",
+        "Team_Account",
+    )
+
+    assert updated.status == "Submitted"
+    assert updated.completed_at is None
+    assert updated.status_history[-1]["reason"] == "completion_plan_update"
+    # Only progress changed, so reviewers are not asked to review again.
+    assert db_session.execute(
+        select(NotificationModel).where(NotificationModel.event == "SK_CONTENT_EDITED")
+    ).first() is None

@@ -117,7 +117,7 @@ describe("FI action visibility", () => {
   it("keeps edit/delete for a newly submitted item because there is no separate draft step", () => {
     const ownSubmitted = { status: "Submitted", author_user_id: "u1" };
 
-    expect(visibleActionsForSk("Team_Account", "u1", ownSubmitted)).toEqual(["edit", "delete"]);
+    expect(visibleActionsForSk("Team_Account", "u1", ownSubmitted)).toEqual(["edit", "updatePlan", "delete"]);
   });
 
   it("does not let another author account edit someone else's submitted SK", () => {
@@ -125,7 +125,7 @@ describe("FI action visibility", () => {
 
     expect(visibleActionsForSk("Staff", "khanhdv1", submitted)).toEqual([]);
     expect(visibleActionsForSk("Team_Account", "TBCH", submitted)).toEqual([]);
-    expect(visibleActionsForSk("Staff", "cunghv", submitted)).toEqual(["edit", "delete"]);
+    expect(visibleActionsForSk("Staff", "cunghv", submitted)).toEqual(["edit", "updatePlan", "delete"]);
   });
 
   it("lets the proxy submitter manage the item without making it their own initiative", () => {
@@ -138,8 +138,8 @@ describe("FI action visibility", () => {
     };
 
     expect(recordSubmitterId(proxySubmitted)).toBe("baomt");
-    expect(visibleActionsForSk("Staff", "baomt", proxySubmitted)).toEqual(["edit", "delete"]);
-    expect(visibleActionsForSk("Staff", "quyenpt", proxySubmitted)).toEqual(["edit", "delete"]);
+    expect(visibleActionsForSk("Staff", "baomt", proxySubmitted)).toEqual(["edit", "updatePlan", "delete"]);
+    expect(visibleActionsForSk("Staff", "quyenpt", proxySubmitted)).toEqual(["edit", "updatePlan", "delete"]);
   });
 
   it("maps deploy-import legacy submissions back to the resolved author account", () => {
@@ -155,18 +155,38 @@ describe("FI action visibility", () => {
     };
 
     expect(recordSubmitterId(legacySubmitted)).toBe("trunghd");
-    expect(visibleActionsForSk("Staff", "trunghd", legacySubmitted)).toEqual(["edit"]);
+    expect(visibleActionsForSk("Staff", "trunghd", legacySubmitted)).toEqual(["edit", "updatePlan"]);
     expect(visibleActionsForSk("Staff", "other", legacySubmitted)).toEqual([]);
   });
 
   it("labels completion progress for the history cards", () => {
     const today = "2026-10-23";
     expect(completionState({ completion_plan: "Đã hoàn thành 20/10/2026", completed_at: "2026-10-20T00:00:00" }, today))
-      .toMatchObject({ tone: "done", date: "2026-10-20", dateText: "20/10/2026", note: null });
+      .toMatchObject({ tone: "done", date: "2026-10-20", dateText: "20/10/2026", note: null, auto: false });
     expect(completionState({ completion_plan: "Dự kiến hoàn thành 30/10/2026" }, today))
       .toMatchObject({ tone: "planned", date: "2026-10-30" });
+    // Reaching the planned date counts as done (the backend schedule records it).
     expect(completionState({ completion_plan: "Dự kiến hoàn thành 15/10/2026" }, today))
-      .toMatchObject({ tone: "overdue", label: "Quá hạn" });
+      .toMatchObject({ tone: "done", label: "Đã hoàn thành", dateText: "15/10/2026", auto: true });
+    expect(completionState({ completion_plan: "Dự kiến hoàn thành 23/10/2026" }, today))
+      .toMatchObject({ tone: "done", auto: true });
+    expect(completionState({ completion_plan: "Dự kiến T8/2026" }, today))
+      .toMatchObject({ tone: "done", date: "2026-08-31", dateText: "31/08/2026" });
+    expect(completionState({ status: "Cancelled", completion_plan: "Dự kiến hoàn thành 15/10/2026" }, today))
+      .toMatchObject({ tone: "planned" });
+    // A "done" date in the future was a mistake: still planned.
+    expect(completionState({ completion_plan: "Đã hoàn thành 23/11/2026", completed_at: "2026-11-23T00:00:00" }, today))
+      .toMatchObject({ tone: "planned", label: "Dự kiến", dateText: "23/11/2026" });
+    expect(completionState({
+      completion_plan: "Đã hoàn thành 15/09/2026",
+      completed_at: "2026-09-15T00:00:00",
+      status_history: [{ reason: "completion_auto_done" }],
+    }, today)).toMatchObject({ tone: "done", auto: true });
+    expect(completionState({
+      completion_plan: "Đã hoàn thành 15/09/2026",
+      completed_at: "2026-09-15T00:00:00",
+      status_history: [{ reason: "completion_auto_done" }, { reason: "completion_plan_update" }],
+    }, today)).toMatchObject({ tone: "done", auto: false });
     expect(completionState({ completion_plan: "Thực hiện khi dừng máy" }, today))
       .toMatchObject({ tone: "unknown", label: "Thực hiện khi dừng máy", dateText: null });
     expect(completionState({ completion_plan: "Đã thực hiện T6/2024" }, today))

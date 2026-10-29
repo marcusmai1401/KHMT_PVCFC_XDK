@@ -12,6 +12,7 @@ from app.db.session import Base, create_session, sandbox_engine
 from app.models import et_domain  # noqa: F401 - register ET tables for sandbox metadata
 from app.models.domain import SystemConfigModel, User
 from app.services.bootstrap import seed_baseline
+from app.services.fi.auto_completion import apply_completion_schedule
 from app.services.cache import cache_delete_prefix
 
 
@@ -88,6 +89,7 @@ def reset_sandbox_data() -> dict[str, int | str]:
     Base.metadata.create_all(bind=sandbox_engine)
     with create_session(sandbox=True) as db:
         counts = _clone_production_data(db)
+        apply_completion_schedule(db)
         seed_baseline(db)
         _seed_sandbox_users(db)
         _mark_sandbox_initialized(db)

@@ -83,6 +83,7 @@ def main(argv: list[str] | None = None) -> int:
             "OKR_BOOTSTRAP_ADMIN_NAME": "Test Admin",
             "OKR_JWT_SECRET": f"audit-test-secret-{uuid4().hex}-not-production",
             "OKR_LLM_ENABLED": "false",
+            "OKR_FI_COMPLETION_SCHEDULE_SECONDS": "0",
             "OKR_REDIS_URL": "",
             "PYTHONPATH": str(WORKSPACE_ROOT / "backend"),
             "OKR_TEST_MANIFEST": str(run_dir / "test-environment.json"),

@@ -68,8 +68,13 @@ const PLAN_ONLY_EDITABLE_STATUSES = ["Approved"];
 export function isPlanOnlyEdit(item: any) {
   return PLAN_ONLY_EDITABLE_STATUSES.includes(item?.status);
 }
+// Sửa nội dung SK ở các trạng thái này sẽ nộp lại, đưa về Chờ xét duyệt.
+const RESUBMIT_ON_EDIT_STATUSES = ["NeedMoreInfo", "Deferred", "Rejected"];
+// Cùng quy ước với backend: nháp và SK Không đồng ý không tự hoàn thành khi tới ngày dự kiến.
+const NOT_AUTO_DONE_STATUSES = ["Draft", "Rejected", "Cancelled"];
 function editActionTitle(item: any) {
   if (isPlanOnlyEdit(item)) return "Cập nhật kế hoạch hoàn thành";
+  if (RESUBMIT_ON_EDIT_STATUSES.includes(item?.status)) return "Chỉnh sửa và gửi xét duyệt lại";
   if (item?.status !== "Draft") return "Chỉnh sửa (sẽ gửi thông báo xét duyệt lại)";
   return "Chỉnh sửa nội dung/kế hoạch";
 }
@@ -120,7 +125,7 @@ type OwnershipBucket = "pending" | "implementation" | "history";
 type OwnershipMode = "mine" | "sent";
 type OwnershipListKey = "minePending" | "mineImplementation" | "sentPending";
 type HistoryMonthGroup = { key: string; month: number | null; year: number; items: any[] };
-type ReviewDecision = "approve" | "defer" | "reject";
+type ReviewDecision = "approve" | "request-info" | "defer" | "reject";
 
 type HistoryDecisionFilter = "approved" | "rejected" | "deferred" | "pending";
 type HistoryKhmtFilter = "in" | "out";
@@ -138,9 +143,16 @@ type PersonFilterOption = {
 
 const reviewDecisionOptions: Array<{ value: ReviewDecision; label: string; helper: string }> = [
   { value: "approve", label: "Đồng ý", helper: "Ghi nhận SK đạt yêu cầu xét duyệt." },
+  { value: "request-info", label: "Cần bổ sung", helper: "Trả về tác giả bổ sung ảnh/thông tin; tác giả sửa xong SK tự quay lại hàng chờ." },
   { value: "defer", label: "Xem xét sau", helper: "Giữ lại để đánh giá tiếp hoặc cần thêm cơ sở." },
   { value: "reject", label: "Không đồng ý", helper: "Không đưa SK vào luồng thực hiện." },
 ];
+
+// "Cần bổ sung" chỉ áp dụng cho SK tạo trên web đang chờ duyệt (backend: Submitted → NeedMoreInfo).
+function reviewDecisionOptionsFor(item: any) {
+  const canRequestInfo = item?.status === "Submitted" && !item?.is_historical_import;
+  return reviewDecisionOptions.filter((option) => option.value !== "request-info" || canRequestInfo);
+}
 
 const historyDecisionFilterOptions: Array<{ value: HistoryDecisionFilter; label: string; tone: string }> = [
   { value: "approved", label: "Đồng ý", tone: "success" },
@@ -228,7 +240,7 @@ function reviewDecisionLabel(value: ReviewDecision) {
 }
 
 function reviewDecisionRequiresNote(value: ReviewDecision) {
-  return value === "defer" || value === "reject";
+  return value === "defer" || value === "reject" || value === "request-info";
 }
 
 function todayIsoDate() {
@@ -413,7 +425,7 @@ export function completionState(item: any, today = todayIsoDate()): {
     return { tone: "done", label: "Đã hoàn thành", date: parsed.date, dateText, note, auto };
   }
   const dueDate = hasFullDate ? parsed.date : endOfMonthIso(parsed.date);
-  if (!parsed.done && dueDate <= today && item?.status !== "Cancelled") {
+  if (!parsed.done && dueDate <= today && !NOT_AUTO_DONE_STATUSES.includes(item?.status)) {
     return { tone: "done", label: "Đã hoàn thành", date: dueDate, dateText: formatDateForPlan(dueDate), note, auto: true };
   }
   return { tone: "planned", label: "Dự kiến", date: dueDate, dateText, note, auto: false };
@@ -1845,6 +1857,7 @@ export function FIWorkspace({
   displayName,
   editMode = true,
   tabsHost = null,
+  focusRequest = null,
 }: {
   role: string;
   currentUserId: string;
@@ -1853,6 +1866,8 @@ export function FIWorkspace({
   editMode?: boolean;
   // Node trong topbar (do App cung cấp) để render hàng tab lên chung với tiêu đề.
   tabsHost?: HTMLElement | null;
+  // SK cần mở (vd. khi bấm một thông báo); nonce đổi mỗi lần bấm.
+  focusRequest?: { id: string; nonce: number } | null;
 }) {
   const canUseAuthorPicker = AUTHOR_PICKER_ROLES.includes(role);
   const teamFromAccount = currentTeam ?? (AUTHOR_ROLES.includes(role) ? currentUserId : null);
@@ -2304,28 +2319,71 @@ export function FIWorkspace({
     }
   };
 
-  const openItem = (id: string) => {
+  // The detail card sits below the lists; bring it into view when the user opens
+  // an SK so the click does not look like it did nothing.
+  const detailCardRef = useRef<HTMLElement | null>(null);
+  const scrollToDetail = useRef(false);
+  useEffect(() => {
+    if (!scrollToDetail.current || !selectedItem) return;
+    scrollToDetail.current = false;
+    detailCardRef.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+  }, [selectedItem?.id]);
+
+  const showItemDetail = (id: string) => {
     if (selectedItem?.id === id) {
-      setSelectedItem(null);
-      setError("");
+      detailCardRef.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
       return;
     }
     api.getSk(id)
       .then((item) => {
+        scrollToDetail.current = true;
         setSelectedItem(item);
         setError("");
       })
       .catch((err) => setError(err.message));
   };
 
+  const openItem = (id: string) => {
+    if (selectedItem?.id === id) {
+      setSelectedItem(null);
+      setError("");
+      return;
+    }
+    showItemDetail(id);
+  };
+
   const selectTab = async (tab: FITab) => {
-    if (!await requestNavigation("đổi tab FI")) return;
+    if (!await requestNavigation("đổi tab FI")) return false;
     setActiveTab(tab);
     setActionTarget(null);
     setEditTarget(null);
     setKhmtTarget(null);
     setSelectedItem(null);
+    return true;
   };
+
+  // Mở SK được yêu cầu từ ngoài (chuông thông báo): SK tạo trên web hiện ở thẻ
+  // chi tiết của tab Xét duyệt/Đăng ký; còn lại tra trong Lịch sử FI theo mã.
+  useEffect(() => {
+    if (!focusRequest) return;
+    let active = true;
+    api.getSk(focusRequest.id)
+      .then(async (item) => {
+        if (!active) return;
+        const isOwner = recordAuthorId(item) === currentUserId || recordSubmitterId(item) === currentUserId;
+        const tab: FITab | null = item.is_historical_import
+          ? null
+          : canReview && !isOwner ? "review" : canRegister ? "register" : canReview ? "review" : null;
+        if (!await selectTab(tab ?? "history")) return;
+        if (!active) return;
+        if (tab === null) setHistoryQuery(item.sk_code || "");
+        scrollToDetail.current = true;
+        setSelectedItem(item);
+        setError("");
+      })
+      .catch((err) => { if (active) setError(err.message); });
+    return () => { active = false; };
+  }, [focusRequest?.nonce]);
 
   const selectHistoryTeams = (teams: string[]) => {
     setHistoryTeams(teams);
@@ -2527,6 +2585,8 @@ export function FIWorkspace({
       setNotice(
         planOnly
           ? "Đã cập nhật kế hoạch hoàn thành. Trạng thái Đồng ý được giữ nguyên."
+          : RESUBMIT_ON_EDIT_STATUSES.includes(editTarget.status)
+            ? "Đã cập nhật và gửi xét duyệt lại. SK đã quay về hàng Chờ xét duyệt."
           : wasSubmitted
             ? "Đã cập nhật SK. Đầu mối FI và Quản trị đã nhận thông báo để xem xét lại."
             : "Đã cập nhật nội dung SK-CTKT."
@@ -2974,6 +3034,18 @@ export function FIWorkspace({
           </div>
           <span className={`legacy-status-pill ${statusTone(item.status)}`}>{displayHistoryStatus(item)}</span>
         </div>
+        {activeTab === "review" && (
+          <div className="fi-inline-review-content">
+            <strong>{item.title}</strong>
+            <p>{item.content_description || "Chưa có mô tả nội dung."}</p>
+            <div className="fi-inline-review-content-foot">
+              <CompletionPill item={item} compact />
+              <button className="link-button" onClick={() => showItemDetail(item.id)} type="button">
+                Xem ảnh và chi tiết
+              </button>
+            </div>
+          </div>
+        )}
         <div className="fi-inline-review-grid">
           <label>
             Kết luận đánh giá
@@ -2983,7 +3055,7 @@ export function FIWorkspace({
                 setActionTarget({ ...actionTarget, decision: e.target.value as ReviewDecision })
               }
             >
-              {reviewDecisionOptions.map((option) => (
+              {reviewDecisionOptionsFor(item).map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
@@ -3867,7 +3939,7 @@ export function FIWorkspace({
       )}
 
       {(activeTab === "register" || activeTab === "review") && selectedItem && !selectedItem.is_historical_import && (
-        <section className="panel wide fi-detail-card">
+        <section className="panel wide fi-detail-card" ref={detailCardRef}>
           <div className="fi-detail-header">
             <div className="fi-detail-title">
               <div className="fi-detail-code-line">

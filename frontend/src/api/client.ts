@@ -579,6 +579,7 @@ export const api = {
   capabilities: () => request<Record<string, unknown>>("/auth/capabilities"),
   revokeAllSessions: () => request<{ revoked: boolean; message: string }>("/auth/revoke-all-sessions", { method: "POST" }),
   markNotificationRead: (id: string) => request<any>(`/notifications/${id}/read`, { method: "PUT" }),
+  markAllNotificationsRead: () => request<{ marked: number }>("/notifications/read-all", { method: "PUT" }),
   submitFeedback: (payload: {
     feedback_type: "loi" | "kho_su_dung" | "gop_y";
     description: string;

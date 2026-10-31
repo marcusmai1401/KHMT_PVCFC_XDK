@@ -86,9 +86,9 @@ def next_status(current: str, action: str, role: str, decision_note: str | None 
     action_enum = FIAction(action)
     if action_enum not in ROLE_ACTIONS.get(role, set()):
         raise PermissionError("Tài khoản không có quyền thực hiện thao tác này")
-    if action_enum in {FIAction.REJECT, FIAction.DEFER, FIAction.CANCEL}:
+    if action_enum in {FIAction.REJECT, FIAction.DEFER, FIAction.CANCEL, FIAction.REQUEST_INFO}:
         if not decision_note or not decision_note.strip():
-            raise ValueError("Cần nhập ghi chú khi từ chối, xem xét sau hoặc hủy")
+            raise ValueError("Cần nhập ghi chú khi từ chối, yêu cầu bổ sung, xem xét sau hoặc hủy")
     try:
         target = TRANSITIONS[(current_status, action_enum)]
     except KeyError as exc:

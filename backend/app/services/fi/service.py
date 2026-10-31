@@ -60,6 +60,11 @@ EDITABLE_AFTER_SUBMIT_STATUSES = {
     SKStatus.DEFERRED.value,
 }
 AUTHOR_CONTENT_EDITABLE_STATUSES = {SKStatus.DRAFT.value, *EDITABLE_AFTER_SUBMIT_STATUSES}
+RESUBMIT_ON_EDIT_STATUSES = {
+    SKStatus.NEED_MORE_INFO.value,
+    SKStatus.DEFERRED.value,
+    SKStatus.REJECTED.value,
+}
 # Sau khi được Đồng ý, nội dung đã duyệt giữ nguyên; tác giả chỉ cập nhật tiến
 # độ thực hiện. KHMT xét theo approved_at nên đổi kế hoạch không ảnh hưởng phân bổ.
 COMPLETION_PLAN_FIELDS = {"completion_date", "completion_done", "completion_plan"}
@@ -453,6 +458,23 @@ def update_sk_ctkt(
     now = _utc_now()
     record.updated_at = now
     record.revision += 1
+    # Sửa nội dung SK đang Cần bổ sung / Xem xét sau / Không đồng ý là nộp lại:
+    # đưa về Chờ xét duyệt để hiện lại trong hàng đợi của người duyệt.
+    if not plan_update and record.status in RESUBMIT_ON_EDIT_STATUSES:
+        record.status = SKStatus.SUBMITTED.value
+        record.is_public = is_public_status(record.status)
+        record.submitted_at = now
+        record.status_history = [
+            *record.status_history,
+            {
+                "from_status": previous_status,
+                "to_status": record.status,
+                "changed_by": actor,
+                "changed_at": now.isoformat(),
+                "reason": "resubmitted_after_edit",
+                "comments": None,
+            },
+        ]
     if plan_update:
         record.status_history = [
             *record.status_history,
@@ -520,7 +542,7 @@ def _validate_actor_for_transition(
             SKStatus.NEED_MORE_INFO.value,
         }:
             raise PermissionError("Chỉ hủy được SK ở trạng thái Nháp hoặc Cần bổ sung")
-    if role == Role.FI_COORDINATOR.value and action in REVIEW_DECISION_ACTIONS:
+    if role == Role.FI_COORDINATOR.value and action in {*REVIEW_DECISION_ACTIONS, FIAction.REQUEST_INFO.value}:
         if record.status not in REVIEWABLE_STATUSES:
             raise PermissionError(
                 "Chỉ đánh giá được SK ở trạng thái Chờ xét duyệt, Đã xem xét, Xem xét sau, Đồng ý hoặc Không đồng ý"
@@ -613,22 +635,36 @@ def transition_sk_ctkt(
     return record
 
 
+def _owner_recipient_ids(db: Session, record: SKCTKTModel) -> list[str]:
+    """Tác giả thật và người gửi hộ; bỏ tài khoản import (không ai đọc)."""
+    recipients: list[str] = []
+    for user_id in (effective_author_user_id(record, db), effective_submitter_user_id(record, db)):
+        if user_id and not is_import_actor(user_id) and user_id not in recipients:
+            recipients.append(user_id)
+    return recipients
+
+
+def _notify_owners(db: Session, record: SKCTKTModel, event: str, payload: dict[str, Any]) -> None:
+    for user_id in _owner_recipient_ids(db, record):
+        notify(db, event, payload, recipient_user_id=user_id)
+
+
 def _notify_transition(db: Session, record: SKCTKTModel, record_id: str) -> None:
     payload = {"id": record_id, "status": record.status, "sk_code": record.sk_code}
     if record.status == SKStatus.SUBMITTED.value:
         notify(db, "SK_SUBMITTED", payload, recipient_role=Role.FI_COORDINATOR.value)
         notify(db, "SK_SUBMITTED", payload, recipient_role=Role.ADMIN.value)
     elif record.status == SKStatus.NEED_MORE_INFO.value:
-        notify(db, "SK_NEED_MORE_INFO", payload, recipient_user_id=record.author_user_id)
+        _notify_owners(db, record, "SK_NEED_MORE_INFO", payload)
     elif record.status == SKStatus.REVIEWED.value:
         notify(db, "SK_REVIEWED", payload, recipient_role=Role.FI_COORDINATOR.value)
     elif record.status == SKStatus.APPROVED.value:
-        notify(db, "SK_APPROVED", payload, recipient_user_id=record.author_user_id)
+        _notify_owners(db, record, "SK_APPROVED", payload)
         notify(db, "SK_APPROVED", payload, recipient_role=Role.WORKSHOP_LEADER.value)
     elif record.status in {SKStatus.REJECTED.value, SKStatus.DEFERRED.value, SKStatus.CANCELLED.value, SKStatus.COMPLETED.value}:
-        notify(db, f"SK_{record.status.upper()}", payload, recipient_user_id=record.author_user_id)
+        _notify_owners(db, record, f"SK_{record.status.upper()}", payload)
     else:
-        notify(db, "SK_STATUS_CHANGED", payload, recipient_user_id=record.author_user_id)
+        _notify_owners(db, record, "SK_STATUS_CHANGED", payload)
 
 
 def assign_khmt(

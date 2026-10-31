@@ -114,6 +114,10 @@ function displayNotification(value: string) {
   return notificationLabels[value] ?? value;
 }
 
+function isUnreadNotification(item: any) {
+  return item.read_status === "unread" || (!item.read_status && !item.read);
+}
+
 function friendlyError(message: string) {
   if (message.includes("Invalid credentials")) return "Sai tài khoản hoặc mật khẩu.";
   if (message.includes("Not authenticated") || message.includes("Invalid token")) return "Phiên đăng nhập không hợp lệ.";
@@ -200,6 +204,7 @@ export function App() {
   const [sandboxIdentities, setSandboxIdentities] = useState<SandboxIdentity[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [fiFocus, setFiFocus] = useState<{ id: string; nonce: number } | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [capabilityMap, setCapabilityMap] = useState<Record<string, unknown>>({});
   const [error, setError] = useState("");
@@ -409,12 +414,32 @@ export function App() {
       .catch(() => {});
   };
 
-  const markRead = (id: string) => {
-    api.markNotificationRead(id)
-      .then(() => {
-        setNotificationsOpen(false);
-        loadNotifications();
-      })
+  // A notification about an SK opens that SK in the FI module.
+  const openNotification = (item: any) => {
+    setNotificationsOpen(false);
+    if (isUnreadNotification(item)) {
+      api.markNotificationRead(item.id)
+        .then(loadNotifications)
+        .catch((err) => setError(friendlyError(err.message)));
+    }
+    const skId = String(item.event ?? "").startsWith("SK_") ? item.payload?.id : null;
+    if (!skId) return;
+    const focus = { id: String(skId), nonce: Date.now() };
+    if (tab === "fi") {
+      setFiFocus(focus);
+      return;
+    }
+    void requestNavigation(`chuyển sang ${tabTitles.fi}`).then((allowed) => {
+      if (!allowed) return;
+      setFiFocus(focus);
+      setTab("fi");
+      updateBrowserPath("fi");
+    });
+  };
+
+  const markAllNotificationsRead = () => {
+    api.markAllNotificationsRead()
+      .then(loadNotifications)
       .catch((err) => setError(friendlyError(err.message)));
   };
 
@@ -745,7 +770,7 @@ export function App() {
   const isAdminProd = role === "Admin" && !sandbox;
 
   const effectiveEditMode = role === "Admin" ? adminEditMode : true;
-  const unreadNotificationCount = notifications.filter((item) => item.read_status === "unread" || (!item.read_status && !item.read)).length;
+  const unreadNotificationCount = notifications.filter(isUnreadNotification).length;
   const canReadEt = capabilityMap["et.read"] !== false && canAccessTab(role, "et");
 
   return (
@@ -1034,12 +1059,25 @@ export function App() {
                       <span>Không có thông báo mới.</span>
                     </div>
                   ) : (
-                    notifications.slice(0, 4).map((item) => (
-                      <button key={item.id} className={item.read ? "read" : ""} onClick={() => markRead(item.id)}>
-                        <strong>{displayNotification(item.event)}</strong>
-                        <span>{item.payload?.sk_code ?? item.payload?.id ?? displayTeam(item.payload?.team)}</span>
-                      </button>
-                    ))
+                    <>
+                      <div className="notification-head">
+                        <span>{unreadNotificationCount > 0 ? `${unreadNotificationCount} chưa đọc` : "Đã đọc hết"}</span>
+                        {unreadNotificationCount > 0 && (
+                          <button className="link-button" onClick={markAllNotificationsRead} type="button">
+                            Đánh dấu đã đọc tất cả
+                          </button>
+                        )}
+                      </div>
+                      <div className="notification-scroll">
+                        {notifications.map((item) => (
+                          <button key={item.id} className={isUnreadNotification(item) ? "unread" : "read"} onClick={() => openNotification(item)} type="button">
+                            <strong>{displayNotification(item.event)}</strong>
+                            <span>{item.payload?.sk_code ?? item.payload?.id ?? displayTeam(item.payload?.team)}</span>
+                            {item.created_at && <small>{new Date(item.created_at).toLocaleString("vi-VN")}</small>}
+                          </button>
+                        ))}
+                      </div>
+                    </>
                   )}
                 </div>
               )}
@@ -1056,7 +1094,7 @@ export function App() {
           <Suspense fallback={<div className="module-loading" aria-busy="true">Đang tải phân hệ…</div>}>
             {tab === "okr" && <LazyOKRModule role={role} currentUserId={currentUserId} currentTeam={currentTeam} editMode={effectiveEditMode} tabsHost={topbarTabsHost} />}
             {tab === "et" && <LazyETModule role={role} currentUserId={currentUserId} editMode={effectiveEditMode} tabsHost={topbarTabsHost} />}
-            {tab === "fi" && <LazyFIWorkspace role={role} currentUserId={currentUserId} currentTeam={currentTeam} displayName={currentDisplayName} editMode={effectiveEditMode} tabsHost={topbarTabsHost} />}
+            {tab === "fi" && <LazyFIWorkspace role={role} currentUserId={currentUserId} currentTeam={currentTeam} displayName={currentDisplayName} editMode={effectiveEditMode} tabsHost={topbarTabsHost} focusRequest={fiFocus} />}
             {tab === "admin" && <LazyAdminPanel />}
           </Suspense>
         </div>

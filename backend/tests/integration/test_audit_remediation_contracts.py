@@ -58,6 +58,26 @@ def test_notification_visibility_and_receipts_are_per_user(client, admin_headers
     assert all(item["read_status"] == "unread" for item in client.get("/api/v1/notifications", headers=user_b_headers).json())
 
 
+def test_mark_all_notifications_read_only_touches_own_notifications(client, admin_headers):
+    user_a_headers = _create_user(client, admin_headers, "bulk-a")
+    user_b_headers = _create_user(client, admin_headers, "bulk-b")
+    with create_session() as db:
+        db.add_all([
+            NotificationModel(id="bulk-private", recipient_user_id="bulk-a", recipient_role=None, event="PRIVATE", payload={}, read=False),
+            NotificationModel(id="bulk-role", recipient_user_id=None, recipient_role="Staff", event="ROLE", payload={}, read=False),
+        ])
+        db.commit()
+
+    response = client.put("/api/v1/notifications/read-all", headers=user_a_headers)
+    assert response.status_code == 200, response.text
+    assert response.json()["marked"] >= 2
+    assert all(item["read_status"] == "read" for item in client.get("/api/v1/notifications", headers=user_a_headers).json())
+    b_items = {item["id"]: item for item in client.get("/api/v1/notifications", headers=user_b_headers).json()}
+    assert b_items["bulk-role"]["read_status"] == "unread"
+    # Nothing left to mark on a second call.
+    assert client.put("/api/v1/notifications/read-all", headers=user_a_headers).json()["marked"] == 0
+
+
 def test_feedback_requires_consent_is_idempotent_and_telemetry_is_allowlisted(client, admin_headers, capsys):
     missing_consent = client.post(
         "/api/v1/feedback",

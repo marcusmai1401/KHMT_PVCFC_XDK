@@ -1202,3 +1202,132 @@ def test_author_can_reset_auto_completed_plan_on_pending_sk(db_session):
     assert db_session.execute(
         select(NotificationModel).where(NotificationModel.event == "SK_CONTENT_EDITED")
     ).first() is None
+
+
+def test_completion_schedule_skips_drafts_and_rejected_sk(db_session):
+    today = date(2026, 10, 29)
+    db_session.add_all(
+        [
+            _plan_record("draft", "Draft", "Dự kiến hoàn thành 15/09/2026"),
+            _plan_record("rejected", "Rejected", "Dự kiến hoàn thành 15/09/2026"),
+            _plan_record("deferred", "Deferred", "Dự kiến hoàn thành 15/09/2026"),
+            _plan_record(
+                "rejected-future-done",
+                "Rejected",
+                "Đã hoàn thành 23/11/2026",
+                completed_at=datetime(2026, 11, 23, tzinfo=timezone.utc),
+            ),
+        ]
+    )
+    db_session.commit()
+
+    assert apply_completion_schedule(db_session, today=today) == 2
+    assert db_session.get(SKCTKTModel, "draft").completed_at is None
+    assert db_session.get(SKCTKTModel, "rejected").completed_at is None
+    assert db_session.get(SKCTKTModel, "deferred").completed_at.date() == date(2026, 9, 15)
+    # A done date in the future is still corrected, whatever the decision.
+    assert db_session.get(SKCTKTModel, "rejected-future-done").completion_plan == "Dự kiến hoàn thành 23/11/2026"
+
+
+def _submitted_sk(db_session, actor: str = "baomt", payload: dict | None = None) -> SKCTKTModel:
+    record = create_sk_ctkt(
+        db_session,
+        {
+            "author_name": "Mai Thái Bảo",
+            "team": "TBCH",
+            "title": "Title",
+            "content_description": "Initial",
+            "completion_plan": "T6/2027",
+            "year": 2026,
+            **(payload or {}),
+        },
+        actor,
+    )
+    transition_sk_ctkt(db_session, record.id, "submit", actor, "Team_Account")
+    return record
+
+
+@pytest.mark.parametrize(
+    ("action", "status"),
+    [("reject", "Rejected"), ("defer", "Deferred"), ("request_info", "NeedMoreInfo")],
+)
+def test_author_content_edit_after_decision_resubmits_for_review(db_session, action, status):
+    record = _submitted_sk(db_session)
+    transition_sk_ctkt(db_session, record.id, action, "admin", "Admin", note="Cần làm rõ")
+    assert db_session.get(SKCTKTModel, record.id).status == status
+
+    updated = update_sk_ctkt(
+        db_session, record.id, {"content_description": "Đã bổ sung"}, "baomt", "Team_Account"
+    )
+
+    assert updated.status == "Submitted"
+    assert updated.submitted_at is not None
+    entry = updated.status_history[-1]
+    assert (entry["from_status"], entry["to_status"], entry["reason"]) == (status, "Submitted", "resubmitted_after_edit")
+
+
+def test_progress_only_edit_after_rejection_keeps_decision(db_session):
+    record = _submitted_sk(db_session)
+    transition_sk_ctkt(db_session, record.id, "reject", "admin", "Admin", note="Không phù hợp")
+    next_month = factory_today() + timedelta(days=31)
+
+    updated = update_sk_ctkt(
+        db_session,
+        record.id,
+        {"completion_plan": "Dự kiến hoàn thành", "completion_done": False, "completion_date": next_month},
+        "baomt",
+        "Team_Account",
+    )
+
+    assert updated.status == "Rejected"
+
+
+def test_request_info_requires_note(db_session):
+    record = _submitted_sk(db_session)
+    with pytest.raises(ValueError):
+        transition_sk_ctkt(db_session, record.id, "request_info", "admin", "Admin")
+
+
+def test_decision_notifies_author_and_proxy_submitter(db_session):
+    record = _submitted_sk(db_session, actor="minhvq", payload={"author_user_id": "baomt"})
+    db_session.execute(NotificationModel.__table__.delete())
+    db_session.commit()
+
+    transition_sk_ctkt(db_session, record.id, "approve", "admin", "Admin")
+
+    recipients = {
+        n.recipient_user_id
+        for n in db_session.execute(
+            select(NotificationModel).where(NotificationModel.event == "SK_APPROVED")
+        ).scalars()
+    }
+    assert {"baomt", "minhvq"} <= recipients
+
+
+def test_decision_on_historical_import_never_notifies_import_actor(db_session):
+    db_session.add(
+        SKCTKTModel(
+            id="legacy-1",
+            sk_code="FI/05/2026-TBCH-01",
+            title="Legacy",
+            author_name="Nguyễn Văn Không Có",
+            author_user_id="historical-import",
+            team="TBCH",
+            content_description="Content",
+            completion_plan="",
+            status="Submitted",
+            status_history=[{"from_status": None, "to_status": "Submitted", "changed_by": "historical-import"}],
+            is_historical_import=True,
+        )
+    )
+    db_session.commit()
+
+    transition_sk_ctkt(db_session, "legacy-1", "approve", "admin", "Admin")
+
+    recipients = {
+        n.recipient_user_id
+        for n in db_session.execute(
+            select(NotificationModel).where(NotificationModel.event == "SK_APPROVED")
+        ).scalars()
+    }
+    assert "historical-import" not in recipients

@@ -174,6 +174,11 @@ describe("FI action visibility", () => {
       .toMatchObject({ tone: "done", date: "2026-08-31", dateText: "31/08/2026" });
     expect(completionState({ status: "Cancelled", completion_plan: "Dự kiến hoàn thành 15/10/2026" }, today))
       .toMatchObject({ tone: "planned" });
+    // Drafts and rejected SK are not being implemented, so a reached date is not done.
+    expect(completionState({ status: "Draft", completion_plan: "Dự kiến hoàn thành 15/10/2026" }, today))
+      .toMatchObject({ tone: "planned" });
+    expect(completionState({ status: "Rejected", completion_plan: "Dự kiến hoàn thành 15/10/2026" }, today))
+      .toMatchObject({ tone: "planned" });
     // A "done" date in the future was a mistake: still planned.
     expect(completionState({ completion_plan: "Đã hoàn thành 23/11/2026", completed_at: "2026-11-23T00:00:00" }, today))
       .toMatchObject({ tone: "planned", label: "Dự kiến", dateText: "23/11/2026" });

@@ -27,6 +27,9 @@ AUTO_DONE_REASON = "completion_auto_done"
 AUTO_PLANNED_REASON = "completion_auto_planned"
 # Đã hủy hoặc đã kết thúc quy trình thì không còn kế hoạch để theo dõi.
 SKIPPED_STATUSES = {SKStatus.CANCELLED.value, SKStatus.COMPLETED.value}
+# Nháp chưa gửi và SK bị Không đồng ý không được triển khai, nên tới ngày dự
+# kiến cũng không tự coi là đã hoàn thành.
+NOT_AUTO_DONE_STATUSES = {SKStatus.DRAFT.value, SKStatus.REJECTED.value}
 
 _FULL_DATE = re.compile(r"\b(0?[1-9]|[12]\d|3[01])\s*[./-]\s*(0?[1-9]|1[0-2])\s*[./-]\s*(20\d{2})\b")
 _MONTH = re.compile(r"(?:\bt|thang)?\s*(1[0-2]|0?[1-9])\s*[./-]\s*(20\d{2})\b")
@@ -73,7 +76,7 @@ def _plan_transition(record: SKCTKTModel, today: date) -> tuple[str, str, dateti
         if completed_on > today:
             return AUTO_PLANNED_REASON, format_plan(False, completed_on), None
         return None
-    if completion_plan_indicates_done(record.completion_plan):
+    if record.status in NOT_AUTO_DONE_STATUSES or completion_plan_indicates_done(record.completion_plan):
         return None
     due = completion_plan_due_date(record.completion_plan)
     if due is None or due > today:

@@ -193,6 +193,7 @@ export function App() {
   });
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [capsLockOn, setCapsLockOn] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [currentUserId, setCurrentUserId] = useState("");
   const [currentDisplayName, setCurrentDisplayName] = useState<string | null>(null);
@@ -700,6 +701,8 @@ export function App() {
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
+                    onKeyDown={(event) => setCapsLockOn(event.getModifierState("CapsLock"))}
+                    onKeyUp={(event) => setCapsLockOn(event.getModifierState("CapsLock"))}
                   />
                   <button
                     type="button"
@@ -711,6 +714,14 @@ export function App() {
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
+                {/[^\x00-\x7F]/.test(password) && (
+                  <small className="auth-mismatch" role="status">
+                    Mật khẩu đang có ký tự có dấu — có thể bộ gõ tiếng Việt (Unikey) đang bật. Hãy tắt rồi nhập lại.
+                  </small>
+                )}
+                {capsLockOn && (
+                  <small className="auth-mismatch" role="status">Caps Lock đang bật.</small>
+                )}
               </label>
 
               <div className="auth-options">

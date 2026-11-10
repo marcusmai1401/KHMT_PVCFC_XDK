@@ -23,6 +23,25 @@ class Role(StrEnum):
 
 bearer = HTTPBearer(auto_error=False)
 
+# Temporary password handed out by an administrator reset.
+DEFAULT_RESET_PASSWORD = "PVCFC@123"
+
+
+def typing_safe_password_error(password: str) -> str | None:
+    """Reject passwords that cannot be retyped the same way on every device.
+
+    A Vietnamese input method (Unikey/Telex) silently rewrites keystrokes, so a
+    password saved with it on does not match the same keys typed with it off.
+    """
+    if not password.isascii():
+        return (
+            "Mật khẩu mới có ký tự có dấu. Hãy tắt bộ gõ tiếng Việt (Unikey) "
+            "và chỉ dùng chữ không dấu, số, ký hiệu."
+        )
+    if password != password.strip():
+        return "Mật khẩu mới không được bắt đầu hoặc kết thúc bằng khoảng trắng"
+    return None
+
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")

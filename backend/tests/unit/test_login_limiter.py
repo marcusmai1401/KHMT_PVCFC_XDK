@@ -89,3 +89,34 @@ def test_retry_after_counts_down_instead_of_restarting_window(monkeypatch):
     limiter.record_failure("192.0.2.5", "synthetic", now=20)
     assert limiter.check("192.0.2.5", "synthetic", now=600) == 10
     assert limiter.check("192.0.2.5", "synthetic", now=610) == 0
+
+
+def test_clear_user_lifts_account_lockout_for_every_client(monkeypatch):
+    limiter = LoginLimiter()
+    monkeypatch.setattr(limiter, "_limits", lambda: (100, 2))
+    for ip in ("192.0.2.20", "192.0.2.21"):
+        limiter.record_failure(ip, "Locked", now=10)
+        limiter.record_failure(ip, "locked", now=10)
+        assert limiter.check(ip, "locked", now=10) > 0
+    limiter.record_failure("192.0.2.20", "bystander", now=10)
+    limiter.record_failure("192.0.2.20", "bystander", now=10)
+
+    limiter.clear_user("LOCKED")
+
+    assert limiter.check("192.0.2.20", "locked", now=10) == 0
+    assert limiter.check("192.0.2.21", "locked", now=10) == 0
+    # Another account's lockout is not lifted by the reset.
+    assert limiter.check("192.0.2.20", "bystander", now=10) > 0
+
+
+def test_clear_pair_only_forgets_the_signed_in_client(monkeypatch):
+    limiter = LoginLimiter()
+    monkeypatch.setattr(limiter, "_limits", lambda: (100, 2))
+    for ip in ("192.0.2.30", "192.0.2.31"):
+        limiter.record_failure(ip, "synthetic", now=10)
+        limiter.record_failure(ip, "synthetic", now=10)
+
+    limiter.clear_pair("192.0.2.30", "synthetic")
+
+    assert limiter.check("192.0.2.30", "synthetic", now=10) == 0
+    assert limiter.check("192.0.2.31", "synthetic", now=10) > 0

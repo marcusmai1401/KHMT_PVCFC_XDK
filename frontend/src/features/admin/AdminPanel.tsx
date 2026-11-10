@@ -113,7 +113,9 @@ function statusTone(value: string | null | undefined) {
 function actionLabel(value: string | null | undefined) {
   const labels: Record<string, string> = {
     login: "Đăng nhập",
+    login_failed: "Đăng nhập thất bại",
     change_password: "Đổi mật khẩu",
+    admin_reset_password: "Admin reset mật khẩu",
     create: "Tạo tài khoản",
     update_role: "Cập nhật quyền",
     save_draft: "Lưu nháp OKR",
@@ -164,6 +166,14 @@ function historyActionLabel(entry: any) {
   return `${displayStatus(entry.from_status)} -> ${displayStatus(entry.to_status)}`;
 }
 
+function failedLoginReason(log: any) {
+  const changes = log?.changes ?? {};
+  if (changes.reason === "inactive_account") return "tài khoản đang khóa";
+  if (changes.typed_default_password) return "nhập mật khẩu mặc định nhưng tài khoản chưa được reset";
+  if (changes.non_ascii_password) return "mật khẩu có dấu tiếng Việt (Unikey đang bật)";
+  return "sai mật khẩu";
+}
+
 function latestByTime(rows: any[]) {
   return [...rows].sort((a, b) => {
     const left = new Date(String(a?.created_at ?? "").replace(" ", "T")).getTime() || 0;
@@ -191,7 +201,7 @@ export function AdminPanel() {
   const [accountLoginFilter, setAccountLoginFilter] = useState("all");
   const [accountActivityFilter, setAccountActivityFilter] = useState("all");
   const [resetBusyId, setResetBusyId] = useState<string | null>(null);
-  const [resetResult, setResetResult] = useState<{ userId: string; password: string } | null>(null);
+  const [resetResult, setResetResult] = useState<{ userId: string; label: string; password: string } | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [khmtMonth, setKhmtMonth] = useState(() => new Date().getMonth() + 1);
   const [khmtYear, setKhmtYear] = useState(() => new Date().getFullYear());
@@ -301,12 +311,24 @@ export function AdminPanel() {
       .finally(() => setKhmtBusyTeam(null));
   };
 
-  const handleResetPassword = (user: any) => {
+  const handleResetPassword = (user: any, loginLog?: any, failedLog?: any) => {
     const label = user.display_name || user.full_name || user.id;
+    // Several people share a given name (thanhcm / thanhdq / thanhdv). Resetting
+    // the wrong one leaves the real person locked out and silently breaks the
+    // working password of a colleague, so spell out exactly who is affected.
     const confirmed = window.confirm(
-      `Reset mật khẩu cho "${label}" (${user.id})?\n\n` +
-        "Hệ thống sẽ đặt lại mật khẩu mặc định và buộc người dùng đổi mật khẩu " +
-        "ngay khi đăng nhập lần kế tiếp.",
+      "RESET MẬT KHẨU — kiểm tra đúng người trước khi đồng ý\n\n" +
+        `Mã tài khoản: ${user.id}\n` +
+        `Họ tên: ${user.full_name || label}\n` +
+        `Đội/tổ: ${displayTeam(user.team) || "Không gán"}\n` +
+        `Đăng nhập thành công gần nhất: ${loginLog ? formatDateTime(loginLog.created_at) : "chưa có"}\n` +
+        `Đăng nhập thất bại gần nhất: ${
+          failedLog
+            ? `${formatDateTime(failedLog.created_at)} (${failedLoginReason(failedLog)})`
+            : "KHÔNG CÓ — người đang báo lỗi có thể dùng mã tài khoản khác"
+        }\n\n` +
+        `Mã tài khoản phải trùng với ô "Tài khoản" người dùng đang gõ. Mật khẩu hiện tại của ${user.id} ` +
+        "sẽ mất hiệu lực ngay, các thiết bị đang đăng nhập bị đăng xuất, và người dùng phải đổi mật khẩu ở lần đăng nhập kế tiếp.",
     );
     if (!confirmed) return;
     setResetBusyId(user.id);
@@ -315,7 +337,7 @@ export function AdminPanel() {
     api
       .adminResetUserPassword(user.id)
       .then((res) => {
-        setResetResult({ userId: user.id, password: res.temporary_password });
+        setResetResult({ userId: user.id, label: user.full_name || label, password: res.temporary_password });
         reload();
       })
       .catch((err) => setError(err.message))
@@ -360,8 +382,9 @@ export function AdminPanel() {
         const relatedLogs = auditRows.filter((row) => row.actor === user.id || (row.entity_type === "Account" && row.entity_id === user.id));
         const loginLog = latestByTime(relatedLogs.filter((row) => row.action === "login"));
         const passwordLog = latestByTime(relatedLogs.filter((row) => row.action === "change_password"));
+        const failedLog = latestByTime(relatedLogs.filter((row) => row.action === "login_failed"));
         const latestLog = latestByTime(relatedLogs);
-        return { user, relatedLogs, loginLog, passwordLog, latestLog };
+        return { user, relatedLogs, loginLog, passwordLog, failedLog, latestLog };
       });
   }, [users, auditRows]);
 
@@ -874,11 +897,12 @@ export function AdminPanel() {
         <div className="admin-reset-banner" role="status">
           <ShieldCheck size={18} />
           <div className="admin-reset-banner-body">
-            <strong>Đã reset mật khẩu cho “{resetResult.userId}”.</strong>
+            <strong>Đã reset mật khẩu cho tài khoản “{resetResult.userId}” ({resetResult.label}).</strong>
             <span>
               Mật khẩu tạm:{" "}
               <code className="admin-reset-password">{resetResult.password}</code> — gửi cho người
-              dùng qua kênh an toàn. Họ sẽ bị buộc đổi mật khẩu khi đăng nhập lần kế tiếp.
+              dùng qua kênh an toàn. Người dùng phải đăng nhập bằng đúng mã “{resetResult.userId}” và sẽ bị
+              buộc đổi mật khẩu khi đăng nhập lần kế tiếp.
             </span>
           </div>
           <div className="admin-reset-banner-actions">
@@ -982,7 +1006,7 @@ export function AdminPanel() {
             </tr>
           </thead>
           <tbody>
-            {accountRows.map(({ user, loginLog, passwordLog, latestLog }) => (
+            {accountRows.map(({ user, loginLog, passwordLog, failedLog, latestLog }) => (
               <tr key={user.id}>
                 <td><strong>{user.id}</strong></td>
                 <td>
@@ -1007,7 +1031,14 @@ export function AdminPanel() {
                   </span>
                   {passwordLog && <small className="admin-cell-note">{formatDateTime(passwordLog.created_at)}</small>}
                 </td>
-                <td>{loginLog ? formatDateTime(loginLog.created_at) : "Chưa có log"}</td>
+                <td>
+                  {loginLog ? formatDateTime(loginLog.created_at) : "Chưa có log"}
+                  {failedLog && (!loginLog || latestByTime([loginLog, failedLog]) === failedLog) && (
+                    <small className="admin-cell-note admin-cell-note-danger">
+                      Thất bại {formatDateTime(failedLog.created_at)}: {failedLoginReason(failedLog)}
+                    </small>
+                  )}
+                </td>
                 <td>
                   {latestLog ? (
                     <>
@@ -1023,7 +1054,7 @@ export function AdminPanel() {
                   <button
                     type="button"
                     className="admin-detail-button admin-reset-button"
-                    onClick={() => handleResetPassword(user)}
+                    onClick={() => handleResetPassword(user, loginLog, failedLog)}
                     disabled={resetBusyId === user.id}
                     title="Đặt lại mật khẩu mặc định và buộc đổi khi đăng nhập"
                   >

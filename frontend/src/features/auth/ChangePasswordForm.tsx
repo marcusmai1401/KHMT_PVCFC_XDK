@@ -22,7 +22,14 @@ const RULES: Rule[] = [
   { key: "letter", label: "Có chữ cái", test: (p) => /[A-Za-z]/.test(p) },
   { key: "digit", label: "Có chữ số", test: (p) => /[0-9]/.test(p) },
   { key: "diff", label: "Khác mật khẩu cũ", test: (p, o) => p.length > 0 && p !== o },
+  // Unikey/Telex rewrites keystrokes (e.g. "w" -> "ư"), so a password saved with it
+  // on never matches the same keys typed with it off. Keep passwords retypeable.
+  { key: "typing", label: "Không có dấu tiếng Việt (tắt Unikey khi gõ)", test: (p) => isTypingSafePassword(p) },
 ];
+
+export function isTypingSafePassword(password: string) {
+  return /^[\x20-\x7E]+$/.test(password) && password === password.trim();
+}
 
 function scorePassword(pw: string, old: string): { score: number; label: string; tone: string } {
   if (!pw) return { score: 0, label: "Chưa nhập", tone: "" };
@@ -101,6 +108,10 @@ export function ChangePasswordForm({ forced, displayName, userId, onChanged, onC
               Đây là lần đăng nhập đầu tiên của bạn. Vui lòng đặt mật khẩu mới (khác với mật khẩu mặc định) trước khi tiếp tục sử dụng hệ thống.
             </p>
           )}
+
+          {/* Lets the browser's password manager update the saved password of this
+              account instead of keeping the old one and autofilling it later. */}
+          <input type="text" name="username" autoComplete="username" value={userId} readOnly hidden />
 
           <label className="auth-field">
             <span>Mật khẩu hiện tại</span>

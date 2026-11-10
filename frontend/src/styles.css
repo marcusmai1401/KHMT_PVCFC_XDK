@@ -3814,6 +3814,10 @@ tr:hover td {
   margin-top: 4px;
 }
 
+.admin-cell-note-danger {
+  color: var(--color-danger-text);
+}
+
 .admin-status-pill,
 .admin-khmt-pill,
 .admin-source-pill {

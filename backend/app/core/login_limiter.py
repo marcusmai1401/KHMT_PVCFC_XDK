@@ -150,6 +150,39 @@ class LoginLimiter:
                 bucket.count += 1
             self._prune_local(current)
 
+    def clear_pair(self, ip: str, user_id: str) -> None:
+        """Forget the failures of one client for one account after it signs in."""
+        _, pair_key = self._keys(ip, user_id)
+        if self._redis is not None:
+            try:
+                self._redis.delete(pair_key)
+            except Exception:
+                self._degraded = True
+                self._redis = None
+        with self._lock:
+            self._local.pop(pair_key, None)
+
+    def clear_user(self, user_id: str) -> None:
+        """Forget the failures of every client for one account.
+
+        An administrator reset hands the user a new temporary password. Without
+        this, the lockout earned with the old password keeps rejecting the new
+        one for the rest of the window, which reads as "the reset did not work".
+        The per-IP bucket is left alone.
+        """
+        suffix = f":{self._identity(user_id)}"
+        if self._redis is not None:
+            try:
+                keys = list(self._redis.scan_iter(match=f"okr:login:pair:*{suffix}", count=500))
+                if keys:
+                    self._redis.delete(*keys)
+            except Exception:
+                self._degraded = True
+                self._redis = None
+        with self._lock:
+            for key in [key for key in self._local if key.startswith("okr:login:pair:") and key.endswith(suffix)]:
+                self._local.pop(key, None)
+
     def health(self) -> dict[str, Any]:
         return {
             "backend": "redis" if self._redis is not None else "in-process",

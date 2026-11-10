@@ -1,3 +1,5 @@
+import logging
+
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -6,11 +8,13 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.login_limiter import login_limiter
 from app.core.security import (
+    DEFAULT_RESET_PASSWORD,
     Role,
     create_access_token,
     current_principal,
     hash_password,
     require_role,
+    typing_safe_password_error,
     verify_password,
 )
 from app.db.session import get_db
@@ -27,6 +31,7 @@ from app.services.sandbox import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
 
 
 class SandboxRoleRequest(BaseModel):
@@ -116,10 +121,49 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
     ):
         audit(db, user.id, "Account", user.id, "login", {"sandbox": False})
         db.commit()
+        login_limiter.clear_pair(client_ip, user_id)
         return _token_response_from_user(user)
 
     login_limiter.record_failure(client_ip, user_id)
+    _record_failed_login(db, attempted_id=user_id, user=user, password=payload.password)
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sai tài khoản hoặc mật khẩu")
+
+
+def _record_failed_login(db: Session, *, attempted_id: str, user: User | None, password: str) -> None:
+    """Leave a trace an administrator can use to explain a rejected sign-in.
+
+    The response stays generic on purpose, so without this row nobody can tell
+    a mistyped account from a wrong password or from a reset that was applied
+    to a different account. Only the shape of the password is recorded.
+    """
+    if user is None:
+        reason = "unknown_account"
+    elif not user.is_active:
+        reason = "inactive_account"
+    else:
+        reason = "wrong_password"
+    details = {
+        "reason": reason,
+        # True when the person typed the reset default against an account that
+        # is not on it: the reset they were told about went somewhere else.
+        "typed_default_password": password.strip() == DEFAULT_RESET_PASSWORD,
+        # Typical of a Vietnamese input method rewriting the keystrokes.
+        "non_ascii_password": not password.isascii(),
+        "outer_whitespace": password != password.strip(),
+    }
+    try:
+        audit(
+            db,
+            user.id if user is not None else "anonymous",
+            "Account",
+            user.id if user is not None else attempted_id[:64],
+            "login_failed",
+            details,
+        )
+        db.commit()
+    except Exception:  # diagnostics must never turn a 401 into a 500
+        db.rollback()
+        logger.exception("Could not record failed login")
 
 
 @router.get("/me")
@@ -204,6 +248,9 @@ def change_password(
     has_digit = any(ch.isdigit() for ch in payload.new_password)
     if not (has_letter and has_digit):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Mật khẩu mới cần có cả chữ và số")
+    typing_error = typing_safe_password_error(payload.new_password)
+    if typing_error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=typing_error)
     user.password_hash = hash_password(payload.new_password)
     user.must_change_password = False
     user.session_version = int(getattr(user, "session_version", 1)) + 1

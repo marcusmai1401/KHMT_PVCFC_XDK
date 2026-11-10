@@ -6,7 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.concurrency import require_expected_revision, require_fi_preview_binding
-from app.core.security import Role, hash_password, require_role
+from app.core.login_limiter import login_limiter
+from app.core.security import DEFAULT_RESET_PASSWORD, Role, hash_password, require_role
 from app.db.session import get_db
 from app.models.domain import (
     AuditLogModel,
@@ -36,8 +37,6 @@ from app.services.okr.web_input import (
 from app.services.repositories import audit, make_id, model_to_dict
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-
-DEFAULT_RESET_PASSWORD = "PVCFC@123"
 
 
 @router.get("/khmt-fi")
@@ -217,6 +216,9 @@ def reset_user_password(
         {"used_default": temp_password == DEFAULT_RESET_PASSWORD},
     )
     db.commit()
+    # The temporary password must work at once, not after the lockout earned
+    # with the forgotten one runs out.
+    login_limiter.clear_user(user.id)
     return model_to_dict(user) | {"password_hash": None, "temporary_password": temp_password}
 
 

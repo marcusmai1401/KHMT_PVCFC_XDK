@@ -1037,7 +1037,13 @@ def export_fi_reports_to_excel(
             resolved_matrix_year = _factory_today().year
     from app.services.fi.dashboard_matrix import build_fi_dashboard_matrix_payload
 
-    matrix_payload = build_fi_dashboard_matrix_payload(db, records, year=resolved_matrix_year)
+    # The matrix must match FI Dashboard, which covers every reportable SK. Building
+    # it from the filtered export rows would zero out months whenever the export is
+    # narrowed (e.g. by decision or registration year) and contradict the UI.
+    matrix_records = db.execute(
+        select(SKCTKTModel).where(SKCTKTModel.status.in_(FI_REPORTABLE_STATUSES))
+    ).scalars().all()
+    matrix_payload = build_fi_dashboard_matrix_payload(db, matrix_records, year=resolved_matrix_year)
     _write_fi_export_summary(summary_sheet, records, filters, generated_at, matrix_payload["khmt_matrix"])
     _write_fi_export_rows(data_sheet, records, generated_at)
     _style_fi_export_workbook(workbook)

@@ -247,7 +247,7 @@ flowchart TD
   - **Hoàn thành khi:** Có báo cáo traceability đầy đủ `R01.1–R06.4` → test case → kết quả PASS.
   - _Requirements: R01–R06._
 
-- [ ] **T16 — Kiểm tra vận hành (dry-run dữ liệu legacy) và chuẩn bị gói bàn giao/PR**
+- [x] **T16 — Kiểm tra vận hành (dry-run dữ liệu legacy) và chuẩn bị gói bàn giao/PR**
   - **Phụ thuộc:** T15.
   - **Thực hiện:**
     - Lập ghi chú vận hành cho bước chạy **chỉ đọc** `python -m scripts.revert_fi_auto_done` (không truyền `--apply`) để xác nhận danh sách `Draft`/`Rejected` lịch sử còn `completed_at` cũ cần chủ sản phẩm quyết định dọn dẹp.
@@ -255,3 +255,17 @@ flowchart TD
   - **Kiểm tra:** Không chứa credentials/secrets trong diff, commit hoặc tài liệu; không chạy lệnh ghi trên production.
   - **Hoàn thành khi:** Gói PR + tài liệu kiểm chứng sẵn sàng để chủ sản phẩm review và merge.
   - _Requirements: R06.4._
+
+---
+
+### Kết quả review cuối (24/11/2026)
+
+- **Dry-run `revert_fi_auto_done.py` trên production (chỉ đọc, không `--apply`):** 2 bản ghi còn dấu `Đã hoàn thành` do lịch tự động cũ — `FI/07/2026-TBĐL-01` (`Draft`) và `HIST-TCĐK-TC- ĐK-16` (`Rejected`). Chờ chủ sản phẩm quyết định có chạy `--apply` hay không.
+- **Lỗi đã sửa sau review:**
+  - Excel: Ma trận KHMT trong sheet `Tong hop` trước đây tính trên tập bản ghi đã lọc của lần xuất (lọc `Kết luận`/`Năm` làm các tháng về `0`), nay luôn tính trên toàn bộ SK như FI Dashboard (R03.5).
+  - Thẻ chi tiết từng đội (phạm vi `Năm`) báo `kho sẵn sàng` khác cột `Kho sẵn sàng` của ma trận khi đội còn SK đã duyệt từ năm trước; nay dùng chung số kho hiện tại.
+  - KPI `Chờ xử lý` hiển thị `chờ duyệt + xem xét sau` (trước đó số chính trùng dòng phụ).
+  - Drawer ô ma trận bổ sung thao tác `Chuyển tháng` cho SK đang nằm trong ô (R02.3).
+  - Nhấn `Esc` khi đang xem ảnh phóng to / hộp sửa / cập nhật tiến độ không còn đóng luôn Drawer chi tiết phía dưới.
+  - Ô tìm kiếm `Lịch sử FI` / `Xét duyệt` không còn hiện 2 nút xóa `×`; bỏ lần tải trùng FI Dashboard khi mở trang.
+

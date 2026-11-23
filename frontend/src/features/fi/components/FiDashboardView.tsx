@@ -390,7 +390,7 @@ export function FiDashboardView({
         >
           <div className="fi-dashboard-kpi-icon"><Clock3 size={20} /></div>
           <span>Chờ xử lý</span>
-          <strong>{formatCount(pendingCount)}</strong>
+          <strong>{formatCount(pendingCount + deferredCount)}</strong>
           <small>
             {formatCount(pendingCount)} chờ duyệt · {formatCount(deferredCount)} xem xét sau
           </small>

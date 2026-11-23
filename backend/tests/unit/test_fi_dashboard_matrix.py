@@ -313,3 +313,47 @@ def test_fi_history_disjunctive_facets_and_chronological_period_sorting(db_sessi
     # Team facet excludes teams filter so user sees all teams matching T8/2026
     team_counts = {row["value"]: row["count"] for row in res["facets"]["teams"]}
     assert team_counts == {"TBCH": 1, "TBĐL": 2, "TBHTĐK": 3}
+
+
+def _matrix_row_values(sheet, team: str) -> list:
+    """Return the matrix row (Đội/tổ, T1..T12, Tổng năm, Kho, Chờ duyệt) for a team."""
+    header_row = None
+    for row in sheet.iter_rows():
+        if row[0].value and "MA TRẬN FI XÉT VÀO KHMT" in str(row[0].value):
+            header_row = row[0].row + 1
+            break
+    assert header_row is not None
+    for row in sheet.iter_rows(min_row=header_row + 1, max_row=header_row + 6):
+        if row[0].value == team:
+            return [cell.value for cell in row[:16]]
+    raise AssertionError(f"Matrix row for {team} not found")
+
+
+def test_excel_matrix_ignores_export_filters_and_matches_dashboard(db_session):
+    _make_sk(db_session, team="TBCH", title="Matrix SK in T6", reg_month=6, khmt_month=6, khmt_year=2026)
+    _make_sk(db_session, team="TBCH", title="Matrix SK pending", reg_month=6, approve=False)
+    # Registered in 2025, counted in KHMT T1/2026: must still appear in the 2026 matrix.
+    _make_sk(db_session, team="TBCH", title="Matrix SK cross year", reg_month=12, reg_year=2025, khmt_month=1, khmt_year=2026)
+
+    # Narrow the export to pending SK registered in 2026: the data sheet shrinks,
+    # but the matrix must still show the workshop-wide KHMT figures of the UI.
+    filters = build_fi_report_export_filters(decisions="pending", registration_year=2026)
+    path = export_fi_reports_to_excel(db_session, filters, matrix_year=2026)
+    values = _matrix_row_values(load_workbook(path)["Tong hop"], "TBCH")
+    assert values[1] == 1  # T1 (cross-year assignment)
+    assert values[6] == 1  # T6
+    assert values[13] == 2  # Tổng năm
+    assert values[15] == 1  # Chờ duyệt
+
+
+def test_selected_year_team_pool_matches_matrix_pool_column(db_session):
+    # Approved in a previous year and still unassigned: part of the team's current pool.
+    _make_sk(db_session, team="TBĐL", title="Old pool SK", reg_month=11, reg_year=2025, approve=True)
+    _make_sk(db_session, team="TBĐL", title="New pool SK", reg_month=3, approve=True)
+
+    dash = fi_dashboard(db_session, {"user_id": "admin", "role": "Admin"}, year=2026)
+    matrix_pool = {row["team"]: row["approved_unassigned_count"] for row in dash["khmt_matrix"]["rows"]}
+    team_cards = {row["team"]: row for row in dash["selected_year_teams"]}
+    assert matrix_pool["TBĐL"] == 2
+    assert team_cards["TBĐL"]["khmt_unassigned_approved"] == matrix_pool["TBĐL"]
+    assert dash["selected_year_totals"]["khmt_unassigned_approved"] == 2

@@ -410,15 +410,25 @@ export function FiMatrixCellDrawer({
                             Xem chi tiết
                           </button>
                           {selection.mode === "khmt" && effectiveCanEditCell && (
-                            <button
-                              type="button"
-                              className="fi-drawer-danger-btn"
-                              disabled={busyId === item.id}
-                              onClick={() => void removeFromCell(item)}
-                            >
-                              <Trash2 size={13} />
-                              {busyId === item.id ? "Đang bỏ..." : `Bỏ khỏi T${selection.month}`}
-                            </button>
+                            <>
+                              <FiKhmtMonthPicker
+                                item={item}
+                                khmtMatrix={khmtMatrix}
+                                busy={busyId !== null}
+                                triggerLabel="Chuyển tháng"
+                                onAssign={(rec, m, y) => assignToCell(rec, m, y)}
+                                onClear={(rec) => removeFromCell(rec)}
+                              />
+                              <button
+                                type="button"
+                                className="fi-drawer-danger-btn"
+                                disabled={busyId !== null}
+                                onClick={() => void removeFromCell(item)}
+                              >
+                                <Trash2 size={13} />
+                                {busyId === item.id ? "Đang bỏ..." : `Bỏ khỏi T${selection.month}`}
+                              </button>
+                            </>
                           )}
                         </div>
                       </article>

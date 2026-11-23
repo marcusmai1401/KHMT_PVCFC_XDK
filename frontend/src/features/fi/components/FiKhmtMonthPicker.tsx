@@ -9,12 +9,15 @@ export function FiKhmtMonthPicker({
   item,
   khmtMatrix,
   busy = false,
+  triggerLabel,
   onAssign,
   onClear,
 }: {
   item: any;
   khmtMatrix?: FiKhmtMatrixData | null;
   busy?: boolean;
+  // Fixed trigger text (e.g. "Chuyển tháng"); defaults to the current KHMT period.
+  triggerLabel?: string;
   onAssign: (item: any, month: number, year: number) => Promise<void> | void;
   onClear: (item: any) => Promise<void> | void;
 }) {
@@ -83,7 +86,7 @@ export function FiKhmtMonthPicker({
         title={considered ? `Đang xét vào KHMT T${currentMonth}/${currentYear} — bấm để đổi tháng/năm` : "Chọn tháng/năm xét vào KHMT"}
       >
         <CalendarDays size={13} aria-hidden="true" />
-        <span>{considered ? `KHMT T${currentMonth}/${currentYear}` : "Chưa vào KHMT"}</span>
+        <span>{triggerLabel ?? (considered ? `KHMT T${currentMonth}/${currentYear}` : "Chưa vào KHMT")}</span>
         <ChevronDown size={13} className={open ? "is-rotated" : ""} aria-hidden="true" />
       </button>
 

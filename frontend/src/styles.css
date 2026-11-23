@@ -19544,3 +19544,12 @@ nav button.active {
     grid-template-columns: 1fr;
   }
 }
+
+/* These search boxes have their own clear (×) button; hide the browser's native one
+   so the user does not see two clear icons side by side. */
+.fi-history-search input[type="search"]::-webkit-search-cancel-button,
+.fi-review-search input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}

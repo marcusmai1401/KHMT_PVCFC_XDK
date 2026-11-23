@@ -1802,10 +1802,16 @@ export function FIWorkspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, dashboardYear]);
 
+  // Refresh when the user comes back to FI Dashboard; the initial load is done by
+  // the role/year effect above, so skip the first run to avoid a duplicate fetch.
+  const tabEffectMounted = useRef(false);
   useEffect(() => {
-    if (activeTab === "dashboard") {
-      reload();
+    if (!tabEffectMounted.current) {
+      tabEffectMounted.current = true;
+      return;
     }
+    if (activeTab !== "dashboard") return;
+    reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
@@ -3996,6 +4002,7 @@ export function FIWorkspace({
           onTriggerImageUpload={() => detailFileInputRef.current?.click()}
           onAssignKhmt={handleAssignKhmtDirect}
           onClearKhmt={handleClearKhmtDirect}
+          suspended={imagePreviewIndex !== null || Boolean(editTarget) || Boolean(planTarget) || Boolean(khmtTarget)}
         />
       )}
 

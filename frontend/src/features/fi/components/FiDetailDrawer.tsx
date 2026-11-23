@@ -45,6 +45,7 @@ export function FiDetailDrawer({
   onTriggerImageUpload,
   onAssignKhmt,
   onClearKhmt,
+  suspended = false,
 }: {
   item: any | null;
   statusLabel: string;
@@ -76,15 +77,18 @@ export function FiDetailDrawer({
   onTriggerImageUpload: () => void;
   onAssignKhmt: (item: any, month: number, year: number) => Promise<void> | void;
   onClearKhmt: (item: any) => Promise<void> | void;
+  // True while a dialog opened from the drawer (lightbox, edit, plan) is on top,
+  // so Escape closes only that dialog instead of the drawer underneath.
+  suspended?: boolean;
 }) {
   useEffect(() => {
-    if (!item) return;
+    if (!item || suspended) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [item, onClose]);
+  }, [item, suspended, onClose]);
 
   if (!item) return null;
 

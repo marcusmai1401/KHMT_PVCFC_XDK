@@ -413,6 +413,14 @@ def build_fi_dashboard_matrix_payload(
     total_pool_all = total_pool_okr + sum(item["approved_unassigned_count"] for item in non_okr_teams.values())
     selected_year_totals["khmt_unassigned_approved"] = total_pool_all
     selected_year_totals["khmt_not_considered"] = total_pool_all
+    # Same for each team card, so "còn N kho sẵn sàng" equals the matrix column.
+    for team_key, bucket in selected_year_teams_map.items():
+        if team_key in pool_unassigned_by_team:
+            team_pool = pool_unassigned_by_team[team_key]
+        else:
+            team_pool = int(non_okr_teams.get(team_key, {}).get("approved_unassigned_count", 0))
+        bucket["khmt_unassigned_approved"] = team_pool
+        bucket["khmt_not_considered"] = team_pool
 
     khmt_rows: list[dict[str, Any]] = []
     reg_rows: list[dict[str, Any]] = []

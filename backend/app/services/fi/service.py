@@ -837,7 +837,7 @@ FI_EXPORT_DATA_HEADERS = [
     "Đội/tổ",
     "Tháng đăng ký",
     "Trạng thái",
-    "Kết luận LĐX",
+    "Kết luận xét duyệt",
     "KHMT",
     "Tháng KHMT",
     "Hoàn thành",
@@ -937,7 +937,7 @@ def _add_record_to_bucket(bucket: dict[str, Any], record: SKCTKTModel) -> None:
         bucket["current"] += 1
 
 
-def fi_dashboard(db: Session, principal: dict[str, str]) -> dict[str, Any]:
+def fi_dashboard(db: Session, principal: dict[str, str], *, year: int | None = None) -> dict[str, Any]:
     # Dashboard FI là cái nhìn toàn xưởng (tổng hợp theo team/tháng), không
     # phụ thuộc người dùng nên không lọc theo can_view_sk. Mọi role có quyền
     # vào dashboard đều thấy số liệu giống nhau.
@@ -955,15 +955,19 @@ def fi_dashboard(db: Session, principal: dict[str, str]) -> dict[str, Any]:
         if _is_khmt_considered(record) and record.khmt_month is not None and record.khmt_year is not None:
             key = (record.khmt_year, record.khmt_month)
             khmt_by_month[key] = khmt_by_month.get(key, 0) + 1
+    from app.services.fi.dashboard_matrix import build_fi_dashboard_matrix_payload
+
+    matrix_payload = build_fi_dashboard_matrix_payload(db, visible_records, year=year)
     return {
         "generated_at": _utc_now().isoformat(),
         "teams": list(by_team.values()),
         "totals": totals,
         "khmt_by_month": [
-            {"year": year, "month": month, "count": count}
-            for (year, month), count in sorted(khmt_by_month.items())
+            {"year": m_year, "month": m_month, "count": count}
+            for (m_year, m_month), count in sorted(khmt_by_month.items())
         ],
         "status_order": FI_DASHBOARD_STATUSES,
+        **matrix_payload,
     }
 
 
@@ -1011,7 +1015,12 @@ def build_fi_report_export_filters(
     }
 
 
-def export_fi_reports_to_excel(db: Session, filters: dict[str, set[Any]]) -> Path:
+def export_fi_reports_to_excel(
+    db: Session,
+    filters: dict[str, set[Any]],
+    *,
+    matrix_year: int | None = None,
+) -> Path:
     records = _filtered_fi_export_records(db, filters)
     workbook = Workbook()
     summary_sheet = workbook.active
@@ -1019,7 +1028,17 @@ def export_fi_reports_to_excel(db: Session, filters: dict[str, set[Any]]) -> Pat
     data_sheet = workbook.create_sheet("Du lieu FI")
     generated_at = _utc_now()
 
-    _write_fi_export_summary(summary_sheet, records, filters, generated_at)
+    resolved_matrix_year = matrix_year
+    if resolved_matrix_year is None:
+        reg_years = filters.get("registration_years") or set()
+        if len(reg_years) == 1:
+            resolved_matrix_year = int(next(iter(reg_years)))
+        else:
+            resolved_matrix_year = _factory_today().year
+    from app.services.fi.dashboard_matrix import build_fi_dashboard_matrix_payload
+
+    matrix_payload = build_fi_dashboard_matrix_payload(db, records, year=resolved_matrix_year)
+    _write_fi_export_summary(summary_sheet, records, filters, generated_at, matrix_payload["khmt_matrix"])
     _write_fi_export_rows(data_sheet, records, generated_at)
     _style_fi_export_workbook(workbook)
 
@@ -1252,6 +1271,7 @@ def _write_fi_export_summary(
     records: list[SKCTKTModel],
     filters: dict[str, set[Any]],
     generated_at: datetime,
+    khmt_matrix: dict[str, Any] | None = None,
 ) -> None:
     approved_count = sum(1 for record in records if _fi_decision_filter(record) == "approved")
     khmt_count = sum(1 for record in records if _fi_khmt_filter(record) == "in")
@@ -1278,7 +1298,7 @@ def _write_fi_export_summary(
     filter_rows = [
         ("Đội/tổ", _filter_value_text(filters.get("teams"), {})),
         ("Tháng đăng ký", _filter_value_text(filters.get("registration_months"), {}, prefix="T")),
-        ("Kết luận LĐX", _filter_value_text(filters.get("decisions"), FI_DECISION_LABELS)),
+        ("Kết luận xét duyệt", _filter_value_text(filters.get("decisions"), FI_DECISION_LABELS)),
         ("KHMT", _filter_value_text(filters.get("khmt"), FI_KHMT_LABELS)),
         ("Kỳ KHMT", _khmt_period_filter_text(filters.get("khmt_periods"))),
         ("Hoàn thành", _filter_value_text(filters.get("completion"), FI_COMPLETION_LABELS)),
@@ -1313,28 +1333,136 @@ def _write_fi_export_summary(
             sheet,
             first_stats_row,
             7,
-            "Theo kết luận LĐX",
+            "Theo kết luận xét duyệt",
             "Kết luận",
             Counter(FI_DECISION_LABELS[_fi_decision_filter(record)] for record in records),
         ),
     ]
     second_stats_row = max(first_group_rows) + 3
-    _write_counter_table(
-        sheet,
-        second_stats_row,
-        1,
-        "Theo KHMT",
-        "KHMT",
-        Counter(FI_KHMT_LABELS[_fi_khmt_filter(record)] for record in records),
-    )
-    _write_counter_table(
-        sheet,
-        second_stats_row,
-        4,
-        "Theo hoàn thành",
-        "Hoàn thành",
-        Counter(FI_COMPLETION_LABELS[_fi_completion_filter(record)] for record in records),
-    )
+    second_end_rows = [
+        _write_counter_table(
+            sheet,
+            second_stats_row,
+            1,
+            "Theo KHMT",
+            "KHMT",
+            Counter(FI_KHMT_LABELS[_fi_khmt_filter(record)] for record in records),
+        ),
+        _write_counter_table(
+            sheet,
+            second_stats_row,
+            4,
+            "Theo hoàn thành",
+            "Hoàn thành",
+            Counter(FI_COMPLETION_LABELS[_fi_completion_filter(record)] for record in records),
+        ),
+    ]
+    if khmt_matrix is not None:
+        matrix_start_row = max(second_end_rows) + 3
+        _write_khmt_matrix_table(sheet, matrix_start_row, khmt_matrix)
+
+
+def _write_khmt_matrix_table(sheet, start_row: int, khmt_matrix: dict[str, Any]) -> int:
+    """Write the 4-team × T1–T12 KHMT allocation matrix into the Tong hop sheet."""
+    border = _thin_border()
+    year = khmt_matrix.get("year", _factory_today().year)
+    headers = ["Đội/tổ", *[f"T{m}" for m in range(1, 13)], "Tổng năm", "Kho sẵn sàng", "Chờ duyệt"]
+    end_col = len(headers)
+
+    sheet.merge_cells(start_row=start_row, start_column=1, end_row=start_row, end_column=end_col)
+    for col in range(1, end_col + 1):
+        cell = sheet.cell(start_row, col)
+        cell.fill = PatternFill("solid", fgColor=FI_NAVY)
+        cell.font = Font(name=FI_BASE_FONT, bold=True, size=11, color=FI_ON_DARK)
+        cell.alignment = Alignment(horizontal="left" if col == 1 else "center", vertical="center")
+        cell.border = border
+    sheet.cell(start_row, 1).value = f"MA TRẬN FI XÉT VÀO KHMT THEO ĐỘI/TỔ × THÁNG (NĂM {year})"
+    sheet.row_dimensions[start_row].height = 24
+
+    header_row = start_row + 1
+    for col, label in enumerate(headers, start=1):
+        cell = sheet.cell(header_row, col)
+        cell.value = label
+        cell.fill = PatternFill("solid", fgColor=FI_NAVY_TINT)
+        cell.font = Font(name=FI_BASE_FONT, bold=True, color=FI_INK)
+        cell.alignment = Alignment(horizontal="left" if col == 1 else "center", vertical="center")
+        cell.border = border
+    sheet.row_dimensions[header_row].height = 22
+
+    tier_styles = {
+        "good": ("DCFCE7", "14532D"),
+        "ok": ("DBEAFE", "1E3A8A"),
+        "none": ("FFFBEB", "92400E"),
+        "exempt_zero": ("F1F5F9", "475569"),
+        "future": ("F8FAFC", "94A3B8"),
+    }
+
+    row_index = header_row + 1
+    for row_data in khmt_matrix.get("rows", []):
+        team_cell = sheet.cell(row_index, 1)
+        team_cell.value = row_data.get("display_name") or row_data.get("team")
+        team_cell.fill = PatternFill("solid", fgColor=FI_SURFACE)
+        team_cell.font = Font(name=FI_BASE_FONT, bold=True, color=FI_INK)
+        team_cell.alignment = Alignment(horizontal="left", vertical="center")
+        team_cell.border = border
+
+        for m_offset, m_cell in enumerate(row_data.get("months", []), start=2):
+            cell = sheet.cell(row_index, m_offset)
+            count = int(m_cell.get("count", 0))
+            tier = m_cell.get("kr_tier", "none")
+            cell.value = count
+            fill_hex, font_hex = tier_styles.get(tier, (FI_SURFACE, FI_INK))
+            cell.fill = PatternFill("solid", fgColor=fill_hex)
+            cell.font = Font(name=FI_BASE_FONT, bold=(count > 0), color=font_hex)
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.number_format = "#,##0"
+            cell.border = border
+
+        summary_values = [
+            int(row_data.get("year_khmt_total", 0)),
+            int(row_data.get("approved_unassigned_count", 0)),
+            int(row_data.get("pending_count", 0)),
+        ]
+        for s_offset, val in enumerate(summary_values, start=14):
+            cell = sheet.cell(row_index, s_offset)
+            cell.value = val
+            cell.fill = PatternFill("solid", fgColor=FI_STRIPE if s_offset == 14 else FI_SURFACE)
+            cell.font = Font(name=FI_BASE_FONT, bold=True, color=FI_NAVY if s_offset == 14 else FI_INK)
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.number_format = "#,##0"
+            cell.border = border
+        sheet.row_dimensions[row_index].height = 20
+        row_index += 1
+
+    totals = khmt_matrix.get("workshop_totals", {})
+    total_label = sheet.cell(row_index, 1)
+    total_label.value = "Tổng 4 đội/tổ"
+    total_label.fill = PatternFill("solid", fgColor=FI_NAVY_TINT)
+    total_label.font = Font(name=FI_BASE_FONT, bold=True, color=FI_NAVY)
+    total_label.alignment = Alignment(horizontal="left", vertical="center")
+    total_label.border = border
+    for m_offset, m_total in enumerate(totals.get("months", []), start=2):
+        cell = sheet.cell(row_index, m_offset)
+        cell.value = int(m_total.get("count", 0))
+        cell.fill = PatternFill("solid", fgColor=FI_NAVY_TINT)
+        cell.font = Font(name=FI_BASE_FONT, bold=True, color=FI_NAVY)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.number_format = "#,##0"
+        cell.border = border
+    for s_offset, key in enumerate(("year_khmt_total", "approved_unassigned_count", "pending_count"), start=14):
+        cell = sheet.cell(row_index, s_offset)
+        cell.value = int(totals.get(key, 0))
+        cell.fill = PatternFill("solid", fgColor=FI_NAVY_TINT)
+        cell.font = Font(name=FI_BASE_FONT, bold=True, color=FI_NAVY)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.number_format = "#,##0"
+        cell.border = border
+    sheet.row_dimensions[row_index].height = 22
+
+    # Ensure extra matrix columns I..P have readable widths without altering A..H.
+    for col_letter, width in (("I", 7), ("J", 7), ("K", 7), ("L", 7), ("M", 7), ("N", 12), ("O", 14), ("P", 12)):
+        sheet.column_dimensions[col_letter].width = width
+    return row_index
 
 
 def _khmt_period_filter_text(values: set[Any] | None) -> str:
@@ -1531,18 +1659,18 @@ def _style_fi_summary_sheet(sheet) -> None:
         head.font = Font(name=FI_BASE_FONT, bold=True, color=FI_INK)
         head.fill = PatternFill("solid", fgColor=FI_NAVY_TINT)
         head.alignment = Alignment(horizontal="left", vertical="center")
-    for offset, row in enumerate(range(11, 16)):
+    for offset, row in enumerate(range(11, 17)):
         stripe = FI_STRIPE if offset % 2 else FI_SURFACE
         for col in (1, 2):
             cell = sheet.cell(row, col)
             cell.fill = PatternFill("solid", fgColor=stripe)
             cell.font = Font(name=FI_BASE_FONT, color=FI_INK)
             cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
-    for row in range(9, 16):
+    for row in range(9, 17):
         for col in (1, 2):
             sheet.cell(row, col).border = border
 
-    widths = {"A": 24, "B": 32, "C": 3, "D": 17, "E": 17, "F": 17, "G": 22, "H": 14}
+    widths = {"A": 24, "B": 32, "C": 7, "D": 17, "E": 17, "F": 17, "G": 22, "H": 14}
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
 

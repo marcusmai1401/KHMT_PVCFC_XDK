@@ -26,22 +26,23 @@ describe("FI ownership lists", () => {
     expect(ownershipBucketForItem({ status: "Completed" })).toBe("history");
   });
 
-  it("keeps approved initiatives visible for their author but archives proxy submissions", () => {
+  it("keeps approved initiatives visible for both their author and proxy submitter until completed", () => {
     const rows = [
       { id: "submitted", status: "Submitted", updated_at: "2026-07-01T00:00:00Z" },
       { id: "approved", status: "Approved", updated_at: "2026-07-03T00:00:00Z" },
+      { id: "completed", status: "Completed", updated_at: "2026-07-04T00:00:00Z" },
       { id: "rejected", status: "Rejected", updated_at: "2026-07-02T00:00:00Z" },
     ];
 
     const mine = buildOwnershipSections(rows, "mine");
     expect(mine.pending.map((item) => item.id)).toEqual(["submitted"]);
     expect(mine.implementation.map((item) => item.id)).toEqual(["approved"]);
-    expect(mine.history.map((item) => item.id)).toEqual(["rejected"]);
+    expect(mine.history.map((item) => item.id)).toEqual(["completed", "rejected"]);
 
     const sent = buildOwnershipSections(rows, "sent");
     expect(sent.pending.map((item) => item.id)).toEqual(["submitted"]);
-    expect(sent.implementation).toEqual([]);
-    expect(sent.history.map((item) => item.id)).toEqual(["approved", "rejected"]);
+    expect(sent.implementation.map((item) => item.id)).toEqual(["approved"]);
+    expect(sent.history.map((item) => item.id)).toEqual(["completed", "rejected"]);
   });
 
   it("sorts each ownership section by the most recent activity without mutating input", () => {
@@ -246,6 +247,7 @@ describe("FI action visibility", () => {
       "delete",
     ]);
     expect(visibleActionsForSk("Team_Account", "TBCH", approved)).toEqual(["updatePlan", "assignKhmt"]);
+    expect(visibleActionsForSk("Team_Account", "haint", { status: "Approved", author_user_id: "tungtp", team: "TBĐL" }, false, "TBĐL")).toEqual(["assignKhmt"]);
     expect(visibleActionsForSk("Team_Account", "TBĐL", approved)).toEqual([]);
     expect(visibleActionsForSk("Workshop_Leader", "leader", approved)).toEqual([]);
   });

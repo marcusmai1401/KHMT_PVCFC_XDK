@@ -366,18 +366,12 @@ def fi_history(
     db: Session = Depends(get_db),
 ):
     """Paginated, server-filtered FI history used by the mobile/desktop view."""
-    query = select(SKCTKTModel).where(SKCTKTModel.status != SKStatus.DRAFT.value)
+    base_query = select(SKCTKTModel).where(SKCTKTModel.status != SKStatus.DRAFT.value)
     if historical is not None:
-        query = query.where(SKCTKTModel.is_historical_import.is_(historical))
+        base_query = base_query.where(SKCTKTModel.is_historical_import.is_(historical))
     requested_teams = {item.strip() for item in (teams or "").split(",") if item.strip()}
     if team:
         requested_teams.add(team)
-    if requested_teams:
-        query = query.where(SKCTKTModel.team.in_(requested_teams))
-    query = query.order_by(
-        func.coalesce(SKCTKTModel.created_at, SKCTKTModel.submitted_at, SKCTKTModel.updated_at).desc(),
-        SKCTKTModel.id.desc(),
-    )
     selected_decisions = {item.strip().lower() for item in (decisions or "").split(",") if item.strip()}
     selected_khmt = {item.strip().lower() for item in (khmt or "").split(",") if item.strip()}
     selected_periods = {item.strip() for item in (khmt_periods or "").split(",") if item.strip()}
@@ -391,22 +385,80 @@ def fi_history(
     }
     from app.services.fi.history_query import expressions, fold, person_filter
     expr, directory = expressions(db)
-    # Facet choices describe the full visible history, never only the page.
-    facet_base = select(SKCTKTModel).where(SKCTKTModel.status != SKStatus.DRAFT.value)
-    if historical is not None:
-        facet_base = facet_base.where(SKCTKTModel.is_historical_import.is_(historical))
-    def facet_rows(*columns):
-        return db.execute(facet_base.with_only_columns(*columns, func.count().label("count")).group_by(*columns)).all()
+
+    def apply_filters(stmt, *, exclude: set[str] = frozenset()):
+        if "teams" not in exclude and requested_teams:
+            stmt = stmt.where(SKCTKTModel.team.in_(requested_teams))
+        if "months" not in exclude:
+            if registration_month is not None:
+                stmt = stmt.where(expr["month"] == registration_month)
+            if selected_registration_months:
+                stmt = stmt.where(expr["month"].in_(selected_registration_months))
+        if registration_year is not None:
+            stmt = stmt.where(expr["year"] == registration_year)
+        if "decisions" not in exclude and selected_decisions:
+            stmt = stmt.where(expr["decision"].in_(selected_decisions))
+        if "khmt" not in exclude and selected_khmt:
+            stmt = stmt.where(case((SKCTKTModel.consider_for_khmt.is_(True), "in"), else_="out").in_(selected_khmt))
+        if "periods" not in exclude and selected_periods:
+            period = cast(SKCTKTModel.khmt_year, String) + "-" + cast(SKCTKTModel.khmt_month, String)
+            period_match = and_(SKCTKTModel.consider_for_khmt.is_(True), period.in_(selected_periods))
+            stmt = stmt.where(or_(period_match, SKCTKTModel.consider_for_khmt.is_(False)) if "out" in selected_khmt else period_match)
+        if "completion" not in exclude and selected_completion:
+            stmt = stmt.where(case((expr["done"], "done"), else_="pending").in_(selected_completion))
+        if author:
+            stmt = stmt.where(fold(SKCTKTModel.author_name).contains(_fold_search(author), autoescape=True))
+        if q:
+            haystack = func.coalesce(SKCTKTModel.sk_code, "") + " " + SKCTKTModel.title + " " + SKCTKTModel.author_name + " " + SKCTKTModel.content_description
+            stmt = stmt.where(fold(haystack).contains(_fold_search(q), autoescape=True))
+        if "authors" not in exclude and selected_authors:
+            stmt = stmt.where(person_filter(selected_authors, expr["author_id"], SKCTKTModel.author_name))
+        if "submitters" not in exclude and selected_submitters:
+            stmt = stmt.where(person_filter(selected_submitters, expr["submitter_id"], expr["submitter_name"]))
+        return stmt
+
+    # Disjunctive facets: each facet reflects all OTHER active filters (team, year, search, etc.)
+    # so dropdown counts always match the active scope without adding extra SQL round-trips.
+    def facet_rows(exclude: set[str], *columns):
+        return db.execute(
+            apply_filters(base_query, exclude=exclude)
+            .with_only_columns(*columns, func.count().label("count"))
+            .group_by(*columns)
+        ).all()
+
+    khmt_period_rows = facet_rows({"khmt", "periods"}, SKCTKTModel.consider_for_khmt, SKCTKTModel.khmt_year, SKCTKTModel.khmt_month)
+    khmt_in_count = 0
+    khmt_out_count = 0
+    period_counts: dict[tuple[int, int], int] = {}
+    for considered, khmt_year, khmt_month, count in khmt_period_rows:
+        if considered:
+            khmt_in_count += count
+            if khmt_year and khmt_month:
+                key = (int(khmt_year), int(khmt_month))
+                period_counts[key] = period_counts.get(key, 0) + count
+        else:
+            khmt_out_count += count
+
     facets = {
-        "teams": [{"value": row[0], "count": row[1]} for row in facet_rows(SKCTKTModel.team)],
-        "months": [{"value": int(row[0]), "count": row[1]} for row in facet_rows(expr["month"]) if row[0]],
-        "periods": [{"month": row[0], "year": row[1], "count": row[2]} for row in facet_rows(SKCTKTModel.khmt_month, SKCTKTModel.khmt_year) if row[0] and row[1]],
+        "teams": sorted(
+            [{"value": row[0], "count": row[1]} for row in facet_rows({"teams"}, SKCTKTModel.team) if row[0]],
+            key=lambda row: str(row["value"]),
+        ),
+        "months": sorted(
+            [{"value": int(row[0]), "count": row[1]} for row in facet_rows({"months"}, expr["month"]) if row[0]],
+            key=lambda row: row["value"],
+        ),
+        "khmt": {"in": khmt_in_count, "out": khmt_out_count},
+        "periods": [
+            {"month": month, "year": year, "count": count}
+            for (year, month), count in sorted(period_counts.items(), key=lambda item: (-item[0][0], item[0][1]))
+        ],
     }
     directory_names = {user.id: user.full_name or user.display_name or "" for user in directory}
     submitter_fallback = case((SKCTKTModel.is_historical_import.is_(True), SKCTKTModel.author_name), else_="")
     for kind, identity, name in [("authors", expr["author_id"], SKCTKTModel.author_name), ("submitters", expr["submitter_id"], submitter_fallback)]:
         options = {}
-        for account_id, label, team_value, count in facet_rows(identity, name, SKCTKTModel.team):
+        for account_id, label, team_value, count in facet_rows({kind}, identity, name, SKCTKTModel.team):
             if kind == "submitters" and account_id in directory_names:
                 label = directory_names[account_id]
             label = label or account_id or "Hệ thống"
@@ -416,27 +468,28 @@ def fi_history(
             else:
                 options[key] = {"key": key, "label": label, "accountId": account_id, "team": team_value, "count": count}
         facets[kind] = sorted(options.values(), key=lambda row: (-row["count"], row["label"]))
-    if registration_month is not None: query = query.where(expr["month"] == registration_month)
-    if selected_registration_months: query = query.where(expr["month"].in_(selected_registration_months))
-    if registration_year is not None: query = query.where(expr["year"] == registration_year)
-    if selected_decisions: query = query.where(expr["decision"].in_(selected_decisions))
-    if selected_khmt: query = query.where(case((SKCTKTModel.consider_for_khmt.is_(True), "in"), else_="out").in_(selected_khmt))
-    if selected_periods:
-        period = cast(SKCTKTModel.khmt_year, String) + "-" + cast(SKCTKTModel.khmt_month, String)
-        period_match = and_(SKCTKTModel.consider_for_khmt.is_(True), period.in_(selected_periods))
-        query = query.where(or_(period_match, SKCTKTModel.consider_for_khmt.is_(False)) if "out" in selected_khmt else period_match)
-    if selected_completion: query = query.where(case((expr["done"], "done"), else_="pending").in_(selected_completion))
-    if author: query = query.where(fold(SKCTKTModel.author_name).contains(_fold_search(author), autoescape=True))
-    if q:
-        haystack = func.coalesce(SKCTKTModel.sk_code, "") + " " + SKCTKTModel.title + " " + SKCTKTModel.author_name + " " + SKCTKTModel.content_description
-        query = query.where(fold(haystack).contains(_fold_search(q), autoescape=True))
-    if selected_authors: query = query.where(person_filter(selected_authors, expr["author_id"], SKCTKTModel.author_name))
-    if selected_submitters: query = query.where(person_filter(selected_submitters, expr["submitter_id"], expr["submitter_name"]))
+
+    query = apply_filters(base_query).order_by(
+        func.coalesce(SKCTKTModel.created_at, SKCTKTModel.submitted_at, SKCTKTModel.updated_at).desc(),
+        SKCTKTModel.id.desc(),
+    )
     aggregates = {
         "total": func.count(),
         **{key: func.sum(case((expr["decision"] == key, 1), else_=0)) for key in ("approved", "rejected", "deferred", "pending")},
         "completed_count": func.sum(case((expr["done"], 1), else_=0)),
         "khmt_considered": func.sum(case((SKCTKTModel.consider_for_khmt.is_(True), 1), else_=0)),
+        "khmt_unassigned_approved": func.sum(
+            case(
+                (
+                    and_(
+                        SKCTKTModel.status.in_([SKStatus.APPROVED.value, SKStatus.COMPLETED.value]),
+                        SKCTKTModel.consider_for_khmt.is_(False),
+                    ),
+                    1,
+                ),
+                else_=0,
+            )
+        ),
         "data_revision": func.max(SKCTKTModel.revision),
     }
     start = (page - 1) * page_size
@@ -481,6 +534,7 @@ def fi_history(
             **decision_counts,
             "khmt_considered": counts["khmt_considered"],
             "khmt_missing": total - counts["khmt_considered"],
+            "khmt_unassigned_approved": counts["khmt_unassigned_approved"],
             "completed_count": completed_count,
             "not_completed": total - completed_count,
         },
@@ -867,16 +921,58 @@ def okr_counts(month: int, year: int, _: dict = Depends(require_role(Role.ADMIN,
 
 @router.get("/dashboard")
 def dashboard(
+    year: int | None = Query(default=None, ge=2020, le=2100),
     principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
-    return fi_dashboard(db, principal)
+    return fi_dashboard(db, principal, year=year)
+
+
+@router.get("/dashboard/cell")
+def dashboard_cell(
+    team: str = Query(..., min_length=1),
+    year: int = Query(..., ge=2020, le=2100),
+    month: int = Query(..., ge=1, le=12),
+    mode: str = Query(default="khmt", pattern="^(khmt|registration)$"),
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    from app.services.fi.dashboard_matrix import get_fi_dashboard_cell
+
+    return get_fi_dashboard_cell(
+        db,
+        team=team,
+        year=year,
+        month=month,
+        mode=mode,
+        principal=principal,
+        serializer=_sk_to_dict,
+    )
+
+
+@router.get("/dashboard/pool")
+def dashboard_pool(
+    team: str = Query(..., min_length=1),
+    kind: str = Query(default="unassigned_approved", pattern="^(unassigned_approved|pending)$"),
+    principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    from app.services.fi.dashboard_matrix import get_fi_dashboard_pool
+
+    return get_fi_dashboard_pool(
+        db,
+        team=team,
+        kind=kind,
+        principal=principal,
+        serializer=_sk_to_dict,
+    )
 
 
 @router.get("/reports/export")
 def export_reports(
     q: str | None = None,
     registration_year: int | None = Query(default=None, ge=2020, le=2100),
+    matrix_year: int | None = Query(default=None, ge=2020, le=2100),
     teams: str | None = None,
     registration_months: str | None = None,
     decisions: str | None = None,
@@ -910,7 +1006,7 @@ def export_reports(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    path = export_fi_reports_to_excel(db, filters)
+    path = export_fi_reports_to_excel(db, filters, matrix_year=matrix_year)
     return FileResponse(
         path,
         filename=Path(path).name,

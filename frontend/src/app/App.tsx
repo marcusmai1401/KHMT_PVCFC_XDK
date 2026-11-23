@@ -206,6 +206,7 @@ export function App() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [fiFocus, setFiFocus] = useState<{ id: string; nonce: number } | null>(null);
+  const [fiMatrixRequest, setFiMatrixRequest] = useState<{ year: number; nonce: number } | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [capabilityMap, setCapabilityMap] = useState<Record<string, unknown>>({});
   const [error, setError] = useState("");
@@ -261,6 +262,7 @@ export function App() {
     setMustChangePassword(Boolean(response.must_change_password));
     setSandbox(Boolean(payload.sandbox));
     setCapabilityMap({});
+    setFiMatrixRequest(null);
     void api.capabilities().then((data: any) => setCapabilityMap(data?.capabilities ?? {})).catch(() => undefined);
     setVoluntaryChange(false);
     setError("");
@@ -280,6 +282,7 @@ export function App() {
     if (nextTab === tab) return;
     void requestNavigation(`chuyển sang ${tabTitles[nextTab]}`).then((allowed) => {
       if (!allowed) return;
+      if (nextTab === "fi") setFiMatrixRequest(null);
       setTab(nextTab);
       updateBrowserPath(nextTab, replace);
     });
@@ -299,6 +302,7 @@ export function App() {
       setNotifications([]);
       setSandboxIdentities([]);
       setCapabilityMap({});
+      setFiMatrixRequest(null);
       setFeedbackOpen(false);
       if (typeof window !== "undefined") {
         const stillRemember = window.localStorage.getItem(REMEMBER_FLAG_KEY) === "true";
@@ -1105,8 +1109,16 @@ export function App() {
           <Suspense fallback={<div className="module-loading" aria-busy="true">Đang tải phân hệ…</div>}>
             {tab === "okr" && <LazyOKRModule role={role} currentUserId={currentUserId} currentTeam={currentTeam} editMode={effectiveEditMode} tabsHost={topbarTabsHost} />}
             {tab === "et" && <LazyETModule role={role} currentUserId={currentUserId} editMode={effectiveEditMode} tabsHost={topbarTabsHost} />}
-            {tab === "fi" && <LazyFIWorkspace role={role} currentUserId={currentUserId} currentTeam={currentTeam} displayName={currentDisplayName} editMode={effectiveEditMode} tabsHost={topbarTabsHost} focusRequest={fiFocus} />}
-            {tab === "admin" && <LazyAdminPanel />}
+            {tab === "fi" && <LazyFIWorkspace role={role} currentUserId={currentUserId} currentTeam={currentTeam} displayName={currentDisplayName} editMode={effectiveEditMode} tabsHost={topbarTabsHost} focusRequest={fiFocus} matrixRequest={fiMatrixRequest} />}
+            {tab === "admin" && canAccessTab(role, "admin") && (
+              <LazyAdminPanel
+                onOpenFiMatrix={(year) => {
+                  setFiMatrixRequest({ year, nonce: Date.now() });
+                  setTab("fi");
+                  updateBrowserPath("fi");
+                }}
+              />
+            )}
           </Suspense>
         </div>
       </section>

@@ -110,6 +110,7 @@ export class ApiError extends Error {
 type FiReportExportFilters = {
   q?: string;
   registration_year?: number;
+  matrix_year?: number;
   teams?: string[];
   registration_months?: number[];
   decisions?: string[];
@@ -558,13 +559,25 @@ export const api = {
       signal: options.signal,
     }),
   publicSk: (filters: QueryParams = {}) => request<any[]>(`/fi/sk-ctkt/public${toQuery(filters)}`),
-  fiDashboard: () => request<any>("/fi/dashboard"),
+  fiDashboard: (params: { year?: number } = {}) =>
+    request<any>(`/fi/dashboard${toQuery({ year: params.year })}`),
+  fiDashboardCell: (
+    params: { team: string; year: number; month: number; mode?: "khmt" | "registration" },
+    options: { signal?: AbortSignal } = {},
+  ) =>
+    request<any>(`/fi/dashboard/cell${toQuery(params)}`, { signal: options.signal }),
+  fiDashboardPool: (
+    params: { team: string; kind: "unassigned_approved" | "pending" },
+    options: { signal?: AbortSignal } = {},
+  ) =>
+    request<any>(`/fi/dashboard/pool${toQuery(params)}`, { signal: options.signal }),
   fiReports: (filters: QueryParams = {}) => request<any[]>(`/fi/reports${toQuery(filters)}`),
   exportFiReports: (filters: FiReportExportFilters = {}) =>
     requestBlob(
       `/fi/reports/export${toQuery({
         q: filters.q,
         registration_year: filters.registration_year,
+        matrix_year: filters.matrix_year,
         teams: filters.teams?.join(","),
         registration_months: filters.registration_months?.join(","),
         decisions: filters.decisions?.join(","),

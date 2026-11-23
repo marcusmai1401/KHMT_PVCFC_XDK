@@ -18,16 +18,13 @@ import {
   ImagePlus,
   Info,
   ListChecks,
-  Loader2,
-  PauseCircle,
   Pencil,
-  PieChart,
   RefreshCw,
-  Save,
+  Search,
   Send,
   SlidersHorizontal,
+  Sparkles,
   Trash2,
-  TrendingUp,
   Users2,
   UserRound,
   X,
@@ -36,6 +33,17 @@ import { ApiError, api } from "../../api/client";
 
 import { DraftRecoveryStore, downloadDraft } from "../../shared/editing/DraftRecoveryStore";
 import { useNavigationGuard } from "../../shared/editing/NavigationGuardProvider";
+import { FiDashboardView } from "./components/FiDashboardView";
+import { FiDetailDrawer } from "./components/FiDetailDrawer";
+import { FiKhmtMonthPicker } from "./components/FiKhmtMonthPicker";
+import { FiMatrixCellDrawer } from "./components/FiMatrixCellDrawer";
+import type { MatrixDrawerSelection } from "./types/fiDashboard";
+import {
+  buildStatusSlices,
+  khmtUnassignedApprovedCount,
+} from "./utils/fiMetrics";
+
+export { buildStatusSlices };
 
 const TEAM_ROLE = "Team_Account";
 const STAFF_ROLE = "Staff";
@@ -123,7 +131,7 @@ const fiSnapshotNames: Record<FITab, string> = {
 type ReviewQueueFilter = "pending" | "reviewed" | "all";
 type OwnershipBucket = "pending" | "implementation" | "history";
 type OwnershipMode = "mine" | "sent";
-type OwnershipListKey = "minePending" | "mineImplementation" | "sentPending";
+type OwnershipListKey = "minePending" | "mineImplementation" | "sentPending" | "sentImplementation";
 type HistoryMonthGroup = { key: string; month: number | null; year: number; items: any[] };
 type ReviewDecision = "approve" | "request-info" | "defer" | "reject";
 
@@ -297,7 +305,7 @@ export function ownershipBucketForItem(item: any): OwnershipBucket {
   return "history";
 }
 
-export function buildOwnershipSections(rows: any[], mode: OwnershipMode) {
+export function buildOwnershipSections(rows: any[], _mode: OwnershipMode) {
   const sections = {
     pending: [] as any[],
     implementation: [] as any[],
@@ -309,10 +317,6 @@ export function buildOwnershipSections(rows: any[], mode: OwnershipMode) {
 
   sortedRows.forEach((item) => {
     const bucket = ownershipBucketForItem(item);
-    if (bucket === "implementation" && mode === "sent") {
-      sections.history.push(item);
-      return;
-    }
     sections[bucket].push(item);
   });
   return sections;
@@ -1012,7 +1016,13 @@ function khmtMissingCount(row: any) {
   return Math.max(0, reviewPassedCount(row) - Number(row?.khmt_considered ?? 0));
 }
 
-export function visibleActionsForSk(role: string, currentUserId: string, item: any, editMode = true): string[] {
+export function visibleActionsForSk(
+  role: string,
+  currentUserId: string,
+  item: any,
+  editMode = true,
+  currentTeam?: string | null,
+): string[] {
   const actions: string[] = [];
   if (role === ADMIN_ROLE && !editMode) return actions;
   const reviewableStatuses = REVIEW_DECISION_STATUSES;
@@ -1035,9 +1045,10 @@ export function visibleActionsForSk(role: string, currentUserId: string, item: a
     REVIEWER_ROLES.includes(role) &&
     reviewableStatuses.includes(item.status) &&
     !(role === FI_COORDINATOR_ROLE && (authorId === currentUserId || recordSubmitterId(item) === currentUserId));
+  const ownerTeam = currentTeam ?? currentUserId;
   const canAssign =
     !item.is_historical_import &&
-    (role === ADMIN_ROLE || (role === TEAM_ROLE && item.team === currentUserId)) &&
+    (role === ADMIN_ROLE || (role === TEAM_ROLE && item.team === ownerTeam)) &&
     ["Approved", "Completed"].includes(item.status);
   const canDelete =
     role === ADMIN_ROLE ||
@@ -1223,48 +1234,6 @@ function SkImageViewer({
   );
 }
 
-type StatusSlice = { key: string; label: string; value: number; color: string; tone: string };
-type TeamProgress = {
-  team: string;
-  total: number;
-  approved: number;
-  deferred: number;
-  pending: number;
-  rejected: number;
-  khmt: number;
-  khmtRate: number;
-};
-type MonthlyTrend = { key: string; label: string; count: number; year: number; month: number };
-
-function buildStatusSlices(totals: Record<string, any>): StatusSlice[] {
-  const approved = reviewPassedCount(totals);
-  const completed = Number(totals.completed_count ?? totals.completed ?? 0);
-  const pureApproved = Math.max(0, approved - completed);
-  const deferred = Number(totals.deferred ?? 0);
-  const pending = Number(totals.pending ?? 0);
-  const rejected = reviewFailedCount(totals) + Number(totals.cancelled ?? 0);
-  return [
-    { key: "completed", label: "Hoàn tất", value: completed, color: "#16a34a", tone: "success" },
-    { key: "approved", label: "Đã xét đạt", value: pureApproved, color: "#22c55e", tone: "approved" },
-    { key: "pending", label: "Chờ xét duyệt", value: pending, color: "#2563eb", tone: "info" },
-    { key: "deferred", label: "Xem xét sau", value: deferred, color: "#f59e0b", tone: "warning" },
-    { key: "rejected", label: "Đã xét không đạt/Hủy", value: rejected, color: "#ef4444", tone: "danger" },
-  ].filter((slice) => slice.value > 0);
-}
-
-function buildTeamProgress(teams: any[]): TeamProgress[] {
-  return teams.map((team) => {
-    const total = Number(team.total ?? 0);
-    const approved = reviewPassedCount(team);
-    const deferred = Number(team.deferred ?? 0);
-    const pending = Number(team.pending ?? 0);
-    const rejected = reviewFailedCount(team) + Number(team.cancelled ?? 0);
-    const khmt = Number(team.khmt_considered ?? 0);
-    const khmtRate = approved ? Math.round((khmt / approved) * 100) : 0;
-    return { team: team.team, total, approved, deferred, pending, rejected, khmt, khmtRate };
-  });
-}
-
 function aggregateTeamSummaries(rows: any[]) {
   if (rows.length === 0) return null;
   return rows.reduce(
@@ -1276,6 +1245,7 @@ function aggregateTeamSummaries(rows: any[]) {
       acc.review_failed += reviewFailedCount(row);
       acc.khmt_considered += Number(row?.khmt_considered ?? 0);
       acc.khmt_not_considered += khmtMissingCount(row);
+      acc.khmt_unassigned_approved += khmtUnassignedApprovedCount(row);
       acc.deferred += Number(row?.deferred ?? 0);
       acc.pending += Number(row?.pending ?? 0);
       acc.completed_count += Number(row?.completed_count ?? row?.completed ?? 0);
@@ -1291,269 +1261,13 @@ function aggregateTeamSummaries(rows: any[]) {
       review_failed: 0,
       khmt_considered: 0,
       khmt_not_considered: 0,
+      khmt_unassigned_approved: 0,
       deferred: 0,
       pending: 0,
       completed_count: 0,
       not_completed: 0,
       cancelled: 0,
     },
-  );
-}
-
-function buildMonthlyTrend(months: any[]): MonthlyTrend[] {
-  return months
-    .map((m) => ({
-      key: `${m.year}-${m.month}`,
-      label: `T${m.month}/${m.year}`,
-      count: Number(m.count ?? 0),
-      year: Number(m.year),
-      month: Number(m.month),
-    }))
-    .sort((a, b) => a.year - b.year || a.month - b.month);
-}
-
-function polarToCartesian(cx: number, cy: number, r: number, angle: number) {
-  const rad = ((angle - 90) * Math.PI) / 180;
-  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-}
-
-function describeArc(cx: number, cy: number, r: number, startAngle: number, endAngle: number, innerR: number) {
-  const start = polarToCartesian(cx, cy, r, endAngle);
-  const end = polarToCartesian(cx, cy, r, startAngle);
-  const innerStart = polarToCartesian(cx, cy, innerR, endAngle);
-  const innerEnd = polarToCartesian(cx, cy, innerR, startAngle);
-  const largeArc = endAngle - startAngle <= 180 ? 0 : 1;
-  return [
-    `M ${start.x} ${start.y}`,
-    `A ${r} ${r} 0 ${largeArc} 0 ${end.x} ${end.y}`,
-    `L ${innerEnd.x} ${innerEnd.y}`,
-    `A ${innerR} ${innerR} 0 ${largeArc} 1 ${innerStart.x} ${innerStart.y}`,
-    "Z",
-  ].join(" ");
-}
-
-function StatusDonutChart({ slices, total }: { slices: StatusSlice[]; total: number }) {
-  const safeTotal = slices.reduce((sum, slice) => sum + slice.value, 0);
-  let cumulative = 0;
-  const size = 180;
-  const cx = size / 2;
-  const cy = size / 2;
-  const radius = 78;
-  const innerRadius = 50;
-  if (safeTotal === 0) {
-    return (
-      <div className="fi-chart-empty">
-        <PieChart size={28} />
-        <span>Chưa có dữ liệu trạng thái</span>
-      </div>
-    );
-  }
-  return (
-    <div className="fi-donut">
-      <svg viewBox={`0 0 ${size} ${size}`} width="100%" height={size} role="img" aria-label="Phân bố trạng thái">
-        {slices.length === 1 ? (
-          <>
-            <circle cx={cx} cy={cy} r={radius} fill={slices[0].color} />
-            <circle cx={cx} cy={cy} r={innerRadius} fill="#ffffff" />
-          </>
-        ) : (
-          slices.map((slice) => {
-            const startAngle = (cumulative / safeTotal) * 360;
-            cumulative += slice.value;
-            const endAngle = (cumulative / safeTotal) * 360;
-            return (
-              <path
-                key={slice.key}
-                d={describeArc(cx, cy, radius, startAngle, endAngle, innerRadius)}
-                fill={slice.color}
-              >
-                <title>{`${slice.label}: ${slice.value} (${Math.round((slice.value / safeTotal) * 100)}%)`}</title>
-              </path>
-            );
-          })
-        )}
-        <text x={cx} y={cy - 4} textAnchor="middle" className="fi-donut-total">{total}</text>
-        <text x={cx} y={cy + 14} textAnchor="middle" className="fi-donut-label">SK-CTKT</text>
-      </svg>
-      <ul className="fi-donut-legend">
-        {slices.map((slice) => (
-          <li key={slice.key}>
-            <span className="fi-donut-swatch" style={{ background: slice.color }} aria-hidden="true" />
-            <span className="fi-donut-name">{slice.label}</span>
-            <strong>{slice.value}</strong>
-            <small>{safeTotal ? Math.round((slice.value / safeTotal) * 100) : 0}%</small>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function TeamProgressBars({ teams }: { teams: TeamProgress[] }) {
-  if (teams.length === 0) {
-    return (
-      <div className="fi-chart-empty">
-        <Users2 size={28} />
-        <span>Chưa có dữ liệu đội/tổ</span>
-      </div>
-    );
-  }
-  const maxTotal = Math.max(1, ...teams.map((team) => team.total));
-  return (
-    <div className="fi-team-bars">
-      {teams.map((team) => {
-        const widthPct = (team.total / maxTotal) * 100;
-        const approvedPct = team.total ? (team.approved / team.total) * 100 : 0;
-        const deferredPct = team.total ? (team.deferred / team.total) * 100 : 0;
-        const pendingPct = team.total ? (team.pending / team.total) * 100 : 0;
-        const rejectedPct = team.total ? (team.rejected / team.total) * 100 : 0;
-        return (
-          <div className="fi-team-row" key={team.team}>
-            <div className="fi-team-meta">
-              <strong>{displayTeam(team.team)}</strong>
-              <small>{team.total} SK · KHMT {team.khmt} ({team.khmtRate}%)</small>
-            </div>
-            <div className="fi-team-track" title={`Tổng ${team.total} SK`}>
-              <div className="fi-team-fill" style={{ width: `${widthPct}%` }}>
-                {team.approved > 0 && (
-                  <span
-                    className="fi-team-seg approved"
-                    style={{ width: `${approvedPct}%` }}
-                    title={`Đã xét đạt: ${team.approved}`}
-                  />
-                )}
-                {team.deferred > 0 && (
-                  <span
-                    className="fi-team-seg deferred"
-                    style={{ width: `${deferredPct}%` }}
-                    title={`Xem xét sau: ${team.deferred}`}
-                  />
-                )}
-                {team.pending > 0 && (
-                  <span
-                    className="fi-team-seg pending"
-                    style={{ width: `${pendingPct}%` }}
-                    title={`Chờ xét duyệt: ${team.pending}`}
-                  />
-                )}
-                {team.rejected > 0 && (
-                  <span
-                    className="fi-team-seg rejected"
-                    style={{ width: `${rejectedPct}%` }}
-                    title={`Đã xét không đạt/Hủy: ${team.rejected}`}
-                  />
-                )}
-              </div>
-            </div>
-            <div className="fi-team-numbers">
-              <span className="fi-team-num approved">{team.approved}</span>
-              <span className="fi-team-num deferred">{team.deferred}</span>
-              <span className="fi-team-num pending">{team.pending}</span>
-              <span className="fi-team-num rejected">{team.rejected}</span>
-            </div>
-          </div>
-        );
-      })}
-      <div className="fi-team-legend" aria-hidden="true">
-        <span><i className="fi-swatch approved" /> Đã xét đạt</span>
-        <span><i className="fi-swatch deferred" /> Xem xét sau</span>
-        <span><i className="fi-swatch pending" /> Chờ xét duyệt</span>
-        <span><i className="fi-swatch rejected" /> Đã xét không đạt/Hủy</span>
-      </div>
-    </div>
-  );
-}
-
-function MonthlyTrendChart({ months }: { months: MonthlyTrend[] }) {
-  if (months.length === 0) {
-    return (
-      <div className="fi-chart-empty">
-        <TrendingUp size={28} />
-        <span>Chưa có SK nào được xét vào KHMT</span>
-      </div>
-    );
-  }
-  const maxCount = Math.max(1, ...months.map((m) => m.count));
-  const width = Math.max(360, months.length * 80);
-  const height = 220;
-  const padding = { top: 24, right: 16, bottom: 36, left: 32 };
-  const innerW = width - padding.left - padding.right;
-  const innerH = height - padding.top - padding.bottom;
-  const barGap = 14;
-  const barWidth = Math.max(28, (innerW - barGap * (months.length - 1)) / months.length);
-  const total = months.reduce((sum, m) => sum + m.count, 0);
-  return (
-    <div className="fi-trend">
-      <div className="fi-trend-meta">
-        <span>Tổng KHMT</span>
-        <strong>{total}</strong>
-        <small>trên {months.length} tháng</small>
-      </div>
-      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} role="img" aria-label="KHMT theo tháng">
-        {[0.25, 0.5, 0.75, 1].map((ratio) => {
-          const y = padding.top + innerH * (1 - ratio);
-          return (
-            <g key={ratio}>
-              <line
-                x1={padding.left}
-                x2={width - padding.right}
-                y1={y}
-                y2={y}
-                stroke="#e2e8f0"
-                strokeDasharray="3 3"
-              />
-              <text x={padding.left - 6} y={y + 4} fontSize="10" fill="#64748b" textAnchor="end">
-                {Math.round(maxCount * ratio)}
-              </text>
-            </g>
-          );
-        })}
-        {months.map((month, index) => {
-          const barH = (month.count / maxCount) * innerH;
-          const x = padding.left + index * (barWidth + barGap);
-          const y = padding.top + (innerH - barH);
-          return (
-            <g key={month.key}>
-              <defs>
-                <linearGradient id={`grad-${month.key}`} x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="#60a5fa" />
-                  <stop offset="100%" stopColor="#2563eb" />
-                </linearGradient>
-              </defs>
-              <rect
-                x={x}
-                y={y}
-                width={barWidth}
-                height={barH}
-                rx={6}
-                fill={`url(#grad-${month.key})`}
-              >
-                <title>{`${month.label}: ${month.count} SK vào KHMT`}</title>
-              </rect>
-              <text
-                x={x + barWidth / 2}
-                y={y - 6}
-                textAnchor="middle"
-                fontSize="12"
-                fontWeight="700"
-                fill="#0f172a"
-              >
-                {month.count}
-              </text>
-              <text
-                x={x + barWidth / 2}
-                y={height - 12}
-                textAnchor="middle"
-                fontSize="11"
-                fill="#475569"
-              >
-                {month.label}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-    </div>
   );
 }
 
@@ -1573,6 +1287,7 @@ function FilterChip<T extends string | number>({
   emptyLabel = "Tất cả",
   single = false,
   prominent = false,
+  align = "left",
   summary,
   footer,
 }: {
@@ -1584,6 +1299,7 @@ function FilterChip<T extends string | number>({
   emptyLabel?: string;
   single?: boolean;
   prominent?: boolean;
+  align?: "left" | "right";
   summary?: string;
   footer?: React.ReactNode;
 }) {
@@ -1597,7 +1313,10 @@ function FilterChip<T extends string | number>({
       if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
     };
     const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClick);
     document.addEventListener("keydown", handleKey);
@@ -1654,7 +1373,7 @@ function FilterChip<T extends string | number>({
       </button>
       {open && (
         <div
-          className={`fi-filter-popover ${single ? "single" : ""} ${footer ? "has-footer" : ""}`}
+          className={`fi-filter-popover ${single ? "single" : ""} ${footer ? "has-footer" : ""} ${align === "right" ? "align-right" : ""}`}
           role="listbox"
           aria-multiselectable={!single}
           aria-label={label}
@@ -1713,12 +1432,14 @@ function PersonFilterCombobox({
   options,
   selected,
   onChange,
+  align = "left",
 }: {
   label: string;
   icon?: React.ReactNode;
   options: PersonFilterOption[];
   selected: string[];
   onChange: (next: string[]) => void;
+  align?: "left" | "right";
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -1731,7 +1452,10 @@ function PersonFilterCombobox({
       if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
     };
     const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClick);
     document.addEventListener("keydown", handleKey);
@@ -1776,7 +1500,7 @@ function PersonFilterCombobox({
         <ChevronDown size={14} className={`fi-filter-chip-caret ${open ? "open" : ""}`} aria-hidden="true" />
       </button>
       {open && (
-        <div className="fi-person-filter-popover" role="dialog" aria-label={`Lọc theo ${label.toLowerCase()}`}>
+        <div className={`fi-person-filter-popover ${align === "right" ? "align-right" : ""}`} role="dialog" aria-label={`Lọc theo ${label.toLowerCase()}`}>
           <div className="fi-person-filter-search">
             <UserRound size={14} aria-hidden="true" />
             <input
@@ -1858,6 +1582,7 @@ export function FIWorkspace({
   editMode = true,
   tabsHost = null,
   focusRequest = null,
+  matrixRequest = null,
 }: {
   role: string;
   currentUserId: string;
@@ -1868,6 +1593,8 @@ export function FIWorkspace({
   tabsHost?: HTMLElement | null;
   // SK cần mở (vd. khi bấm một thông báo); nonce đổi mỗi lần bấm.
   focusRequest?: { id: string; nonce: number } | null;
+  // Yêu cầu mở thẳng Ma trận KHMT trên FI Dashboard (vd. từ trang Admin Chốt KHMT).
+  matrixRequest?: { year: number; nonce: number } | null;
 }) {
   const canUseAuthorPicker = AUTHOR_PICKER_ROLES.includes(role);
   const teamFromAccount = currentTeam ?? (AUTHOR_ROLES.includes(role) ? currentUserId : null);
@@ -1903,7 +1630,10 @@ export function FIWorkspace({
   const [historyPageSize, setHistoryPageSize] = useState<25 | 50>(25);
   const [historyMeta, setHistoryMeta] = useState<any>(null);
   const [dashboard, setDashboard] = useState<any>(null);
+  const [dashboardYear, setDashboardYear] = useState<number>(() => matrixRequest?.year ?? new Date().getFullYear());
   const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [matrixDrawer, setMatrixDrawer] = useState<MatrixDrawerSelection | null>(null);
+  const [matrixRefreshNonce, setMatrixRefreshNonce] = useState(0);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [historyTeams, setHistoryTeams] = useState<string[]>([]);
   const [historyMonths, setHistoryMonths] = useState<number[]>([]);
@@ -1914,12 +1644,16 @@ export function FIWorkspace({
   const [historyAuthors, setHistoryAuthors] = useState<string[]>([]);
   const [historySubmitters, setHistorySubmitters] = useState<string[]>([]);
   const [exportingHistoryExcel, setExportingHistoryExcel] = useState(false);
-  const [activeTab, setActiveTab] = useState<FITab>(defaultTab);
+  const [activeTab, setActiveTab] = useState<FITab>(() => (matrixRequest ? "dashboard" : defaultTab));
   const [reviewFilter, setReviewFilter] = useState<ReviewQueueFilter>("pending");
+  const [reviewSearch, setReviewSearch] = useState("");
+  const [reviewTeamFilter, setReviewTeamFilter] = useState("");
+  const [reviewMonthFilter, setReviewMonthFilter] = useState("");
   const [expandedOwnershipLists, setExpandedOwnershipLists] = useState<Record<OwnershipListKey, boolean>>({
     minePending: false,
     mineImplementation: false,
     sentPending: false,
+    sentImplementation: false,
   });
   const [form, setForm] = useState(() => {
     const today = new Date();
@@ -1954,7 +1688,7 @@ export function FIWorkspace({
   editTargetRef.current = editTarget;
   const [khmtTarget, setKhmtTarget] = useState<{ id: string; label: string; month: number; year: number; revision: number } | null>(null);
   const [assigningKhmt, setAssigningKhmt] = useState(false);
-  const [pendingKhmtMonths, setPendingKhmtMonths] = useState<Record<string, string>>({});
+  const [draftDragOver, setDraftDragOver] = useState(false);
   const draftFileInputRef = useRef<HTMLInputElement>(null);
   const detailFileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
@@ -2013,8 +1747,9 @@ export function FIWorkspace({
     setEvidenceFiles([]);
   };
   const reloadEpoch = useRef(0);
-  const reload = () => {
+  const reload = (overrideYear?: number) => {
     const epoch = ++reloadEpoch.current;
+    const yearToLoad = overrideYear ?? dashboardYear;
     setDashboardLoading(true);
     const listFilters = canReview ? {} : { mine_only: true };
     const historyRequest = activeTab === "history"
@@ -2033,10 +1768,11 @@ export function FIWorkspace({
           page_size: historyPageSize,
         })
       : Promise.resolve(null);
+    const needDashboard = activeTab !== "history" || !dashboard || overrideYear !== undefined;
     Promise.all([
       activeTab === "history" ? Promise.resolve(items) : api.listSk(listFilters),
       historyRequest,
-      activeTab === "history" ? Promise.resolve(dashboard) : api.fiDashboard(),
+      needDashboard ? api.fiDashboard({ year: yearToLoad }) : Promise.resolve(dashboard),
     ])
       .then(([privateList, historyList, dashboardData]) => {
         if (epoch !== reloadEpoch.current) return;
@@ -2061,12 +1797,21 @@ export function FIWorkspace({
   };
 
   useEffect(() => {
+    setMatrixDrawer(null);
     reload();
-  }, [role]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, dashboardYear]);
+
+  useEffect(() => {
+    if (activeTab === "dashboard") {
+      reload();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab !== "history") return;
-    const timer = window.setTimeout(reload, 250);
+    const timer = window.setTimeout(() => reload(), 250);
     return () => { window.clearTimeout(timer); reloadEpoch.current += 1; };
   }, [activeTab, historyQuery, historyYear, historyPage, historyPageSize, historyTeams, historyMonths, historyAuthors, historySubmitters, historyDecisions, historyKhmt, historyKhmtPeriods, historyCompletion]);
 
@@ -2319,24 +2064,9 @@ export function FIWorkspace({
     }
   };
 
-  // The detail card sits below the lists; bring it into view when the user opens
-  // an SK so the click does not look like it did nothing.
-  const detailCardRef = useRef<HTMLElement | null>(null);
-  const scrollToDetail = useRef(false);
-  useEffect(() => {
-    if (!scrollToDetail.current || !selectedItem) return;
-    scrollToDetail.current = false;
-    detailCardRef.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
-  }, [selectedItem?.id]);
-
   const showItemDetail = (id: string) => {
-    if (selectedItem?.id === id) {
-      detailCardRef.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
-      return;
-    }
     api.getSk(id)
       .then((item) => {
-        scrollToDetail.current = true;
         setSelectedItem(item);
         setError("");
       })
@@ -2358,12 +2088,44 @@ export function FIWorkspace({
     setActionTarget(null);
     setEditTarget(null);
     setKhmtTarget(null);
+    setMatrixDrawer(null);
     setSelectedItem(null);
     return true;
   };
 
-  // Mở SK được yêu cầu từ ngoài (chuông thông báo): SK tạo trên web hiện ở thẻ
-  // chi tiết của tab Xét duyệt/Đăng ký; còn lại tra trong Lịch sử FI theo mã.
+  const jumpToHistoryWithFilters = async (filters: {
+    team?: string;
+    khmt?: HistoryKhmtFilter;
+    khmtPeriod?: string;
+    registrationMonth?: number;
+    registrationYear?: number;
+    decision?: HistoryDecisionFilter;
+    completion?: HistoryCompletionFilter;
+  }) => {
+    if (!await selectTab("history")) return;
+    setHistoryQuery("");
+    setHistoryYear(filters.registrationYear ? String(filters.registrationYear) : "");
+    setHistoryTeams(filters.team ? [filters.team] : []);
+    setHistoryMonths(filters.registrationMonth ? [filters.registrationMonth] : []);
+    setHistoryDecisions(filters.decision ? [filters.decision] : []);
+    setHistoryKhmt(filters.khmt ? [filters.khmt] : []);
+    setHistoryKhmtPeriods(filters.khmtPeriod ? [filters.khmtPeriod] : []);
+    setHistoryCompletion(filters.completion ? [filters.completion] : []);
+    setHistoryAuthors([]);
+    setHistorySubmitters([]);
+    setHistoryPage(1);
+  };
+
+  const jumpToReviewForTeam = async (team?: string) => {
+    if (!canReview) return;
+    if (!await selectTab("review")) return;
+    setReviewFilter("pending");
+    setReviewTeamFilter(team || "");
+    setReviewMonthFilter("");
+    setReviewSearch("");
+  };
+
+  // Mở SK được yêu cầu từ ngoài (chuông thông báo): mở ngay Detail Drawer.
   useEffect(() => {
     if (!focusRequest) return;
     let active = true;
@@ -2377,7 +2139,6 @@ export function FIWorkspace({
         if (!await selectTab(tab ?? "history")) return;
         if (!active) return;
         if (tab === null) setHistoryQuery(item.sk_code || "");
-        scrollToDetail.current = true;
         setSelectedItem(item);
         setError("");
       })
@@ -2385,15 +2146,16 @@ export function FIWorkspace({
     return () => { active = false; };
   }, [focusRequest?.nonce]);
 
+  useEffect(() => {
+    if (!matrixRequest) return;
+    setDashboardYear(matrixRequest.year);
+    setActiveTab("dashboard");
+    setMatrixDrawer(null);
+    setSelectedItem(null);
+  }, [matrixRequest?.nonce]);
+
   const selectHistoryTeams = (teams: string[]) => {
     setHistoryTeams(teams);
-    setHistoryMonths([]);
-    setHistoryDecisions([]);
-    setHistoryKhmt([]);
-    setHistoryKhmtPeriods([]);
-    setHistoryCompletion([]);
-    setHistoryAuthors([]);
-    setHistorySubmitters([]);
     setSelectedItem(null);
   };
 
@@ -2414,7 +2176,15 @@ export function FIWorkspace({
   };
 
   const changeHistoryKhmtPeriods = (next: string[]) => {
-    setHistoryKhmtPeriods([...next].sort());
+    const sorted = [...next].sort((a, b) => {
+      const [ya, ma] = a.split("-").map(Number);
+      const [yb, mb] = b.split("-").map(Number);
+      return (yb - ya) || (ma - mb);
+    });
+    setHistoryKhmtPeriods(sorted);
+    if (sorted.length > 0 && !historyKhmt.includes("in")) {
+      setHistoryKhmt([...historyKhmt, "in"]);
+    }
     setSelectedItem(null);
   };
 
@@ -2446,12 +2216,14 @@ export function FIWorkspace({
     setSelectedItem(null);
   };
 
-  const openOwnershipHistory = (mode: OwnershipMode) => {
+  const openOwnershipHistory = async (mode: OwnershipMode) => {
     const currentUserKey = personFilterKey(
       currentUserId,
       mode === "mine" ? accountAuthorName : registrarName,
     );
-    selectTab("history");
+    if (!await selectTab("history")) return;
+    setHistoryQuery("");
+    setHistoryYear("");
     setHistoryTeams([]);
     setHistoryMonths([]);
     setHistoryDecisions([]);
@@ -2594,6 +2366,7 @@ export function FIWorkspace({
       setEditTarget(null);
       setSelectedItem((current: any) => current?.id === updated.id ? { ...current, ...updated } : current);
       reload();
+      setMatrixRefreshNonce((n) => n + 1);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -2619,6 +2392,7 @@ export function FIWorkspace({
         setKhmtTarget(null);
         setActionNote("");
         reload();
+        setMatrixRefreshNonce((n) => n + 1);
         setSelectedItem((current: any) => current?.id === updated.id ? { ...current, ...updated } : current);
         if (selectedItem?.id === target.id) reloadDetail(target.id);
       })
@@ -2648,37 +2422,99 @@ export function FIWorkspace({
     }
   };
 
-  const handleKhmtMonthSelect = async (item: any, value: string) => {
+  const handleAssignKhmtDirect = async (item: any, month: number, year: number) => {
     if (assigningKhmt) return;
-    const year = khmtAssignmentYear(item);
-    const isClearingKhmt = value === "";
-    const month = Number(value);
-    if (!isClearingKhmt && (!Number.isFinite(month) || month < 1 || month > 12)) return;
     setAssigningKhmt(true);
     setError("");
     setNotice("");
     try {
-      const updated = isClearingKhmt
-        ? await api.clearKhmt(item.id, item.server_revision ?? item.revision ?? 0)
-        : await api.assignKhmt(item.id, month, year, item.server_revision ?? item.revision ?? 0);
-      setNotice(
-        isClearingKhmt
-          ? `Đã bỏ ${updated.sk_code || item.title} khỏi KHMT.`
-          : `Đã ghi nhận ${updated.sk_code || item.title} vào KHMT T${month}/${year}.`
-      );
+      const updated = await api.assignKhmt(item.id, month, year, item.server_revision ?? item.revision ?? 0);
+      setNotice(`Đã ghi nhận ${updated.sk_code || item.title} vào KHMT T${month}/${year}.`);
       setKhmtTarget(null);
-      setPendingKhmtMonths((current) => {
-        const next = { ...current };
-        delete next[item.id];
-        return next;
-      });
-      reload();
+      reload(dashboardYear);
+      setMatrixRefreshNonce((n) => n + 1);
       if (selectedItem?.id === item.id) reloadDetail(item.id);
     } catch (err: any) {
       setError(err.message);
     } finally {
       setAssigningKhmt(false);
     }
+  };
+
+  const handleClearKhmtDirect = async (item: any) => {
+    if (assigningKhmt) return;
+    setAssigningKhmt(true);
+    setError("");
+    setNotice("");
+    try {
+      const updated = await api.clearKhmt(item.id, item.server_revision ?? item.revision ?? 0);
+      setNotice(`Đã bỏ ${updated.sk_code || item.title} khỏi KHMT.`);
+      setKhmtTarget(null);
+      reload(dashboardYear);
+      setMatrixRefreshNonce((n) => n + 1);
+      if (selectedItem?.id === item.id) reloadDetail(item.id);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setAssigningKhmt(false);
+    }
+  };
+
+  const extractClipboardImageFiles = (event: React.ClipboardEvent): File[] => {
+    const clipboardItems = Array.from(event.clipboardData?.items ?? []);
+    const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+    const files: File[] = [];
+    clipboardItems.forEach((entry, idx) => {
+      if (entry.kind === "file" && entry.type.startsWith("image/")) {
+        const raw = entry.getAsFile();
+        if (!raw) return;
+        const ext = (raw.type.split("/")[1] || "png").replace("jpeg", "jpg");
+        const named = raw.name && raw.name !== "image.png"
+          ? raw
+          : new File([raw], `clipboard-${stamp}-${idx + 1}.${ext}`, { type: raw.type || "image/png" });
+        files.push(named);
+      }
+    });
+    return files;
+  };
+
+  const handleDraftPaste = (event: React.ClipboardEvent) => {
+    const pastedImages = extractClipboardImageFiles(event);
+    if (pastedImages.length === 0) return;
+    event.preventDefault();
+    setError("");
+    setEvidenceFiles((current) => [...current, ...pastedImages]);
+    setNotice(`Đã dán ${pastedImages.length} ảnh từ clipboard vào danh sách đính kèm.`);
+  };
+
+  const handleDraftDrop = (event: React.DragEvent) => {
+    event.preventDefault();
+    setDraftDragOver(false);
+    const dropped = Array.from(event.dataTransfer?.files ?? []).filter((file) =>
+      file.type.startsWith("image/") || /\.(heic|heif|jfif|bmp|tiff?|avif)$/i.test(file.name),
+    );
+    if (dropped.length === 0) return;
+    setError("");
+    setEvidenceFiles((current) => [...current, ...dropped]);
+    setNotice(`Đã thêm ${dropped.length} ảnh bằng chứng bằng thao tác kéo thả.`);
+  };
+
+  const handleEditPaste = (event: React.ClipboardEvent) => {
+    if (!editTarget || !canManageEditImages) return;
+    const pastedImages = extractClipboardImageFiles(event);
+    if (pastedImages.length === 0) return;
+    event.preventDefault();
+    void uploadImagesForItem(editTarget.id, pastedImages);
+  };
+
+  const insertContentTemplate = () => {
+    const template = "1. Hiện trạng / Vấn đề:\n- \n\n2. Giải pháp cải tiến:\n- \n\n3. Hiệu quả dự kiến:\n- ";
+    setForm((current) => ({
+      ...current,
+      content_description: current.content_description.trim()
+        ? `${current.content_description.trim()}\n\n${template}`
+        : template,
+    }));
   };
 
   const handleDraftImageSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2771,6 +2607,7 @@ export function FIWorkspace({
         if (editTarget?.id === id) setEditTarget(null);
         setNotice("Đã xóa hồ sơ SK-CTKT.");
         reload();
+        setMatrixRefreshNonce((n) => n + 1);
       })
       .catch((err) => setError(err.message));
   };
@@ -2798,7 +2635,7 @@ export function FIWorkspace({
     map.set("deploy-import", "Hệ thống");
     return map;
   }, [accountAuthorName, allHistoryItems, authorOptions, currentUserId]);
-  const displayUser = (userId: string | null) => {
+  const displayUser = (userId: string | null | undefined) => {
     if (!userId) return "Hệ thống";
     return userLabelById.get(userId) || actorLabel(userId);
   };
@@ -2811,12 +2648,48 @@ export function FIWorkspace({
     if (role === FI_COORDINATOR_ROLE && (recordAuthorId(item) === currentUserId || recordSubmitterId(item) === currentUserId)) return false;
     return true;
   });
-  const reviewQueue = reviewQueueAll.filter((item) => {
+  const reviewQueueByStatus = reviewQueueAll.filter((item) => {
     if (reviewFilter === "all") return true;
     if (reviewFilter === "reviewed") return REVIEWED_STATUSES.includes(item.status);
     // pending: chờ tay người duyệt — Submitted/NeedMoreInfo (chưa có quyết định)
     return ["Submitted", "NeedMoreInfo"].includes(item.status);
   });
+  const reviewTeamCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    reviewQueueByStatus.forEach((item) => {
+      if (item.team) counts[item.team] = (counts[item.team] ?? 0) + 1;
+    });
+    return counts;
+  }, [reviewQueueByStatus]);
+  const reviewTeamOptions = useMemo(() => {
+    const extra = Object.keys(reviewTeamCounts).filter((t) => !FI_TEAMS.includes(t));
+    return [...FI_TEAMS, ...extra];
+  }, [reviewTeamCounts]);
+  const reviewMonthOptions = useMemo(() => {
+    const set = new Set<string>();
+    reviewQueueByStatus.forEach((item) => {
+      const { month, year } = registrationInfo(item);
+      if (month && year) set.add(`${year}-${String(month).padStart(2, "0")}`);
+    });
+    return Array.from(set).sort().reverse();
+  }, [reviewQueueByStatus]);
+  const reviewQueue = useMemo(() => {
+    const term = normalizeAuthorQuery(reviewSearch);
+    const tokens = term ? term.split(/\s+/).filter(Boolean) : [];
+    return reviewQueueByStatus.filter((item) => {
+      if (reviewTeamFilter && item.team !== reviewTeamFilter) return false;
+      if (reviewMonthFilter) {
+        const { month, year } = registrationInfo(item);
+        const key = month && year ? `${year}-${String(month).padStart(2, "0")}` : "";
+        if (key !== reviewMonthFilter) return false;
+      }
+      if (tokens.length > 0) {
+        const hay = normalizeAuthorQuery(`${item.sk_code || ""} ${item.title || ""} ${item.author_name || ""} ${item.content_description || ""} ${displayTeam(item.team)}`);
+        if (!tokens.every((token) => hay.includes(token))) return false;
+      }
+      return true;
+    });
+  }, [reviewQueueByStatus, reviewTeamFilter, reviewMonthFilter, reviewSearch]);
   const reviewCounts = {
     pending: reviewQueueAll.filter((item) => ["Submitted", "NeedMoreInfo"].includes(item.status)).length,
     reviewed: reviewQueueAll.filter((item) => REVIEWED_STATUSES.includes(item.status)).length,
@@ -2825,29 +2698,78 @@ export function FIWorkspace({
   const selectedImages = Array.isArray(selectedItem?.supporting_images) ? selectedItem.supporting_images : [];
   const selectedHistory = Array.isArray(selectedItem?.status_history) ? selectedItem.status_history : [];
   const canUploadForSelected = selectedItem ? canUploadImages(role, currentUserId, selectedItem, editMode) : false;
-  const selectedActions = selectedItem ? visibleActionsForSk(role, currentUserId, selectedItem, editMode) : [];
+  const selectedActions = selectedItem ? visibleActionsForSk(role, currentUserId, selectedItem, editMode, currentTeam) : [];
   const editImages = Array.isArray(editTarget?.supporting_images) ? editTarget.supporting_images : [];
   const canManageEditImages = editTarget ? canUploadImages(role, currentUserId, editTarget, editMode) : false;
   const historyItems = allHistoryItems;
   const historyTeamCounts: Record<string, number> = Object.fromEntries((historyMeta?.facets?.teams ?? []).map((row: any) => [row.value, row.count]));
-  const historyMonthOptions: Array<[number, number]> = (historyMeta?.facets?.months ?? []).map((row: any) => [row.value, row.count]).sort((a: number[], b: number[]) => b[0] - a[0]);
+  const historyMonthOptions: Array<[number, number]> = (() => {
+    const map = new Map<number, number>();
+    (historyMeta?.facets?.months ?? []).forEach((row: any) => map.set(Number(row.value), Number(row.count)));
+    historyMonths.forEach((m) => { if (!map.has(m)) map.set(m, 0); });
+    return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
+  })();
   const personFacets = (kind: "authors" | "submitters"): PersonFilterOption[] => (historyMeta?.facets?.[kind] ?? []).map((row: any) => ({...row, nameKey: normalizeAuthorQuery(row.label), searchText: normalizeAuthorQuery(`${row.label} ${row.accountId ?? ""} ${row.team ?? ""}`)}));
   const historyAuthorOptions = useMemo(() => personFacets("authors"), [historyMeta]);
   const historySubmitterOptions = useMemo(() => personFacets("submitters"), [historyMeta]);
-  const historyAuthorOptionByKey = useMemo(
-    () => new Map(historyAuthorOptions.map((option) => [option.key, option])),
-    [historyAuthorOptions],
-  );
-  const historySubmitterOptionByKey = useMemo(
-    () => new Map(historySubmitterOptions.map((option) => [option.key, option])),
-    [historySubmitterOptions],
-  );
   const historyDecisionCounts: Record<HistoryDecisionFilter, number> = {
     approved: historyMeta?.summary?.approved ?? 0, rejected: historyMeta?.summary?.rejected ?? 0,
     deferred: historyMeta?.summary?.deferred ?? 0, pending: historyMeta?.summary?.pending ?? 0,
   };
-  const historyKhmtCounts = {in: historyMeta?.summary?.khmt_considered ?? 0, out: historyMeta?.summary?.khmt_missing ?? 0};
-  const historyKhmtPeriodOptions: Array<[string, {month: number; year: number; count: number}]> = (historyMeta?.facets?.periods ?? []).map((row: any) => [`${row.year}-${row.month}`, row]);
+  const historyKhmtCounts = {
+    in: historyMeta?.facets?.khmt?.in ?? historyMeta?.summary?.khmt_considered ?? 0,
+    out: historyMeta?.facets?.khmt?.out ?? historyMeta?.summary?.khmt_missing ?? 0,
+  };
+  const historyKhmtPeriodOptions: Array<[string, {month: number; year: number; count: number}]> = (() => {
+    const map = new Map<string, { month: number; year: number; count: number }>();
+    (historyMeta?.facets?.periods ?? []).forEach((row: any) => {
+      const m = Number(row.month);
+      const y = Number(row.year);
+      if (m >= 1 && m <= 12 && y >= 2020) {
+        map.set(`${y}-${m}`, { month: m, year: y, count: Number(row.count ?? 0) });
+      }
+    });
+    historyKhmtPeriods.forEach((period) => {
+      if (!map.has(period)) {
+        const [yStr, mStr] = period.split("-");
+        const y = Number(yStr);
+        const m = Number(mStr);
+        if (m >= 1 && m <= 12 && y >= 2020) {
+          map.set(period, { month: m, year: y, count: 0 });
+        }
+      }
+    });
+    return Array.from(map.entries()).sort(([, a], [, b]) => (b.year - a.year) || (a.month - b.month));
+  })();
+  const historyKhmtPeriodsByYear = (() => {
+    const groups: Array<{ year: number; items: Array<[string, { month: number; year: number; count: number }]> }> = [];
+    for (const entry of historyKhmtPeriodOptions) {
+      const yr = entry[1].year;
+      let group = groups.find((g) => g.year === yr);
+      if (!group) {
+        group = { year: yr, items: [] };
+        groups.push(group);
+      }
+      group.items.push(entry);
+    }
+    return groups;
+  })();
+  const historyKhmtScopeLabel = historyTeams.length === 1
+    ? displayTeam(historyTeams[0])
+    : historyTeams.length > 1
+      ? `${historyTeams.length} đội/tổ`
+      : "";
+  const historyKhmtChipSummary = (() => {
+    if (historyKhmtPeriods.length === 0) return undefined;
+    const formatPeriod = (p: string) => {
+      const [y, m] = p.split("-");
+      return `T${String(Number(m)).padStart(2, "0")}/${y}`;
+    };
+    const periodLabel = historyKhmtPeriods.length === 1
+      ? formatPeriod(historyKhmtPeriods[0])
+      : `${historyKhmtPeriods.length} kỳ`;
+    return historyKhmt.includes("out") ? `2 mục · ${periodLabel}` : periodLabel;
+  })();
   const historyCompletionCounts = {done: historyMeta?.summary?.completed_count ?? 0, pending: historyMeta?.summary?.not_completed ?? 0};
   const historyActiveFilterCount =
     Number(Boolean(historyQuery)) + Number(Boolean(historyYear)) +
@@ -2871,25 +2793,7 @@ export function FIWorkspace({
     }
     return groups;
   }, []);
-  const dashboardTotals = dashboard?.totals ?? {};
   const dashboardTeams = Array.isArray(dashboard?.teams) ? dashboard.teams : [];
-  const dashboardKhmtMonths = Array.isArray(dashboard?.khmt_by_month) ? dashboard.khmt_by_month : [];
-  const dashboardTotalCount = Number(dashboardTotals.total ?? 0);
-  const dashboardApprovedCount = reviewPassedCount(dashboardTotals);
-  const dashboardKhmtCount = Number(dashboardTotals.khmt_considered ?? 0);
-  const dashboardCompletedCount = Number(dashboardTotals.completed_count ?? dashboardTotals.completed ?? 0);
-  const dashboardPendingCount = Number(dashboardTotals.pending ?? 0);
-  const dashboardDeferredCount = Number(dashboardTotals.deferred ?? 0);
-  const dashboardReviewFailedCount = reviewFailedCount(dashboardTotals);
-  const statusSlices = useMemo(() => buildStatusSlices(dashboardTotals), [dashboardTotals]);
-  const teamProgress = useMemo(() => buildTeamProgress(dashboardTeams), [dashboardTeams]);
-  const monthlyTrend = useMemo(() => buildMonthlyTrend(dashboardKhmtMonths), [dashboardKhmtMonths]);
-  const approvalRate = dashboardTotalCount
-    ? Math.round((dashboardApprovedCount / dashboardTotalCount) * 100)
-    : 0;
-  const khmtRate = dashboardApprovedCount
-    ? Math.round((dashboardKhmtCount / dashboardApprovedCount) * 100)
-    : 0;
   const historySummaryTeamRows = historyTeams.length === 0
     ? dashboardTeams
     : dashboardTeams.filter((team: any) => historyTeams.includes(team.team));
@@ -2898,16 +2802,18 @@ export function FIWorkspace({
         ...historyMeta.summary,
         review_passed: historyMeta.summary.approved,
         review_failed: historyMeta.summary.rejected,
-        khmt_not_considered: historyMeta.summary.khmt_missing,
+        khmt_not_considered: historyMeta.summary.khmt_unassigned_approved ?? historyMeta.summary.khmt_missing,
+        khmt_unassigned_approved: historyMeta.summary.khmt_unassigned_approved,
       }
     : aggregateTeamSummaries(historySummaryTeamRows);
-  const historyTeamOptions = [
+  const historyTeamOptions: string[] = [
     ...FI_TEAMS,
     ...Array.from(
-      new Set(
-        allHistoryItems
-          .map((item) => item?.team)
-          .filter((team): team is string => Boolean(team) && !FI_TEAMS.includes(team))
+      new Set<string>(
+        [
+          ...(historyMeta?.facets?.teams ?? []).map((row: any) => row?.value),
+          ...allHistoryItems.map((item) => item?.team),
+        ].filter((team: unknown): team is string => typeof team === "string" && team.length > 0 && !FI_TEAMS.includes(team))
       )
     ).sort((a, b) => displayTeam(a).localeCompare(displayTeam(b), "vi")),
   ];
@@ -2918,7 +2824,9 @@ export function FIWorkspace({
     setError("");
     setNotice("");
     api.exportFiReports({
-      q: historyQuery || undefined, registration_year: historyYear ? Number(historyYear) : undefined,
+      q: historyQuery || undefined,
+      registration_year: historyYear ? Number(historyYear) : undefined,
+      matrix_year: historyYear ? Number(historyYear) : dashboardYear,
       teams: historyTeams,
       registration_months: historyMonths,
       decisions: historyDecisions,
@@ -2937,31 +2845,23 @@ export function FIWorkspace({
       .finally(() => setExportingHistoryExcel(false));
   };
 
-  const renderMetricPair = (
-    primary: number | undefined,
-    secondaryText: string,
-    className = ""
-  ) => (
-    <span className={`metric-pair ${className}`}>
-      <strong>{formatCount(primary)}</strong>
-      <small>{secondaryText}</small>
-    </span>
-  );
-
-  const renderKhmtMetric = (considered: number | undefined) => (
-    <span className="metric-pair cell-khmt">
-      <strong>Đã vào {formatCount(considered)}</strong>
-    </span>
-  );
-
-  const renderKhmtMissing = (missing: number | undefined) => (
-    <span className="metric-pair cell-khmt-missing">
-      <strong>{formatCount(missing)}</strong>
-    </span>
-  );
+  const exportDashboardExcel = (year: number) => {
+    if (exportingHistoryExcel) return;
+    setExportingHistoryExcel(true);
+    setError("");
+    setNotice("");
+    api.exportFiReports({ matrix_year: year })
+      .then((blob) => {
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+        saveBlob(blob, `fi-khmt-matrix-${year}-${stamp}.xlsx`);
+        setNotice(`Đã xuất báo cáo & Ma trận KHMT năm ${year} ra Excel.`);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setExportingHistoryExcel(false));
+  };
 
   const renderKhmtControl = (item: any) => {
-    const canSelect = canSelectKhmtMonth(role, currentUserId, item, currentTeam);
+    const canSelect = (role !== ADMIN_ROLE || editMode) && canSelectKhmtMonth(role, currentUserId, item, currentTeam);
     const considered = isKhmtConsidered(item);
     if (!canSelect) {
       return (
@@ -2971,43 +2871,15 @@ export function FIWorkspace({
       );
     }
 
-    const year = khmtAssignmentYear(item);
-    const currentValue = considered && item.khmt_month ? String(item.khmt_month) : "";
-    const selectedValue = pendingKhmtMonths[item.id] ?? currentValue;
-    const hasPendingChange = hasKhmtPendingChange(selectedValue, currentValue);
     return (
       <span className="legacy-khmt-control">
-        <select
-          aria-label={`Chọn tháng KHMT cho ${item.title}`}
-          className={`legacy-khmt-select ${selectedValue ? "success" : "empty"}`}
-          disabled={assigningKhmt}
-          onChange={(event) => {
-            const value = event.target.value;
-            setPendingKhmtMonths((current) => ({ ...current, [item.id]: value }));
-          }}
-          title={`Chọn tháng KHMT năm ${year}`}
-          value={selectedValue}
-        >
-          <option value="">
-            Chưa vào KHMT
-          </option>
-          {KHMT_MONTHS.map((month) => (
-            <option key={month} value={month}>
-              {`T${month}/${year}`}
-            </option>
-          ))}
-        </select>
-        <button
-          aria-label={`Lưu tháng KHMT cho ${item.title}`}
-          className="legacy-khmt-save"
-          disabled={assigningKhmt || !hasPendingChange}
-          onClick={() => handleKhmtMonthSelect(item, selectedValue)}
-          title={hasPendingChange ? "Lưu tháng KHMT" : "Chưa có thay đổi"}
-          type="button"
-        >
-          <Save size={13} />
-          <span>Lưu</span>
-        </button>
+        <FiKhmtMonthPicker
+          item={item}
+          khmtMatrix={dashboard?.khmt_matrix ?? null}
+          busy={assigningKhmt}
+          onAssign={handleAssignKhmtDirect}
+          onClear={handleClearKhmtDirect}
+        />
       </span>
     );
   };
@@ -3112,7 +2984,7 @@ export function FIWorkspace({
     return (
       <div className="list">
       {visibleRows.map((item) => {
-        const actions = visibleActionsForSk(role, currentUserId, item, editMode);
+        const actions = visibleActionsForSk(role, currentUserId, item, editMode, currentTeam);
         const submitterId = recordSubmitterId(item);
         const authorId = recordAuthorId(item);
         return (
@@ -3308,6 +3180,7 @@ export function FIWorkspace({
             aria-labelledby="fi-edit-modal-title"
             aria-modal="true"
             className="fi-edit-modal"
+            onPaste={handleEditPaste}
             role="dialog"
           >
             <div className="fi-edit-modal-head">
@@ -3507,7 +3380,7 @@ export function FIWorkspace({
         <>
       <div className={`fi-register-layout ${showForm ? "" : "single"}`}>
       {showForm && (
-        <section className="panel fi-form-panel">
+        <section className="panel fi-form-panel" onPaste={handleDraftPaste}>
           <h2>Đăng ký SK-CTKT</h2>
 	          <p className="muted" style={{ marginTop: -6, marginBottom: 8 }}>
 	            Điền đầy đủ thông tin để gửi sáng kiến/cải tiến kỹ thuật vào quy trình xét duyệt.
@@ -3668,7 +3541,18 @@ export function FIWorkspace({
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
             />
-            <label htmlFor="fi-content">Nội dung đăng ký <span style={{ color: "#dc2626" }}>*</span></label>
+            <div className="fi-content-label-row">
+              <label htmlFor="fi-content">Nội dung đăng ký <span style={{ color: "#dc2626" }}>*</span></label>
+              <button
+                type="button"
+                className="fi-template-btn"
+                onClick={insertContentTemplate}
+                title="Chèn dàn ý Hiện trạng / Giải pháp / Hiệu quả"
+              >
+                <Sparkles size={14} />
+                Chèn mẫu gợi ý
+              </button>
+            </div>
             <textarea
               id="fi-content"
               className="fi-content-input"
@@ -3684,12 +3568,20 @@ export function FIWorkspace({
               onChange={(next) => setForm({ ...form, completion_done: next.done, completion_plan_date: next.date })}
             />
             <label>
-              Ảnh bằng chứng FI <span className="muted">(tùy chọn — có thể thêm sau khi đăng ký xét duyệt)</span>
+              Ảnh bằng chứng FI <span className="muted">(tùy chọn — có thể dán Ctrl+V từ Zalo / Snipping Tool hoặc kéo thả ảnh vào đây)</span>
             </label>
-            <button type="button" onClick={() => draftFileInputRef.current?.click()}>
-              <ImagePlus size={16} />
-              Chọn ảnh
-            </button>
+            <div
+              className={`fi-dropzone ${draftDragOver ? "is-drag-over" : ""}`}
+              onDragOver={(event) => { event.preventDefault(); setDraftDragOver(true); }}
+              onDragLeave={() => setDraftDragOver(false)}
+              onDrop={handleDraftDrop}
+            >
+              <button type="button" onClick={() => draftFileInputRef.current?.click()}>
+                <ImagePlus size={16} />
+                Chọn ảnh
+              </button>
+              <span className="fi-dropzone-hint">hoặc kéo thả ảnh vào khung / nhấn Ctrl+V để dán ảnh chụp màn hình</span>
+            </div>
             {evidenceFiles.length > 0 && (
               <div className="evidence-file-list">
                 <small className="muted">{evidenceFiles.length} ảnh sẽ được tải lên sau khi đăng ký xét duyệt.</small>
@@ -3720,7 +3612,7 @@ export function FIWorkspace({
       <section className="panel fi-processing-panel">
         <div className="panel-header">
           <h2>Sáng kiến của tôi</h2>
-          <button aria-label="Tải lại danh sách" disabled={dashboardLoading} onClick={reload} title="Tải lại danh sách" type="button">
+          <button aria-label="Tải lại danh sách" disabled={dashboardLoading} onClick={() => reload()} title="Tải lại danh sách" type="button">
             <RefreshCw size={17} className={dashboardLoading ? "icon-spin" : undefined} />
           </button>
         </div>
@@ -3779,9 +3671,11 @@ export function FIWorkspace({
               <h3>
                 <Send size={16} />
                 Phiếu tôi đã gửi
-                <span className="fi-ownership-count">{sentOwnershipSections.pending.length}</span>
+                <span className="fi-ownership-count">
+                  {sentOwnershipSections.pending.length + sentOwnershipSections.implementation.length}
+                </span>
               </h3>
-              <p className="muted">Chỉ hiện phiếu đăng ký hộ đang chờ xử lý hoặc cần bổ sung.</p>
+              <p className="muted">Hiển thị phiếu đăng ký hộ đang chờ xử lý và đã duyệt nhưng chưa hoàn tất.</p>
             </div>
           </div>
           {renderOwnershipItems(
@@ -3789,6 +3683,26 @@ export function FIWorkspace({
             "Bạn không có phiếu đăng ký hộ nào đang chờ xử lý.",
             "sent",
             "sentPending",
+          )}
+          {sentOwnershipSections.implementation.length > 0 && (
+            <div className="fi-list-block fi-implementation-block fi-sent-implementation-block">
+              <div className="fi-list-block-head fi-ownership-group-head">
+                <div>
+                  <h3>
+                    <CheckCircle2 size={15} />
+                    Phiếu gửi hộ đã duyệt – đang thực hiện
+                    <span className="fi-ownership-count success">{sentOwnershipSections.implementation.length}</span>
+                  </h3>
+                  <p className="muted">Tổ trưởng/người gửi hộ có thể theo dõi và cập nhật tiến độ cho đến khi hoàn tất.</p>
+                </div>
+              </div>
+              {renderOwnershipItems(
+                sentOwnershipSections.implementation,
+                "Không có phiếu gửi hộ nào đang thực hiện.",
+                "sent",
+                "sentImplementation",
+              )}
+            </div>
           )}
           {sentOwnershipSections.history.length > 0 && (
             <button className="fi-ownership-history-link compact" onClick={() => openOwnershipHistory("sent")} type="button">
@@ -3817,7 +3731,7 @@ export function FIWorkspace({
                   : "Toàn bộ SK đang trong luồng xét duyệt. Admin có thể xem & ghi đè quyết định nếu cần."}
               </p>
             </div>
-            <button aria-label="Tải lại hàng đợi xét duyệt" disabled={dashboardLoading} onClick={reload} title="Tải lại hàng đợi xét duyệt" type="button">
+            <button aria-label="Tải lại hàng đợi xét duyệt" disabled={dashboardLoading} onClick={() => reload()} title="Tải lại hàng đợi xét duyệt" type="button">
               <RefreshCw size={17} className={dashboardLoading ? "icon-spin" : undefined} />
             </button>
           </div>
@@ -3853,6 +3767,79 @@ export function FIWorkspace({
               <span className="tab-badge">{reviewCounts.all}</span>
             </button>
           </div>
+          <div className="fi-review-filters-bar" role="group" aria-label="Lọc nhanh hàng đợi xét duyệt">
+            <label className="fi-review-search">
+              <Search size={15} aria-hidden="true" />
+              <input
+                type="search"
+                value={reviewSearch}
+                onChange={(event) => setReviewSearch(event.target.value)}
+                placeholder="Tìm theo mã SK, tiêu đề, tác giả..."
+                aria-label="Tìm trong hàng đợi xét duyệt"
+              />
+              {reviewSearch && (
+                <button
+                  type="button"
+                  className="fi-search-clear-btn"
+                  aria-label="Xóa từ khóa tìm kiếm"
+                  onClick={() => setReviewSearch("")}
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </label>
+            <div className="fi-review-team-chips" role="group" aria-label="Lọc theo đội/tổ">
+              <button
+                type="button"
+                className={reviewTeamFilter === "" ? "is-active" : ""}
+                onClick={() => setReviewTeamFilter("")}
+              >
+                Tất cả đội
+                <span>{reviewQueueByStatus.length}</span>
+              </button>
+              {reviewTeamOptions.map((teamKey) => (
+                <button
+                  key={teamKey}
+                  type="button"
+                  className={reviewTeamFilter === teamKey ? "is-active" : ""}
+                  onClick={() => setReviewTeamFilter(reviewTeamFilter === teamKey ? "" : teamKey)}
+                >
+                  {displayTeam(teamKey)}
+                  <span>{reviewTeamCounts[teamKey] ?? 0}</span>
+                </button>
+              ))}
+            </div>
+            {reviewMonthOptions.length > 0 && (
+              <label className="fi-review-month-select">
+                <CalendarDays size={14} aria-hidden="true" />
+                <select
+                  aria-label="Lọc theo tháng đăng ký"
+                  value={reviewMonthFilter}
+                  onChange={(event) => setReviewMonthFilter(event.target.value)}
+                >
+                  <option value="">Mọi tháng ĐK</option>
+                  {reviewMonthOptions.map((ym) => {
+                    const [yr, mo] = ym.split("-");
+                    return <option key={ym} value={ym}>T{Number(mo)}/{yr}</option>;
+                  })}
+                </select>
+              </label>
+            )}
+            {(reviewSearch || reviewTeamFilter || reviewMonthFilter) && (
+              <button
+                type="button"
+                className="fi-review-clear-filters"
+                onClick={() => {
+                  setReviewSearch("");
+                  setReviewTeamFilter("");
+                  setReviewMonthFilter("");
+                }}
+              >
+                <X size={13} />
+                Xóa lọc ({reviewQueue.length}/{reviewQueueByStatus.length})
+              </button>
+            )}
+          </div>
           {error && <p className="error" role="alert" tabIndex={-1}>{error}</p>}
           {legacyPendingCount > 0 ? (
             <div className="warning-inline fi-legacy-pending-note" role="note">
@@ -3865,7 +3852,7 @@ export function FIWorkspace({
           ) : null}
           <div className="list">
             {reviewQueue.map((item) => {
-              const actions = visibleActionsForSk(role, currentUserId, item, editMode);
+              const actions = visibleActionsForSk(role, currentUserId, item, editMode, currentTeam);
               const alreadyReviewed = REVIEWED_STATUSES.includes(item.status);
               const isReviewOpen = actionTarget?.id === item.id;
               return (
@@ -3921,13 +3908,15 @@ export function FIWorkspace({
                       </button>
                     )}
                   </div>
-                  {renderReviewDecisionPanel(item)}
+                  {selectedItem?.id !== item.id && renderReviewDecisionPanel(item)}
                 </div>
               );
             })}
             {reviewQueue.length === 0 &&
               renderEmptyState(
-                reviewFilter === "pending"
+                reviewSearch || reviewTeamFilter || reviewMonthFilter
+                  ? "Không có SK nào khớp bộ lọc đang chọn."
+                  : reviewFilter === "pending"
                   ? "Không có SK nào đang chờ xét duyệt."
                   : reviewFilter === "reviewed"
                   ? "Chưa có SK nào được đánh giá."
@@ -3938,438 +3927,110 @@ export function FIWorkspace({
         </section>
       )}
 
-      {(activeTab === "register" || activeTab === "review") && selectedItem && !selectedItem.is_historical_import && (
-        <section className="panel wide fi-detail-card" ref={detailCardRef}>
-          <div className="fi-detail-header">
-            <div className="fi-detail-title">
-              <div className="fi-detail-code-line">
-                <h2>{selectedItem.sk_code}</h2>
-                <span className={`fi-status-pill ${statusTone(selectedItem.status)}`}>
-                  {displayStatus(selectedItem.status)}
-                </span>
-              </div>
-              <p>{displayTeam(selectedItem.team)}</p>
-            </div>
-            <div className="fi-detail-actions">
-              {selectedActions.includes("edit") && (
-                <button
-                  className="fi-detail-action"
-                  title={editActionTitle(selectedItem)}
-                  type="button"
-                  onClick={() => openEdit(selectedItem)}
-                >
-                  <Pencil size={17} />
-                  {isPlanOnlyEdit(selectedItem) ? "Cập nhật kế hoạch" : "Chỉnh sửa"}
-                </button>
-              )}
-              {selectedActions.includes("delete") && (
-                <button
-                  className="fi-detail-action danger-button"
-                  title="Xóa SK"
-                  type="button"
-                  onClick={() => handleDelete(selectedItem)}
-                >
-                  <Trash2 size={17} />
-                  Xóa
-                </button>
-              )}
+      {activeTab !== "history" && selectedItem && (
+        <FiDetailDrawer
+          item={selectedItem}
+          statusLabel={displayStatus(selectedItem.status)}
+          statusToneClass={statusTone(selectedItem.status)}
+          submitterLabel={displaySubmitter(selectedItem)}
+          registrationLabel={registrationMonthLabel(selectedItem)}
+          khmtText={khmtLabel(selectedItem)}
+          canSelectKhmt={
+            (role !== ADMIN_ROLE || editMode) &&
+            canSelectKhmtMonth(role, currentUserId, selectedItem, currentTeam)
+          }
+          khmtBusy={assigningKhmt}
+          khmtMatrix={dashboard?.khmt_matrix ?? null}
+          actions={selectedActions}
+          isPlanOnly={isPlanOnlyEdit(selectedItem)}
+          editTitle={editActionTitle(selectedItem)}
+          canUploadImages={canUploadForSelected}
+          uploadingImages={uploadingImages}
+          images={selectedImages}
+          historyEntries={selectedHistory}
+          completionBand={
+            <CompletionBand
+              item={selectedItem}
+              canUpdate={selectedActions.includes("updatePlan")}
+              onUpdate={() => setPlanTarget(selectedItem)}
+              hint={
+                role === ADMIN_ROLE && !editMode && isPlanOnlyEdit(selectedItem)
+                  ? "Bật “Chỉnh sửa” ở góc trên để cập nhật tiến độ"
+                  : undefined
+              }
+            />
+          }
+          reviewPanel={renderReviewDecisionPanel(selectedItem)}
+          renderImageCard={(img, index) => (
+            <div className="image-card" key={img.id}>
+              <AuthenticatedSkImage
+                skId={selectedItem.id}
+                image={img}
+                onOpen={() => setImagePreviewIndex(index)}
+              />
+              <small title={img.file_name}>{img.file_name}</small>
               {canUploadForSelected && (
                 <button
-                  className="fi-detail-action"
-                  title="Tải ảnh bằng chứng"
+                  aria-label={`Xóa ảnh ${img.file_name}`}
+                  className="image-card-delete"
+                  title="Xóa ảnh"
+                  onClick={() => handleDeleteImage(selectedItem.id, img.id)}
                   type="button"
-                  disabled={uploadingImages}
-                  onClick={() => detailFileInputRef.current?.click()}
                 >
-                  <ImagePlus size={17} />
-                  {uploadingImages ? "Đang tải..." : "Thêm ảnh"}
+                  <Trash2 size={14} />
                 </button>
               )}
-              <button
-                className="fi-detail-action secondary"
-                title="Thu gọn chi tiết"
-                type="button"
-                onClick={() => setSelectedItem(null)}
-              >
-                <ChevronUp size={17} />
-                Thu gọn
-              </button>
-            </div>
-          </div>
-
-          <div className="fi-detail-meta">
-            <div className="fi-meta-item">
-              <UserRound size={17} />
-              <span>Tác giả</span>
-              <strong>{selectedItem.author_name}</strong>
-            </div>
-            <div className="fi-meta-item">
-              <Users2 size={17} />
-              <span>Người đăng ký</span>
-              <strong>{displaySubmitter(selectedItem)}</strong>
-            </div>
-            <div className="fi-meta-item">
-              <CalendarDays size={17} />
-              <span>Tháng đăng ký</span>
-              <strong>{registrationMonthLabel(selectedItem)}</strong>
-            </div>
-            <div className="fi-meta-item">
-              <ClipboardCheck size={17} />
-              <span>KHMT</span>
-              <strong>{khmtLabel(selectedItem)}</strong>
-            </div>
-          </div>
-
-          <CompletionBand
-            item={selectedItem}
-            canUpdate={selectedActions.includes("updatePlan")}
-            onUpdate={() => setPlanTarget(selectedItem)}
-            hint={role === ADMIN_ROLE && !editMode && isPlanOnlyEdit(selectedItem) ? "Bật “Chỉnh sửa” ở góc trên để cập nhật tiến độ" : undefined}
-          />
-
-          <div className="fi-detail-content">
-            <div className="fi-content-section primary">
-              <span className="fi-section-label">Tên SK-CTKT</span>
-              <h3>{selectedItem.title}</h3>
-              <span className="fi-section-label">Nội dung đăng ký</span>
-              <p>{selectedItem.content_description || "Chưa có mô tả nội dung."}</p>
-            </div>
-            {(selectedItem.fi_coordinator_comments || selectedItem.workshop_leader_conclusion || selectedItem.decision_note) && (
-              <div className="fi-content-section notes">
-                <h3>Ghi chú và kết luận</h3>
-                {selectedItem.fi_coordinator_comments && (
-                  <div>
-                    <span>Nhận xét FI</span>
-                    <p>{selectedItem.fi_coordinator_comments}</p>
-                  </div>
-                )}
-                {selectedItem.workshop_leader_conclusion && (
-                  <div>
-                    <span>Kết luận LĐX</span>
-                    <p>{selectedItem.workshop_leader_conclusion}</p>
-                  </div>
-                )}
-                {selectedItem.decision_note && (
-                  <div>
-                    <span>Ghi chú quyết định</span>
-                    <p>{selectedItem.decision_note}</p>
-                  </div>
-                )}
-              </div>
-            )}
-            {selectedHistory.length > 0 && (
-              <div className="fi-content-section timeline">
-                <div className="fi-section-heading">
-                  <History size={17} />
-                  <h3>Lịch sử xử lý</h3>
-                </div>
-                <div className="fi-timeline">
-                  {selectedHistory.map((history: any, index: number) => {
-                    const detail = historyDetail(history);
-                    const time = formatHistoryTime(history.changed_at);
-                    return (
-                      <div className="fi-timeline-item" key={`${history.changed_at}-${index}`}>
-                        <span className="fi-timeline-dot" />
-                        <div>
-                          <div className="fi-timeline-row">
-                            <strong>{historyActionLabel(history)}</strong>
-                            {time && <time>{time}</time>}
-                          </div>
-                          <p className="fi-timeline-actor">
-                            <span>Người thực hiện</span>
-                            <strong>{actorLabel(history.changed_by)}</strong>
-                          </p>
-                          {detail && (
-                            <div className="fi-timeline-note">
-                              <span>{detail.label}</span>
-                              <p>{detail.text}</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-          {(selectedImages.length > 0 || canUploadForSelected) && (
-            <div className="image-list">
-              <h3>Ảnh bằng chứng ({selectedImages.length})</h3>
-              {selectedImages.length === 0 && (
-                <div className="image-empty">
-                  <span>Chưa có ảnh bằng chứng.</span>
-                  {canUploadForSelected && (
-                    <button type="button" onClick={() => detailFileInputRef.current?.click()} disabled={uploadingImages}>
-                      <ImagePlus size={16} />
-                      {uploadingImages ? "Đang tải..." : "Thêm ảnh"}
-                    </button>
-                  )}
-                </div>
-              )}
-              <div className="image-card-grid">
-                {selectedImages.map((img: any, index: number) => (
-                  <div className="image-card" key={img.id}>
-                    <AuthenticatedSkImage skId={selectedItem.id} image={img} onOpen={() => setImagePreviewIndex(index)} />
-                    <small title={img.file_name}>{img.file_name}</small>
-                    {canUploadForSelected && (
-                      <button
-                        aria-label={`Xóa ảnh ${img.file_name}`}
-                        className="image-card-delete"
-                        title="Xóa ảnh"
-                        onClick={() => handleDeleteImage(selectedItem.id, img.id)}
-                        type="button"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
             </div>
           )}
-        </section>
+          historyActionLabel={historyActionLabel}
+          actorLabel={displayUser}
+          historyDetail={historyDetail}
+          formatHistoryTime={formatHistoryTime}
+          onClose={() => {
+            setSelectedItem(null);
+            if (actionTarget?.id === selectedItem.id) setActionTarget(null);
+          }}
+          onEdit={() => openEdit(selectedItem)}
+          onDelete={() => handleDelete(selectedItem)}
+          onReview={() => openReviewDecision(selectedItem)}
+          onTriggerImageUpload={() => detailFileInputRef.current?.click()}
+          onAssignKhmt={handleAssignKhmtDirect}
+          onClearKhmt={handleClearKhmtDirect}
+        />
       )}
 
       {activeTab === "dashboard" && (
-        <section className="wide fi-dashboard-shell">
-          <div className="fi-dashboard-toolbar">
-            <div>
-              <h2>FI Dashboard</h2>
-              <p className="muted">Cập nhật {dashboard?.generated_at ? formatHistoryTime(dashboard.generated_at) : "—"}</p>
-            </div>
-            <button
-              aria-label="Tải lại FI Dashboard"
-              className="fi-dashboard-refresh"
-              disabled={dashboardLoading}
-              onClick={reload}
-              title="Tải lại FI Dashboard"
-              type="button"
-            >
-              <RefreshCw size={17} className={dashboardLoading ? "icon-spin" : undefined} />
-            </button>
-          </div>
-
-          {dashboardLoading && (
-            <p className="loading-inline" role="status">
-              <Loader2 size={15} className="icon-spin" />
-              Đang tải FI Dashboard...
-            </p>
-          )}
-          {error && <p className="error" role="alert" tabIndex={-1}>{error}</p>}
-
-          <div className="fi-dashboard-kpis">
-            <div className="fi-dashboard-kpi total">
-              <div className="fi-dashboard-kpi-icon"><ClipboardList size={20} /></div>
-              <span>Tổng SK</span>
-              <strong>{formatCount(dashboardTotalCount)}</strong>
-              <small>{formatCount(dashboardApprovedCount)} đã xét đạt · {formatCount(dashboardPendingCount)} chưa duyệt</small>
-            </div>
-            <div className="fi-dashboard-kpi success">
-              <div className="fi-dashboard-kpi-icon"><CheckCircle2 size={20} /></div>
-              <span>Đã xét đạt</span>
-              <strong>{formatCount(dashboardApprovedCount)}</strong>
-              <small>{approvalRate}% tổng SK</small>
-              <div className="fi-kpi-bar"><div className="fi-kpi-bar-fill success" style={{ width: `${approvalRate}%` }} /></div>
-            </div>
-            <div className="fi-dashboard-kpi warning">
-              <div className="fi-dashboard-kpi-icon"><PauseCircle size={20} /></div>
-              <span>Xem xét sau</span>
-              <strong>{formatCount(dashboardDeferredCount)}</strong>
-              <small>{formatCount(dashboardPendingCount)} SK chưa duyệt</small>
-            </div>
-            <div className="fi-dashboard-kpi info">
-              <div className="fi-dashboard-kpi-icon"><CalendarDays size={20} /></div>
-              <span>Đã vào KHMT</span>
-              <strong>{formatCount(dashboardKhmtCount)}</strong>
-              <small>{formatCount(khmtMissingCount(dashboardTotals))} SK đạt chưa vào KHMT</small>
-              <div className="fi-kpi-bar"><div className="fi-kpi-bar-fill info" style={{ width: `${khmtRate}%` }} /></div>
-            </div>
-            <div className="fi-dashboard-kpi neutral">
-              <div className="fi-dashboard-kpi-icon"><Flag size={20} /></div>
-              <span>Hoàn tất</span>
-              <strong>{formatCount(dashboardCompletedCount)}</strong>
-              <small>{formatCount(dashboardTotals.not_completed)} SK chưa xong</small>
-            </div>
-          </div>
-
-          <div className="fi-dashboard-chart-row">
-            <div className="fi-dashboard-card">
-              <div className="fi-dashboard-section-title">
-                <PieChart size={17} />
-                <h3>Phân bố trạng thái</h3>
-                <small className="muted">{dashboardTotalCount} SK</small>
-              </div>
-              <StatusDonutChart slices={statusSlices} total={dashboardTotalCount} />
-            </div>
-            <div className="fi-dashboard-card fi-team-card">
-              <div className="fi-dashboard-section-title">
-                <Users2 size={17} />
-                <h3>So sánh giữa các đội/tổ</h3>
-                <small className="muted">độ dài thanh tỉ lệ với tổng SK</small>
-              </div>
-              <TeamProgressBars teams={teamProgress} />
-            </div>
-          </div>
-
-          <div className="fi-dashboard-card">
-            <div className="fi-dashboard-section-title">
-              <TrendingUp size={17} />
-              <h3>Xu hướng KHMT theo tháng</h3>
-              <small className="muted">Số SK đã được ghi nhận vào KHMT</small>
-            </div>
-            <MonthlyTrendChart months={monthlyTrend} />
-          </div>
-
-          <div className="fi-dashboard-team-section">
-            <div className="fi-dashboard-section-title">
-              <ListChecks size={17} />
-              <h3>Chi tiết theo đội/tổ</h3>
-              <small className="muted">tỉ lệ phê duyệt, KHMT và hoàn thành cho từng đội</small>
-            </div>
-            {dashboardTeams.length === 0 ? (
-              renderEmptyState("Chưa có dữ liệu FI.")
-            ) : (
-              <div className="fi-dashboard-team-grid">
-                {dashboardTeams.map((team: any) => {
-                  const teamTotal = Number(team.total ?? 0);
-                  const teamPassed = reviewPassedCount(team);
-                  const teamFailed = reviewFailedCount(team);
-                  const teamDeferred = Number(team.deferred ?? 0);
-                  const teamPending = Number(team.pending ?? 0);
-                  const teamKhmt = Number(team.khmt_considered ?? 0);
-                  const teamKhmtMissing = khmtMissingCount(team);
-                  const teamCompleted = Number(team.completed_count ?? team.completed ?? 0);
-                  const teamNotCompleted = Number(team.not_completed ?? 0);
-                  const teamApprovalRate = teamTotal ? Math.round((teamPassed / teamTotal) * 100) : 0;
-                  const teamKhmtRate = teamPassed ? Math.round((teamKhmt / teamPassed) * 100) : 0;
-                  const teamCompletionRate = teamTotal ? Math.round((teamCompleted / teamTotal) * 100) : 0;
-                  return (
-                    <article className="fi-team-detail-card" key={team.team}>
-                      <header className="fi-team-detail-head">
-                        <div>
-                          <span className="fi-team-detail-name">{displayTeam(team.team)}</span>
-                          <small>{formatCount(teamPassed)} đã xét đạt · {formatCount(teamPending)} chưa duyệt</small>
-                        </div>
-                        <div className="fi-team-detail-total">
-                          <span>Tổng SK</span>
-                          <strong>{formatCount(teamTotal)}</strong>
-                        </div>
-                      </header>
-
-                      <div className="fi-team-detail-rates">
-                        <div className="fi-team-rate tone-success">
-                          <div className="fi-team-rate-head">
-                            <span>Tỉ lệ phê duyệt</span>
-                            <strong>{teamApprovalRate}%</strong>
-                          </div>
-                          <div className="fi-team-rate-bar" aria-hidden="true">
-                            <div className="fi-team-rate-bar-fill" style={{ width: `${teamApprovalRate}%` }} />
-                          </div>
-                          <small>{formatCount(teamPassed)}/{formatCount(teamTotal)} SK đã xét đạt</small>
-                        </div>
-
-                        <div className="fi-team-rate tone-info">
-                          <div className="fi-team-rate-head">
-                            <span>Đã vào KHMT</span>
-                            <strong>{teamKhmtRate}%</strong>
-                          </div>
-                          <div className="fi-team-rate-bar" aria-hidden="true">
-                            <div className="fi-team-rate-bar-fill" style={{ width: `${teamKhmtRate}%` }} />
-                          </div>
-                          <small>
-                            {formatCount(teamKhmt)}/{formatCount(teamPassed)} SK đạt
-                            {teamKhmtMissing > 0 && <> · còn <em>{formatCount(teamKhmtMissing)}</em> chưa vào</>}
-                          </small>
-                        </div>
-
-                        <div className="fi-team-rate tone-completion">
-                          <div className="fi-team-rate-head">
-                            <span>Hoàn thành</span>
-                            <strong>{teamCompletionRate}%</strong>
-                          </div>
-                          <div className="fi-team-rate-bar" aria-hidden="true">
-                            <div className="fi-team-rate-bar-fill" style={{ width: `${teamCompletionRate}%` }} />
-                          </div>
-                          <small>
-                            {formatCount(teamCompleted)}/{formatCount(teamTotal)}
-                            {teamNotCompleted > 0 && <> · còn <em>{formatCount(teamNotCompleted)}</em> chưa xong</>}
-                          </small>
-                        </div>
-                      </div>
-
-                      <footer className="fi-team-detail-breakdown">
-                        <div className="tone-success">
-                          <strong>{formatCount(teamPassed)}</strong>
-                          <span>Đạt</span>
-                        </div>
-                        <div className="tone-danger">
-                          <strong>{formatCount(teamFailed)}</strong>
-                          <span>Không đạt</span>
-                        </div>
-                        <div className="tone-warning">
-                          <strong>{formatCount(teamDeferred)}</strong>
-                          <span>Xem xét sau</span>
-                        </div>
-                        <div className="tone-neutral">
-                          <strong>{formatCount(teamPending)}</strong>
-                          <span>Chưa duyệt</span>
-                        </div>
-                      </footer>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="fi-dashboard-aux">
-            <div className="fi-dashboard-card">
-              <div className="fi-dashboard-section-title">
-                <CalendarDays size={17} />
-                <h3>KHMT theo tháng</h3>
-                <small className="muted">phân bổ SK đã vào KHMT theo từng tháng</small>
-              </div>
-              {dashboardKhmtMonths.length === 0 ? (
-                renderEmptyState("Chưa có SK nào được xét vào KHMT.")
-              ) : (
-                <div className="fi-khmt-month-grid">
-                  {dashboardKhmtMonths.map((month: any) => (
-                    <div className="fi-khmt-month" key={`${month.year}-${month.month}`}>
-                      <span>T{month.month}/{month.year}</span>
-                      <strong>{formatCount(month.count)}</strong>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="fi-dashboard-card">
-              <div className="fi-dashboard-section-title">
-                <Clock3 size={17} />
-                <h3>Tóm tắt trạng thái</h3>
-                <small className="muted">tổng hợp trên toàn bộ 4 đội/tổ</small>
-              </div>
-              <div className="fi-dashboard-status-list">
-                <div>
-                  <span><i className="fi-swatch approved" /> Đã xét đạt</span>
-                  <strong>{formatCount(dashboardApprovedCount)}</strong>
-                </div>
-                <div>
-                  <span><i className="fi-swatch deferred" /> Xem xét sau</span>
-                  <strong>{formatCount(dashboardDeferredCount)}</strong>
-                </div>
-                <div>
-                  <span><i className="fi-swatch pending" /> Chưa duyệt</span>
-                  <strong>{formatCount(dashboardPendingCount)}</strong>
-                </div>
-                <div>
-                  <span><i className="fi-swatch rejected" /> Đã xét không đạt</span>
-                  <strong>{formatCount(dashboardReviewFailedCount)}</strong>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+        <>
+          <FiDashboardView
+            dashboard={dashboard}
+            loading={dashboardLoading}
+            error={error}
+            selectedYear={dashboardYear}
+            currentTeam={currentTeam}
+            activeSelection={matrixDrawer}
+            exportingExcel={exportingHistoryExcel}
+            canReview={canReview}
+            onYearChange={(year) => setDashboardYear(year)}
+            onReload={() => reload(dashboardYear)}
+            onExportExcel={(year) => exportDashboardExcel(year)}
+            onSelectMatrix={(selection) => setMatrixDrawer(selection)}
+            onJumpToHistory={(filters) => void jumpToHistoryWithFilters(filters)}
+            onJumpToReview={canReview ? () => void jumpToReviewForTeam() : undefined}
+          />
+          <FiMatrixCellDrawer
+            selection={matrixDrawer}
+            role={role}
+            editMode={editMode}
+            khmtMatrix={dashboard?.khmt_matrix ?? null}
+            suspended={Boolean(selectedItem)}
+            refreshNonce={matrixRefreshNonce}
+            onClose={() => setMatrixDrawer(null)}
+            onOpenDetail={(item) => showItemDetail(item.id)}
+            onOpenInHistory={(filters) => void jumpToHistoryWithFilters(filters)}
+            onOpenReviewForTeam={canReview ? (team) => void jumpToReviewForTeam(team) : undefined}
+            onDataChanged={() => reload(dashboardYear)}
+          />
+        </>
       )}
 
       {activeTab === "history" && (
@@ -4393,175 +4054,216 @@ export function FIWorkspace({
             role="group"
             aria-label="Bộ lọc lịch sử FI"
           >
-            <label className={`fi-history-select-chip ${historyYear ? "is-active" : ""}`}>
-              <CalendarDays size={14} aria-hidden="true" />
-              <span>Năm</span>
-              <select aria-label="Năm đăng ký" value={historyYear} onChange={(event) => setHistoryYear(event.target.value)}>
-                <option value="">Tất cả</option>
-                {Array.from({ length: new Date().getFullYear() - 2019 }, (_, index) => new Date().getFullYear() - index).map((year) => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
-            </label>
-            <FilterChip<string>
-              label="Đội/tổ"
-              icon={<Users2 size={14} />}
-              options={historyTeamOptions.map((team) => ({
-                value: team,
-                label: displayTeam(team),
-                count: historyTeamCounts[team] ?? 0,
-              }))}
-              selected={historyTeams}
-              onChange={selectHistoryTeams}
-              emptyLabel="Tất cả"
-            />
-            <FilterChip<number>
-              label="Tháng"
-              icon={<CalendarDays size={14} />}
-              options={historyMonthOptions.map(([month, count]) => ({
-                value: month,
-                label: `T${month}`,
-                count,
-              }))}
-              selected={historyMonths}
-              onChange={changeHistoryMonths}
-              emptyLabel="Tất cả"
-            />
-            <PersonFilterCombobox
-              label="Tác giả"
-              icon={<UserRound size={14} />}
-              options={historyAuthorOptions}
-              selected={historyAuthors}
-              onChange={changeHistoryAuthors}
-            />
-            <PersonFilterCombobox
-              label="Người đăng ký"
-              icon={<Users2 size={14} />}
-              options={historySubmitterOptions}
-              selected={historySubmitters}
-              onChange={changeHistorySubmitters}
-            />
-            <FilterChip<HistoryDecisionFilter>
-              label="Kết luận LĐX"
-              icon={<ClipboardCheck size={14} />}
-              options={historyDecisionFilterOptions.map((option) => ({
-                ...option,
-                count: historyDecisionCounts[option.value],
-              }))}
-              selected={historyDecisions}
-              onChange={changeHistoryDecisions}
-              emptyLabel="Tất cả"
-            />
-            <FilterChip<HistoryKhmtFilter>
-              label="KHMT"
-              icon={<Flag size={14} />}
-              options={historyKhmtFilterOptions.map((option) => ({
-                ...option,
-                count: historyKhmtCounts[option.value],
-              }))}
-              selected={historyKhmt}
-              onChange={changeHistoryKhmt}
-              emptyLabel="Tất cả"
-              summary={historyKhmtPeriods.length > 0
-                ? `${historyKhmt.length === 1 ? "Đã vào KHMT" : `${historyKhmt.length} mục`} · ${historyKhmtPeriods.length} kỳ`
-                : undefined}
-              footer={historyKhmt.includes("in") ? (
-                <div className="fi-filter-subsection">
-                  <div className="fi-filter-subsection-head">
-                    <span>Kỳ vào KHMT</span>
-                    {historyKhmtPeriods.length > 0 && (
-                      <button type="button" onClick={() => changeHistoryKhmtPeriods([])}>Bỏ chọn kỳ</button>
+            <div className="fi-history-toolbar-main">
+              <label className={`fi-history-search ${historyQuery ? "is-active" : ""}`}>
+                <Search size={14} aria-hidden="true" />
+                <input
+                  type="search"
+                  aria-label="Tìm kiếm mã SK, tên sáng kiến, nội dung, tác giả"
+                  placeholder="Tìm mã SK, tên, nội dung, tác giả..."
+                  value={historyQuery}
+                  onChange={(event) => setHistoryQuery(event.target.value)}
+                />
+                {historyQuery && (
+                  <button
+                    type="button"
+                    className="fi-search-clear-btn"
+                    aria-label="Xóa từ khóa tìm kiếm"
+                    onClick={() => setHistoryQuery("")}
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </label>
+              <label className={`fi-history-select-chip ${historyYear ? "is-active" : ""}`}>
+                <CalendarDays size={14} aria-hidden="true" />
+                <span>Năm</span>
+                <select aria-label="Năm đăng ký" value={historyYear} onChange={(event) => setHistoryYear(event.target.value)}>
+                  <option value="">Tất cả</option>
+                  {Array.from({ length: new Date().getFullYear() - 2019 }, (_, index) => new Date().getFullYear() - index).map((year) => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="fi-history-toolbar-tail">
+                {historyActiveFilterCount > 0 && (
+                  <button
+                    type="button"
+                    className="fi-history-filter-reset"
+                    onClick={resetHistoryFilters}
+                    title="Xóa toàn bộ bộ lọc"
+                  >
+                    <X size={13} />
+                    Xóa lọc
+                    <span className="fi-history-filter-reset-count">{historyActiveFilterCount}</span>
+                  </button>
+                )}
+                <span className="fi-history-toolbar-count" aria-live="polite">
+                  {historyActiveFilterCount > 0 ? (
+                    <>
+                      Hiển thị <strong>{filteredHistoryItems.length}</strong>/{historyMeta?.total ?? historyItems.length}
+                    </>
+                  ) : (
+                    <>
+                      <strong>{historyMeta?.total ?? historyItems.length}</strong> SK-CTKT
+                    </>
+                  )}
+                </span>
+                <button
+                  aria-label="Xuất Excel theo bộ lọc hiện tại"
+                  className="fi-history-reload fi-history-export-btn"
+                  disabled={exportingHistoryExcel || filteredHistoryItems.length === 0}
+                  onClick={exportHistoryExcel}
+                  title={filteredHistoryItems.length === 0 ? "Không có dữ liệu để xuất" : "Xuất Excel theo bộ lọc hiện tại"}
+                  type="button"
+                >
+                  <FileDown size={15} />
+                  <span>{exportingHistoryExcel ? "Đang xuất..." : "Xuất Excel"}</span>
+                </button>
+                <button
+                  aria-label="Tải lại lịch sử FI"
+                  className="fi-history-reload"
+                  disabled={dashboardLoading}
+                  onClick={() => reload()}
+                  title="Tải lại lịch sử FI"
+                  type="button"
+                >
+                  <RefreshCw size={16} className={dashboardLoading ? "icon-spin" : undefined} />
+                </button>
+              </div>
+            </div>
+
+            <div className="fi-history-toolbar-filters">
+              <FilterChip<string>
+                label="Đội/tổ"
+                icon={<Users2 size={14} />}
+                options={historyTeamOptions.map((team) => ({
+                  value: team,
+                  label: displayTeam(team),
+                  count: historyTeamCounts[team] ?? 0,
+                }))}
+                selected={historyTeams}
+                onChange={selectHistoryTeams}
+                emptyLabel="Tất cả"
+              />
+              <FilterChip<number>
+                label="Tháng ĐK"
+                icon={<CalendarDays size={14} />}
+                options={historyMonthOptions.map(([month, count]) => ({
+                  value: month,
+                  label: `T${month}`,
+                  count,
+                }))}
+                selected={historyMonths}
+                onChange={changeHistoryMonths}
+                emptyLabel="Tất cả"
+              />
+              <FilterChip<HistoryKhmtFilter>
+                label="KHMT"
+                icon={<Flag size={14} />}
+                options={historyKhmtFilterOptions.map((option) => ({
+                  ...option,
+                  count: historyKhmtCounts[option.value],
+                }))}
+                selected={historyKhmt}
+                onChange={changeHistoryKhmt}
+                emptyLabel="Tất cả"
+                summary={historyKhmtChipSummary}
+                footer={(
+                  <div className="fi-filter-subsection">
+                    <div className="fi-filter-subsection-head">
+                      <span>
+                        Kỳ vào KHMT
+                        {historyKhmtScopeLabel && <em className="fi-filter-scope-tag">{historyKhmtScopeLabel}</em>}
+                      </span>
+                      {historyKhmtPeriods.length > 0 && (
+                        <button type="button" onClick={() => changeHistoryKhmtPeriods([])}>Bỏ chọn kỳ</button>
+                      )}
+                    </div>
+                    {historyKhmtPeriodsByYear.length > 0 ? (
+                      <div className="fi-filter-period-groups">
+                        {historyKhmtPeriodsByYear.map((group) => (
+                          <div key={group.year} className="fi-filter-period-year-group">
+                            <div className="fi-filter-period-year-label">Năm {group.year}</div>
+                            <div className="fi-filter-month-grid" role="group" aria-label={`Kỳ vào KHMT năm ${group.year}`}>
+                              {group.items.map(([period, { month, year, count }]) => {
+                                const checked = historyKhmtPeriods.includes(period);
+                                return (
+                                  <button
+                                    type="button"
+                                    className={[checked ? "checked" : "", count === 0 ? "is-empty" : ""].filter(Boolean).join(" ")}
+                                    aria-pressed={checked}
+                                    key={period}
+                                    title={`KHMT T${month}/${year}: ${count} SK`}
+                                    onClick={() => changeHistoryKhmtPeriods(
+                                      checked
+                                        ? historyKhmtPeriods.filter((value) => value !== period)
+                                        : [...historyKhmtPeriods, period],
+                                    )}
+                                  >
+                                    <span>{`T${month}`}</span>
+                                    <small>{count}</small>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="fi-filter-subsection-empty">Chưa có kỳ KHMT phù hợp bộ lọc.</p>
                     )}
                   </div>
-                  {historyKhmtPeriodOptions.length > 0 ? (
-                    <div className="fi-filter-month-grid" role="group" aria-label="Kỳ vào KHMT">
-                      {historyKhmtPeriodOptions.map(([period, { month, year, count }]) => {
-                        const checked = historyKhmtPeriods.includes(period);
-                        return (
-                          <button
-                            type="button"
-                            className={checked ? "checked" : ""}
-                            aria-pressed={checked}
-                            key={period}
-                            onClick={() => changeHistoryKhmtPeriods(
-                              checked
-                                ? historyKhmtPeriods.filter((value) => value !== period)
-                                : [...historyKhmtPeriods, period],
-                            )}
-                          >
-                            <span>{`T${String(month).padStart(2, "0")}/${year}`}</span>
-                            <small>{count}</small>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="fi-filter-subsection-empty">Chưa có kỳ KHMT trong dữ liệu.</p>
-                  )}
-                </div>
-              ) : undefined}
-            />
-            <FilterChip<HistoryCompletionFilter>
-              label="Hoàn thành"
-              icon={<CheckCircle2 size={14} />}
-              options={historyCompletionFilterOptions.map((option) => ({
-                ...option,
-                count: historyCompletionCounts[option.value],
-              }))}
-              selected={historyCompletion}
-              onChange={changeHistoryCompletion}
-              emptyLabel="Tất cả"
-            />
-            <div className="fi-history-toolbar-tail">
-              {historyActiveFilterCount > 0 && (
-                <button
-                  type="button"
-                  className="fi-history-filter-reset"
-                  onClick={resetHistoryFilters}
-                  title="Xóa toàn bộ bộ lọc"
-                >
-                  <X size={13} />
-                  Xóa bộ lọc
-                  <span className="fi-history-filter-reset-count">{historyActiveFilterCount}</span>
-                  </button>
-              )}
-              <span className="fi-history-toolbar-count" aria-live="polite">
-                {historyActiveFilterCount > 0 ? (
-                  <>
-                    Hiển thị <strong>{filteredHistoryItems.length}</strong>/{historyMeta?.total ?? historyItems.length}
-                  </>
-                ) : (
-                  <>
-                    <strong>{historyMeta?.total ?? historyItems.length}</strong> SK-CTKT
-                  </>
                 )}
-              </span>
-              <button
-                aria-label="Xuất Excel theo bộ lọc hiện tại"
-                className="fi-history-reload"
-                disabled={exportingHistoryExcel || filteredHistoryItems.length === 0}
-                onClick={exportHistoryExcel}
-                title={filteredHistoryItems.length === 0 ? "Không có dữ liệu để xuất" : "Xuất Excel theo bộ lọc hiện tại"}
-                type="button"
-              >
-                <FileDown size={17} />
-              </button>
-              <button
-                aria-label="Tải lại lịch sử FI"
-                className="fi-history-reload"
-                disabled={dashboardLoading}
-                onClick={reload}
-                title="Tải lại lịch sử FI"
-                type="button"
-              >
-                <RefreshCw size={17} className={dashboardLoading ? "icon-spin" : undefined} />
-              </button>
+              />
+              <FilterChip<HistoryDecisionFilter>
+                label="Kết luận"
+                icon={<ClipboardCheck size={14} />}
+                options={historyDecisionFilterOptions.map((option) => ({
+                  ...option,
+                  count: historyDecisionCounts[option.value],
+                }))}
+                selected={historyDecisions}
+                onChange={changeHistoryDecisions}
+                emptyLabel="Tất cả"
+              />
+              <FilterChip<HistoryCompletionFilter>
+                label="Hoàn thành"
+                icon={<CheckCircle2 size={14} />}
+                align="right"
+                options={historyCompletionFilterOptions.map((option) => ({
+                  ...option,
+                  count: historyCompletionCounts[option.value],
+                }))}
+                selected={historyCompletion}
+                onChange={changeHistoryCompletion}
+                emptyLabel="Tất cả"
+              />
+              <PersonFilterCombobox
+                label="Tác giả"
+                icon={<UserRound size={14} />}
+                align="right"
+                options={historyAuthorOptions}
+                selected={historyAuthors}
+                onChange={changeHistoryAuthors}
+              />
+              <PersonFilterCombobox
+                label="Người ĐK"
+                icon={<Users2 size={14} />}
+                align="right"
+                options={historySubmitterOptions}
+                selected={historySubmitters}
+                onChange={changeHistorySubmitters}
+              />
             </div>
           </div>
           {historyTeamSummary && (() => {
             const passed = reviewPassedCount(historyTeamSummary);
             const failed = reviewFailedCount(historyTeamSummary);
-            const missing = khmtMissingCount(historyTeamSummary);
+            const deferred = historyTeamSummary.deferred ?? 0;
+            const pending = historyTeamSummary.pending ?? 0;
+            const khmtConsidered = historyTeamSummary.khmt_considered ?? 0;
+            const unassignedApproved = khmtUnassignedApprovedCount(historyTeamSummary);
             const completed = historyTeamSummary.completed_count ?? historyTeamSummary.completed ?? 0;
             const notCompleted = historyTeamSummary.not_completed ?? 0;
             const totalForRate = historyTeamSummary.total ?? 0;
@@ -4576,11 +4278,11 @@ export function FIWorkspace({
                 >
                   <span>Tổng SK</span>
                   <strong>{formatCount(totalForRate)}</strong>
-                  <small>{formatCount(passed)} đã xét đồng ý · {formatCount(historyTeamSummary.pending ?? 0)} chưa duyệt</small>
+                  <small>{formatCount(passed)} đồng ý · {formatCount(pending)} chờ duyệt</small>
                 </button>
                 <button
                   type="button"
-                  className={`fi-history-stat tone-success is-quickfilter ${isOnlyHistoryDecision("approved") ? "is-active" : ""}`}
+                  className={`fi-history-stat tone-success is-quickfilter ${isOnlyHistoryDecision("approved") ? "is-active" : ""} ${passed === 0 && !isOnlyHistoryDecision("approved") ? "is-zero" : ""}`}
                   onClick={() => toggleHistoryDecision("approved")}
                   aria-pressed={isOnlyHistoryDecision("approved")}
                   title="Lọc các SK đã xét đồng ý"
@@ -4591,55 +4293,55 @@ export function FIWorkspace({
                 </button>
                 <button
                   type="button"
-                  className={`fi-history-stat tone-danger is-quickfilter ${isOnlyHistoryDecision("rejected") ? "is-active" : ""}`}
+                  className={`fi-history-stat tone-danger is-quickfilter ${isOnlyHistoryDecision("rejected") ? "is-active" : ""} ${failed === 0 && !isOnlyHistoryDecision("rejected") ? "is-zero" : ""}`}
                   onClick={() => toggleHistoryDecision("rejected")}
                   aria-pressed={isOnlyHistoryDecision("rejected")}
                   title="Lọc các SK đã xét không đồng ý"
                 >
-                  <span>Đã xét không đồng ý</span>
+                  <span>Không đồng ý</span>
                   <strong>{formatCount(failed)}</strong>
                 </button>
                 <button
                   type="button"
-                  className={`fi-history-stat tone-warning is-quickfilter ${isOnlyHistoryDecision("deferred") ? "is-active" : ""}`}
+                  className={`fi-history-stat tone-warning is-quickfilter ${isOnlyHistoryDecision("deferred") ? "is-active" : ""} ${deferred === 0 && !isOnlyHistoryDecision("deferred") ? "is-zero" : ""}`}
                   onClick={() => toggleHistoryDecision("deferred")}
                   aria-pressed={isOnlyHistoryDecision("deferred")}
                   title="Lọc các SK xem xét sau"
                 >
                   <span>Xem xét sau</span>
-                  <strong>{formatCount(historyTeamSummary.deferred ?? 0)}</strong>
+                  <strong>{formatCount(deferred)}</strong>
                 </button>
                 <button
                   type="button"
-                  className={`fi-history-stat tone-neutral is-quickfilter ${isOnlyHistoryDecision("pending") ? "is-active" : ""}`}
+                  className={`fi-history-stat tone-neutral is-quickfilter ${isOnlyHistoryDecision("pending") ? "is-active" : ""} ${pending === 0 && !isOnlyHistoryDecision("pending") ? "is-zero" : ""}`}
                   onClick={() => toggleHistoryDecision("pending")}
                   aria-pressed={isOnlyHistoryDecision("pending")}
                   title="Lọc các SK chưa duyệt"
                 >
                   <span>Chưa duyệt</span>
-                  <strong>{formatCount(historyTeamSummary.pending ?? 0)}</strong>
+                  <strong>{formatCount(pending)}</strong>
                 </button>
                 <button
                   type="button"
-                  className={`fi-history-stat tone-info is-quickfilter ${isOnlyHistoryKhmt("in") ? "is-active" : ""}`}
+                  className={`fi-history-stat tone-info is-quickfilter ${isOnlyHistoryKhmt("in") ? "is-active" : ""} ${khmtConsidered === 0 && !isOnlyHistoryKhmt("in") ? "is-zero" : ""}`}
                   onClick={() => toggleHistoryKhmt("in")}
                   aria-pressed={isOnlyHistoryKhmt("in")}
                   title="Lọc các SK đã vào KHMT"
                 >
                   <span>Đã vào KHMT</span>
-                  <strong>{formatCount(historyTeamSummary.khmt_considered ?? 0)}</strong>
-                  <small>{formatCount(missing)} chưa vào</small>
+                  <strong>{formatCount(khmtConsidered)}</strong>
+                  <small>{formatCount(unassignedApproved)} SK đạt chưa vào</small>
                 </button>
                 <button
                   type="button"
-                  className={`fi-history-stat tone-completion is-quickfilter ${isOnlyHistoryCompletion("done") ? "is-active" : ""}`}
+                  className={`fi-history-stat tone-completion is-quickfilter ${isOnlyHistoryCompletion("done") ? "is-active" : ""} ${completed === 0 && !isOnlyHistoryCompletion("done") ? "is-zero" : ""}`}
                   onClick={() => toggleHistoryCompletion("done")}
                   aria-pressed={isOnlyHistoryCompletion("done")}
                   title="Lọc các SK đã hoàn thành"
                 >
                   <span>Hoàn thành</span>
                   <strong>{formatCount(completed)}</strong>
-                  <small>/ {formatCount(notCompleted)} chưa xong</small>
+                  <small>{formatCount(notCompleted)} chưa xong</small>
                 </button>
               </div>
             );
@@ -4666,7 +4368,7 @@ export function FIWorkspace({
                   <span />
                   <div className="legacy-row-column-label-side">
                     <span className="tone-period">Thời gian ĐK</span>
-                    <span className="tone-decision">Kết luận LĐX</span>
+                    <span className="tone-decision">Kết luận xét duyệt</span>
                     <span className="tone-khmt">KHMT</span>
                     <span />
                   </div>
@@ -4674,7 +4376,7 @@ export function FIWorkspace({
               </div>
               {group.items.map((item) => {
                 const isOpen = selectedItem?.id === item.id;
-                const actions = visibleActionsForSk(role, currentUserId, item, editMode);
+                const actions = visibleActionsForSk(role, currentUserId, item, editMode, currentTeam);
                 const detail: any = isOpen ? (selectedItem ?? item) : item;
                 const detailImages = Array.isArray(detail.supporting_images) ? detail.supporting_images : [];
                 const isHistorical = Boolean(detail.is_historical_import);
@@ -4688,15 +4390,21 @@ export function FIWorkspace({
                       type="button"
                     >
                       <div className="legacy-row-head">
+                        {item.sk_code && <span className="legacy-row-code">{item.sk_code}</span>}
+                        {item.team && <span className="legacy-row-team">{displayTeam(item.team)}</span>}
                         <strong>{item.title}</strong>
                       </div>
                       <div className="legacy-row-subtitle">
-                        <span>Tác giả: {item.author_name}</span>
-                        <span>Người đăng ký: {displaySubmitter(item)}</span>
+                        <span>Tác giả: <strong>{item.author_name}</strong></span>
+                        {displaySubmitter(item) !== item.author_name && (
+                          <span>Đăng ký hộ: {displaySubmitter(item)}</span>
+                        )}
                       </div>
                       <div className="legacy-row-meta">
                         <CompletionPill item={item} compact />
-                        {isKhmtConsidered(item) && <small>{khmtLabel(item)}</small>}
+                        {isKhmtConsidered(item) && (
+                          <small className="legacy-row-meta-khmt-mobile">{khmtLabel(item)}</small>
+                        )}
                       </div>
                     </button>
                     <div className="legacy-row-side">
@@ -4790,7 +4498,7 @@ export function FIWorkspace({
                         )}
                         {detail.workshop_leader_conclusion && (
                           <section>
-                            <span>Kết luận LĐX</span>
+                            <span>Kết luận LĐX (dữ liệu cũ)</span>
                             <p>{detail.workshop_leader_conclusion}</p>
                           </section>
                         )}
@@ -4927,6 +4635,7 @@ export function FIWorkspace({
             setSelectedItem((current: any) => current?.id === updated.id ? { ...current, ...updated } : current);
             setNotice(`Đã cập nhật tiến độ: ${completionState(updated).label}${completionState(updated).dateText ? ` ${completionState(updated).dateText}` : ""}.`);
             reload();
+            setMatrixRefreshNonce((n) => n + 1);
           }}
         />
       )}

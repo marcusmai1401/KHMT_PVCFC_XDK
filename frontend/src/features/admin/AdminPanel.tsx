@@ -182,7 +182,11 @@ function latestByTime(rows: any[]) {
   })[0];
 }
 
-export function AdminPanel() {
+export function AdminPanel({
+  onOpenFiMatrix,
+}: {
+  onOpenFiMatrix?: (year: number) => void;
+} = {}) {
   const [activeTab, setActiveTab] = useState<AdminTab>("fi");
   const [fiRows, setFiRows] = useState<any[]>([]);
   const [dashboard, setDashboard] = useState<any>(null);
@@ -700,10 +704,17 @@ export function AdminPanel() {
                 ))}
               </select>
             </label>
-            <button className="admin-detail-button" disabled={khmtLoading} onClick={() => loadKhmtOverview()} type="button">
-              <RefreshCw size={15} className={khmtLoading ? "icon-spin" : undefined} />
-              Tải lại
-            </button>
+            {onOpenFiMatrix && (
+              <button
+                className="admin-detail-button"
+                onClick={() => onOpenFiMatrix(khmtYear)}
+                title={`Mở Ma trận KHMT năm ${khmtYear} trên FI Dashboard`}
+                type="button"
+              >
+                <Eye size={15} />
+                Xem Ma trận KHMT {khmtYear}
+              </button>
+            )}
           </div>
         </div>
 
@@ -747,11 +758,11 @@ export function AdminPanel() {
             <thead>
               <tr>
                 <th>Đội/tổ</th>
-                <th>Báo cáo tháng</th>
-                <th>Mức đánh giá Admin chọn</th>
+                <th>Báo cáo</th>
+                <th>Mức đánh giá</th>
                 <th>Định mức</th>
-                <th>FI khả dụng</th>
-                <th>Đang gán kỳ này</th>
+                <th>Khả dụng</th>
+                <th>Đang gán</th>
                 <th>Trạng thái</th>
                 <th>Thao tác</th>
               </tr>
@@ -1095,9 +1106,16 @@ export function AdminPanel() {
               Theo dõi dữ liệu vận hành: SK-CTKT và tài khoản đã sử dụng.
             </p>
           </div>
-          <button onClick={reload} disabled={loading} type="button">
-            <RefreshCw size={17} className={loading ? "icon-spin" : undefined} />
-            {loading ? "Đang tải..." : "Tải lại"}
+          <button
+            onClick={() => {
+              reload();
+              if (activeTab === "khmt-fi") loadKhmtOverview();
+            }}
+            disabled={loading || (activeTab === "khmt-fi" && khmtLoading)}
+            type="button"
+          >
+            <RefreshCw size={17} className={(loading || (activeTab === "khmt-fi" && khmtLoading)) ? "icon-spin" : undefined} />
+            {loading || (activeTab === "khmt-fi" && khmtLoading) ? "Đang tải..." : "Tải lại"}
           </button>
         </div>
 

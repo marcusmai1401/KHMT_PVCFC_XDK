@@ -71,6 +71,7 @@ const notificationLabels: Record<string, string> = {
   SK_DEFERRED: "FI xem xét sau",
   SK_CANCELLED: "FI đã hủy",
   SK_COMPLETED: "FI đã hoàn tất",
+  SK_EXECUTION_UPDATED: "FI đã cập nhật tình hình thực hiện",
   SK_STATUS_CHANGED: "FI đổi trạng thái",
   SK_CONTENT_EDITED: "Tác giả đã chỉnh sửa SK — cần xét duyệt lại",
   OKR_TEAM_SUBMITTED: "Đội/Tổ đã nộp OKR",

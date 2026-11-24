@@ -785,7 +785,7 @@ def test_fi_history_export_uses_history_filters(client, admin_headers):
         sheet = workbook["Du lieu FI"]
         assert sheet["A1"].value == "DANH SÁCH FI/SK-CTKT"
         assert sheet.freeze_panes == "A5"
-        assert sheet.auto_filter.ref.startswith("A4:P")
+        assert sheet.auto_filter.ref.startswith("A4:R")
         headers = [cell.value for cell in sheet[4]]
         assert headers[:6] == [
             "STT",

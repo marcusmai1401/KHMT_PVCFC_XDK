@@ -116,7 +116,12 @@ def ensure_sandbox_data() -> None:
         return
     if "sk_ctkt" in inspector.get_table_names():
         sk_columns = {column["name"] for column in inspector.get_columns("sk_ctkt")}
-        if "completed_at" not in sk_columns:
+        if not {"completed_at", "execution_status", "execution_note"}.issubset(sk_columns):
+            reset_sandbox_data()
+            return
+    if "sk_images" in inspector.get_table_names():
+        img_columns = {column["name"] for column in inspector.get_columns("sk_images")}
+        if "stage" not in img_columns:
             reset_sandbox_data()
             return
     with create_session(sandbox=True) as db:

@@ -200,6 +200,7 @@ export function FiDashboardView({
   loading,
   error,
   selectedYear,
+  role,
   currentTeam,
   activeSelection,
   exportingExcel,
@@ -215,6 +216,7 @@ export function FiDashboardView({
   loading: boolean;
   error: string;
   selectedYear: number;
+  role?: string;
   currentTeam?: string | null;
   activeSelection: MatrixDrawerSelection | null;
   exportingExcel: boolean;
@@ -227,7 +229,7 @@ export function FiDashboardView({
     team?: string;
     khmt?: "in" | "out";
     decision?: "approved" | "pending";
-    completion?: "done" | "pending";
+    completion?: "done" | "pending" | "auto_done" | "paused";
   }) => void;
   onJumpToReview?: () => void;
 }) {
@@ -263,12 +265,18 @@ export function FiDashboardView({
   const unassignedApproved = khmtUnassignedApprovedCount(activeTotals);
   const pendingCount = Number(activeTotals.pending ?? 0);
   const deferredCount = Number(activeTotals.deferred ?? 0);
-  const completedCount = Number(activeTotals.completed_count ?? activeTotals.completed ?? 0);
-  const notCompletedCount = Number(activeTotals.not_completed ?? Math.max(0, totalCount - completedCount));
+  const hasApprovedExecBreakdown = activeTotals.approved_completed_count !== undefined;
+  const completedCount = hasApprovedExecBreakdown
+    ? Number(activeTotals.approved_completed_count ?? 0)
+    : Number(activeTotals.completed_count ?? activeTotals.completed ?? 0);
+  const pausedApprovedCount = Number(activeTotals.approved_paused_count ?? 0);
+  const notCompletedCount = hasApprovedExecBreakdown
+    ? Number(activeTotals.approved_in_progress_count ?? 0) + pausedApprovedCount
+    : Number(activeTotals.not_completed ?? Math.max(0, totalCount - completedCount));
 
   const approvalRate = percent(approvedCount, totalCount);
   const khmtRate = percent(khmtCount, approvedCount);
-  const completionRate = percent(completedCount, totalCount);
+  const completionRate = percent(completedCount, hasApprovedExecBreakdown ? approvedCount : totalCount);
 
   const statusSlices = useMemo(() => buildStatusSlices(activeTotals), [activeTotals]);
   const teamProgress = useMemo(() => buildTeamProgress(activeTeams), [activeTeams]);
@@ -399,14 +407,26 @@ export function FiDashboardView({
         <button
           type="button"
           className="fi-dashboard-kpi success is-clickable"
-          onClick={() => onJumpToHistory({ completion: "done" })}
-          title="Xem các SK-CTKT đã hoàn thành trong Lịch sử FI"
+          onClick={() =>
+            onJumpToHistory({
+              decision: "approved",
+              completion: notCompletedCount > 0 ? "pending" : "done",
+            })
+          }
+          title={
+            notCompletedCount > 0
+              ? `Mở ${notCompletedCount} SK đã đồng ý đang triển khai trong Lịch sử FI`
+              : "Xem các SK-CTKT đã hoàn thành trong Lịch sử FI"
+          }
         >
           <div className="fi-dashboard-kpi-icon"><Flag size={20} /></div>
           <span>Tiến độ thực hiện</span>
-          <strong>{formatCount(completedCount)}</strong>
+          <strong>
+            {formatCount(completedCount)}/{formatCount(hasApprovedExecBreakdown ? approvedCount : totalCount)}
+          </strong>
           <small>
-            {completionRate}% đã hoàn thành · {formatCount(notCompletedCount)} đang thực hiện
+            {completionRate}% SK đồng ý · {formatCount(notCompletedCount)} đang triển khai
+            {pausedApprovedCount > 0 ? ` (${formatCount(pausedApprovedCount)} tạm dừng)` : ""}
           </small>
           <div className="fi-kpi-bar"><div className="fi-kpi-bar-fill success" style={{ width: `${completionRate}%` }} /></div>
         </button>
@@ -420,6 +440,7 @@ export function FiDashboardView({
           selectedYear={selectedYear}
           currentYear={currentYear}
           currentMonth={currentMonth}
+          role={role}
           currentTeam={currentTeam}
           activeSelection={activeSelection}
           onSelect={onSelectMatrix}
@@ -463,11 +484,18 @@ export function FiDashboardView({
               const teamPending = Number(team.pending ?? 0);
               const teamKhmt = Number(team.khmt_considered ?? 0);
               const teamKhmtMissing = khmtUnassignedApprovedCount(team);
-              const teamCompleted = Number(team.completed_count ?? team.completed ?? 0);
-              const teamNotCompleted = Number(team.not_completed ?? Math.max(0, teamTotal - teamCompleted));
+              const teamHasApprovedBreakdown = team.approved_completed_count !== undefined;
+              const teamCompleted = teamHasApprovedBreakdown
+                ? Number(team.approved_completed_count ?? 0)
+                : Number(team.completed_count ?? team.completed ?? 0);
+              const teamPaused = Number(team.approved_paused_count ?? 0);
+              const teamNotCompleted = teamHasApprovedBreakdown
+                ? Number(team.approved_in_progress_count ?? 0) + teamPaused
+                : Number(team.not_completed ?? Math.max(0, teamTotal - teamCompleted));
               const teamApprovalRate = percent(teamPassed, teamTotal);
               const teamKhmtRate = percent(teamKhmt, teamPassed);
-              const teamCompletionRate = percent(teamCompleted, teamTotal);
+              const teamCompletionDenom = teamHasApprovedBreakdown ? teamPassed : teamTotal;
+              const teamCompletionRate = percent(teamCompleted, teamCompletionDenom);
               return (
                 <article className="fi-team-detail-card" key={team.team}>
                   <header className="fi-team-detail-head">
@@ -521,7 +549,7 @@ export function FiDashboardView({
                         <div className="fi-team-rate-bar-fill" style={{ width: `${teamCompletionRate}%` }} />
                       </div>
                       <small>
-                        {formatCount(teamCompleted)}/{formatCount(teamTotal)}
+                        {formatCount(teamCompleted)}/{formatCount(teamCompletionDenom)} SK đạt
                         {teamNotCompleted > 0 && <> · còn <em>{formatCount(teamNotCompleted)}</em> chưa xong</>}
                       </small>
                     </div>

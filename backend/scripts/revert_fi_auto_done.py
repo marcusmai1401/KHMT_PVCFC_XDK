@@ -1,10 +1,12 @@
-"""Undo "Đã hoàn thành" that the completion schedule set on Draft/Rejected FI.
+"""Undo "Đã hoàn thành" that the completion schedule set on non-Approved FI records.
 
-Before the schedule learned to skip drafts and rejected SK, it ticked them done
-when their planned date arrived. This script restores the plan recorded in that
-``completion_auto_done`` history entry. It only touches an SK when the automatic
-tick is still its latest progress change and the plan has not been edited since,
-so anything an author or Admin set by hand is left alone.
+Before the schedule restricted auto-completion strictly to Approved (non-paused)
+records, it ticked Draft, Submitted, NeedMoreInfo, Reviewed, Deferred, Rejected,
+or Cancelled SKs done when their planned date arrived. This script restores the
+plan recorded in that ``completion_auto_done`` history entry. It only touches an
+SK when the automatic tick is still its latest progress change and the plan has
+not been edited since, so anything an author, Team Leader, FI Coordinator, or
+Admin set by hand is left alone.
 
 Dry run by default; pass --apply to write.
 """
@@ -39,7 +41,13 @@ from app.services.repositories import audit
 
 REVERT_REASON = "completion_auto_done_reverted"
 # Mọi lần đổi tiến độ đều ghi một trong các reason này vào status_history.
-PLAN_HISTORY_REASONS = {AUTO_DONE_REASON, AUTO_PLANNED_REASON, "completion_plan_update", REVERT_REASON}
+PLAN_HISTORY_REASONS = {
+    AUTO_DONE_REASON,
+    AUTO_PLANNED_REASON,
+    "completion_plan_update",
+    "execution_update",
+    REVERT_REASON,
+}
 
 
 @dataclass(frozen=True)
@@ -108,6 +116,7 @@ def revert_auto_done(db: Session, *, apply: bool) -> dict[str, Any]:
             restored_completed_at = _parse_datetime(candidate.restored_completed_at)
             record.completion_plan = candidate.restored_plan
             record.completed_at = restored_completed_at
+            record.execution_status = None
             record.revision += 1
             record.status_history = [
                 *record.status_history,

@@ -1110,15 +1110,16 @@ def test_completion_schedule_follows_planned_dates(db_session):
     db_session.add_all(
         [
             _plan_record("due", "Approved", "Dự kiến hoàn thành 15/09/2026"),
-            _plan_record("due-today", "Submitted", "Dự kiến hoàn thành 29/10/2026"),
-            _plan_record("upcoming", "Submitted", "Dự kiến hoàn thành 30/12/2026"),
+            _plan_record("due-today-approved", "Approved", "Dự kiến hoàn thành 29/10/2026"),
+            _plan_record("due-today-submitted", "Submitted", "Dự kiến hoàn thành 29/10/2026"),
+            _plan_record("upcoming", "Approved", "Dự kiến hoàn thành 30/12/2026"),
             _plan_record("month", "Approved", "Chưa thực hiện\nDự kiến  T08.2026"),
             _plan_record("this-month", "Approved", "Dự kiến T10/2026"),
             _plan_record("free-text", "Approved", "Thực hiện khi dừng máy"),
             _plan_record("cancelled", "Cancelled", "Dự kiến hoàn thành 15/09/2026"),
             _plan_record(
                 "future-done",
-                "Submitted",
+                "Approved",
                 "Đã hoàn thành 23/11/2026",
                 completed_at=datetime(2026, 11, 23, tzinfo=timezone.utc),
             ),
@@ -1132,6 +1133,7 @@ def test_completion_schedule_follows_planned_dates(db_session):
     )
     db_session.commit()
 
+    # Only Approved (not paused) records auto-complete when due; Submitted is skipped.
     assert apply_completion_schedule(db_session, today=today) == 4
 
     def get(record_id: str) -> SKCTKTModel:
@@ -1140,7 +1142,10 @@ def test_completion_schedule_follows_planned_dates(db_session):
     assert get("due").completion_plan == "Đã hoàn thành 15/09/2026"
     assert get("due").completed_at.date() == date(2026, 9, 15)
     assert get("due").status == "Approved"
-    assert get("due-today").completed_at.date() == today
+    assert get("due").execution_status == "auto_completed"
+    assert get("due-today-approved").completed_at.date() == today
+    assert get("due-today-approved").execution_status == "auto_completed"
+    assert get("due-today-submitted").completed_at is None
     # A month-only plan is due at the end of that month.
     assert get("month").completed_at.date() == date(2026, 8, 31)
     assert get("this-month").completed_at is None
@@ -1161,10 +1166,11 @@ def test_completion_schedule_follows_planned_dates(db_session):
 
     # Idempotent: nothing left to change on the same day.
     assert apply_completion_schedule(db_session, today=today) == 0
-    # The upcoming plan is ticked once its date arrives, as is the corrected one.
+    # The upcoming Approved plan is ticked once its date arrives, as is the corrected one.
     assert apply_completion_schedule(db_session, today=date(2026, 12, 30)) == 3
     assert get("upcoming").completed_at.date() == date(2026, 12, 30)
     assert get("future-done").completed_at.date() == date(2026, 11, 23)
+    assert get("due-today-submitted").completed_at is None
 
 
 def test_author_can_reset_auto_completed_plan_on_pending_sk(db_session):
@@ -1206,11 +1212,15 @@ def test_author_can_reset_auto_completed_plan_on_pending_sk(db_session):
 
 def test_completion_schedule_skips_drafts_and_rejected_sk(db_session):
     today = date(2026, 10, 29)
+    paused = _plan_record("paused", "Approved", "Dự kiến hoàn thành 15/09/2026")
+    paused.execution_status = "paused"
     db_session.add_all(
         [
             _plan_record("draft", "Draft", "Dự kiến hoàn thành 15/09/2026"),
+            _plan_record("submitted", "Submitted", "Dự kiến hoàn thành 15/09/2026"),
             _plan_record("rejected", "Rejected", "Dự kiến hoàn thành 15/09/2026"),
             _plan_record("deferred", "Deferred", "Dự kiến hoàn thành 15/09/2026"),
+            paused,
             _plan_record(
                 "rejected-future-done",
                 "Rejected",
@@ -1221,10 +1231,13 @@ def test_completion_schedule_skips_drafts_and_rejected_sk(db_session):
     )
     db_session.commit()
 
-    assert apply_completion_schedule(db_session, today=today) == 2
+    # Only future-done correction runs; all non-Approved and paused Approved records stay un-ticked.
+    assert apply_completion_schedule(db_session, today=today) == 1
     assert db_session.get(SKCTKTModel, "draft").completed_at is None
+    assert db_session.get(SKCTKTModel, "submitted").completed_at is None
     assert db_session.get(SKCTKTModel, "rejected").completed_at is None
-    assert db_session.get(SKCTKTModel, "deferred").completed_at.date() == date(2026, 9, 15)
+    assert db_session.get(SKCTKTModel, "deferred").completed_at is None
+    assert db_session.get(SKCTKTModel, "paused").completed_at is None
     # A done date in the future is still corrected, whatever the decision.
     assert db_session.get(SKCTKTModel, "rejected-future-done").completion_plan == "Dự kiến hoàn thành 23/11/2026"
 

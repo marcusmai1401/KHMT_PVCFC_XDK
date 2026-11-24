@@ -535,10 +535,26 @@ export const api = {
     total_pages: number;
     summary?: Record<string, number>;
     applied_filters?: Record<string, unknown>;
+    facets?: Record<string, any>;
     sort?: string;
     data_revision?: number;
   }>(`/fi/history${toQuery(filters)}`),
   getSk: (id: string) => request<any>(`/fi/sk-ctkt/${id}`),
+  updateSkExecution: (
+    id: string,
+    payload: {
+      execution_status: "in_progress" | "paused" | "completed";
+      completion_date?: string | null;
+      execution_note?: string | null;
+      expected_revision?: number | null;
+    },
+    options: { signal?: AbortSignal } = {},
+  ) =>
+    request<any>(`/fi/sk-ctkt/${id}/execution`, {
+      method: "PUT",
+      signal: options.signal,
+      body: JSON.stringify(payload),
+    }),
   updateSk: (id: string, payload: any) =>
     request<any>(`/fi/sk-ctkt/${id}`, {
       method: "PUT",
@@ -623,15 +639,25 @@ export const api = {
     body.append("file", file);
     return request<any>(`/fi/sk-ctkt/${skId}/images`, { method: "POST", body });
   },
-  uploadSkImageWithOptions: (skId: string, file: File, options: RevisionRequestOptions = {}) => {
+  uploadSkImageWithOptions: (
+    skId: string,
+    file: File,
+    options: RevisionRequestOptions & { stage?: "registration" | "completion" } = {},
+  ) => {
     const body = new FormData();
     body.append("file", file);
-    return request<any>(`/fi/sk-ctkt/${skId}/images${toQuery({ expected_revision: options.expectedRevision })}`, {
-      method: "POST",
-      signal: options.signal,
-      headers: options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : undefined,
-      body,
-    });
+    return request<any>(
+      `/fi/sk-ctkt/${skId}/images${toQuery({
+        expected_revision: options.expectedRevision,
+        stage: options.stage,
+      })}`,
+      {
+        method: "POST",
+        signal: options.signal,
+        headers: options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : undefined,
+        body,
+      },
+    );
   },
   getSkImageBlob: (skId: string, imageId: string) =>
     requestBlob(`/fi/sk-ctkt/${skId}/images/${imageId}/raw`),

@@ -17,7 +17,7 @@ from app.models.domain import (
     TeamReportModel,
 )
 from app.services.fi.auto_completion import factory_today
-from app.services.fi.completion import completion_plan_indicates_done
+from app.services.fi.execution import is_record_auto_done, is_record_completed, is_record_paused
 from app.services.fi.monthly_allocation import FIAllocationError, quota_for_assessment
 from app.services.fi.workflow import SKStatus
 from app.services.okr.rules import normalize_assessment
@@ -73,11 +73,7 @@ def registration_period_of(record: SKCTKTModel) -> tuple[int | None, int | None]
 
 
 def _is_done(record: SKCTKTModel) -> bool:
-    return bool(
-        record.status == SKStatus.COMPLETED.value
-        or record.completed_at is not None
-        or completion_plan_indicates_done(record.completion_plan)
-    )
+    return is_record_completed(record)
 
 
 def _is_in_khmt(record: SKCTKTModel) -> bool:
@@ -262,15 +258,31 @@ def _empty_year_summary() -> dict[str, int]:
         "khmt_unassigned_approved": 0,
         "completed_count": 0,
         "not_completed": 0,
+        "approved_completed_count": 0,
+        "approved_confirmed_completed_count": 0,
+        "approved_auto_done_count": 0,
+        "approved_in_progress_count": 0,
+        "approved_paused_count": 0,
     }
 
 
 def _accumulate_summary(bucket: dict[str, int], record: SKCTKTModel, *, year: int | None = None) -> None:
     status = record.status
     bucket["total"] += 1
+    done = _is_done(record)
     if status in ASSIGNABLE_STATUSES:
         bucket["approved"] += 1
         bucket["review_passed"] += 1
+        if is_record_paused(record):
+            bucket["approved_paused_count"] += 1
+        elif done:
+            bucket["approved_completed_count"] += 1
+            if is_record_auto_done(record):
+                bucket["approved_auto_done_count"] += 1
+            else:
+                bucket["approved_confirmed_completed_count"] += 1
+        else:
+            bucket["approved_in_progress_count"] += 1
     if status == SKStatus.REJECTED.value:
         bucket["rejected"] += 1
         bucket["review_failed"] += 1
@@ -280,7 +292,7 @@ def _accumulate_summary(bucket: dict[str, int], record: SKCTKTModel, *, year: in
         bucket["pending"] += 1
     if status == SKStatus.CANCELLED.value:
         bucket["cancelled"] += 1
-    if _is_done(record):
+    if done:
         bucket["completed_count"] += 1
     else:
         bucket["not_completed"] += 1

@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
-from sqlalchemy import case, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -20,6 +20,17 @@ from app.services.fi.completion import (
     completion_date_to_datetime,
     completion_plan_completed_at,
     completion_plan_indicates_done,
+)
+from app.services.fi.execution import (
+    EXECUTION_EDITABLE_STATUSES,
+    EXECUTION_STATUS_COMPLETED,
+    EXECUTION_STATUS_IN_PROGRESS,
+    IMAGE_STAGE_COMPLETION,
+    can_update_execution,
+    is_record_auto_done,
+    is_record_completed,
+    is_record_paused,
+    lock_record_for_execution_update,
 )
 from app.services.fi.workflow import FIAction, SKStatus, is_public_status, next_status
 from app.services.fi.period_guard import (
@@ -91,12 +102,12 @@ def _assert_completion_not_in_future(payload: dict[str, Any]) -> None:
 
 
 def _normalize_completion_payload(payload: dict[str, Any]) -> None:
-    # Cùng quy ước với apply_completion_schedule: ngày dự kiến đã tới thì coi
-    # như đã hoàn thành.
+    # Nếu người dùng nhập ngày dự kiến đã qua hẳn (trước hôm nay), quy đổi thành
+    # đã hoàn thành; ngày hôm nay vẫn giữ làm dự kiến để không ép hoàn thành ngay lúc đăng ký.
     planned_on = payload.get("completion_date")
     if isinstance(planned_on, datetime):
         planned_on = planned_on.date()
-    if payload.get("completion_done") is False and isinstance(planned_on, date) and planned_on <= _factory_today():
+    if payload.get("completion_done") is False and isinstance(planned_on, date) and planned_on < _factory_today():
         payload["completion_done"] = True
         payload["completion_plan"] = format_plan(True, planned_on)
 
@@ -415,19 +426,35 @@ def update_sk_ctkt(
     payload: dict[str, Any],
     actor: str,
     role: str,
+    *,
+    principal_team: str | None = None,
 ) -> SKCTKTModel:
     expected_revision = payload.pop("expected_revision", None)
-    record, _team_guard = _lock_record_context(db, record_id)
-    _assert_revision(record, expected_revision)
     requested_fields = set(payload)
+    plan_update = bool(requested_fields) and requested_fields <= COMPLETION_PLAN_FIELDS
+    preliminary = db.get(SKCTKTModel, record_id)
+    if preliminary is None:
+        raise KeyError("SK-CTKT not found")
+    if plan_update and preliminary.status in EXECUTION_EDITABLE_STATUSES:
+        record = lock_record_for_execution_update(db, record_id)
+        if record.status not in EXECUTION_EDITABLE_STATUSES:
+            record, _team_guard = _lock_record_context(db, record_id)
+    else:
+        record, _team_guard = _lock_record_context(db, record_id)
+    _assert_revision(record, expected_revision)
     shared_content_edit = bool(requested_fields) and requested_fields <= SHARED_CONTENT_EDIT_FIELDS
-    plan_only_edit = record.status in PLAN_ONLY_EDITABLE_STATUSES
-    # Admin may record progress on an approved FI (plan fields only), e.g. when
-    # the author reports completion in person; content stays author-only.
-    admin_plan_update = plan_only_edit and role == Role.ADMIN.value and requested_fields <= COMPLETION_PLAN_FIELDS
-    if not is_author_or_submitter(record, actor, db) and not admin_plan_update:
+    plan_only_edit = record.status in EXECUTION_EDITABLE_STATUSES
+    if plan_only_edit and plan_update:
+        allowed, blocked_reason = can_update_execution(
+            record,
+            {"user_id": actor, "role": role, "team": principal_team},
+            db,
+        )
+        if not allowed:
+            raise PermissionError(blocked_reason or "Chỉ tác giả hoặc người gửi hộ mới được chỉnh sửa")
+    elif not is_author_or_submitter(record, actor, db):
         raise PermissionError("Chỉ tác giả hoặc người gửi hộ mới được chỉnh sửa")
-    if record.status in {SKStatus.CANCELLED.value, SKStatus.COMPLETED.value}:
+    if record.status == SKStatus.CANCELLED.value:
         raise PermissionError("SK đã hoàn tất hoặc đã hủy, không chỉnh sửa được nội dung")
     if plan_only_edit:
         if not requested_fields or not requested_fields <= COMPLETION_PLAN_FIELDS:
@@ -438,8 +465,6 @@ def update_sk_ctkt(
         raise PermissionError("Tác giả chỉ được cập nhật tiêu đề, nội dung đăng ký và kế hoạch thực hiện")
     _assert_completion_not_in_future(payload)
     _normalize_completion_payload(payload)
-    # Chỉ đổi tiến độ (ở mọi trạng thái được sửa): ghi lịch sử, không cần xét duyệt lại.
-    plan_update = requested_fields <= COMPLETION_PLAN_FIELDS
     before = model_to_dict(record)
     if "team" in payload and payload["team"] != record.team:
         raise PermissionError("Tài khoản không được đổi đội/tổ của SK")
@@ -449,13 +474,19 @@ def update_sk_ctkt(
     for field in ["title", "content_description", "completion_plan"]:
         if field in payload:
             setattr(record, field, payload[field])
+    now = _utc_now()
     if {"completion_plan", "completion_done", "completion_date"} & requested_fields:
         record.completed_at = _completed_at_from_payload(
             payload,
-            fallback=record.created_at or _utc_now(),
+            fallback=record.created_at or now,
             existing=record.completed_at,
         )
-    now = _utc_now()
+        if record.status in EXECUTION_EDITABLE_STATUSES:
+            record.execution_status = (
+                EXECUTION_STATUS_COMPLETED if record.completed_at is not None else EXECUTION_STATUS_IN_PROGRESS
+            )
+            record.execution_updated_at = now
+            record.execution_updated_by = actor
     record.updated_at = now
     record.revision += 1
     # Sửa nội dung SK đang Cần bổ sung / Xem xét sau / Không đồng ý là nộp lại:
@@ -607,8 +638,12 @@ def transition_sk_ctkt(
         record.approved_at = now
     elif record.status == SKStatus.COMPLETED.value:
         record.completed_at = now
-    if before == SKStatus.APPROVED.value and record.status not in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}:
+        record.execution_status = EXECUTION_STATUS_COMPLETED
+        record.execution_updated_at = now
+        record.execution_updated_by = actor
+    if before in EXECUTION_EDITABLE_STATUSES and record.status not in EXECUTION_EDITABLE_STATUSES:
         record.approved_at = None
+        record.execution_status = None
     history = {
         "from_status": before,
         "to_status": record.status,
@@ -808,7 +843,7 @@ PENDING_STATUSES = {
 FI_REPORTABLE_STATUSES = {status for status in FI_DASHBOARD_STATUSES if status != SKStatus.DRAFT.value}
 FI_EXPORT_DECISIONS = {"approved", "rejected", "deferred", "pending"}
 FI_EXPORT_KHMT_FILTERS = {"in", "out"}
-FI_EXPORT_COMPLETION_FILTERS = {"done", "pending"}
+FI_EXPORT_COMPLETION_FILTERS = {"done", "pending", "auto_done", "paused"}
 FI_STATUS_LABELS = {
     SKStatus.DRAFT.value: "Bản nháp",
     SKStatus.SUBMITTED.value: "Chờ xét duyệt",
@@ -827,7 +862,12 @@ FI_DECISION_LABELS = {
     "pending": "Chưa duyệt",
 }
 FI_KHMT_LABELS = {"in": "Đã vào KHMT", "out": "Chưa vào KHMT"}
-FI_COMPLETION_LABELS = {"done": "Đã hoàn thành", "pending": "Chưa hoàn thành"}
+FI_COMPLETION_LABELS = {
+    "done": "Đã hoàn thành",
+    "pending": "Chưa hoàn thành",
+    "auto_done": "Tự ghi nhận · cần xác nhận",
+    "paused": "Tạm dừng",
+}
 FI_EXPORT_DATA_HEADERS = [
     "STT",
     "Mã SK",
@@ -840,8 +880,10 @@ FI_EXPORT_DATA_HEADERS = [
     "Kết luận xét duyệt",
     "KHMT",
     "Tháng KHMT",
-    "Hoàn thành",
+    "Tình hình thực hiện",
     "Kế hoạch hoàn thành",
+    "Ghi chú thực hiện",
+    "Ảnh hoàn thành",
     "Nội dung",
     "Nhận xét FI/BM01",
     "Ghi chú quyết định",
@@ -883,6 +925,11 @@ def _empty_fi_dashboard_bucket(team: str | None = None) -> dict[str, Any]:
         "khmt_not_considered": 0,
         "completed_count": 0,
         "not_completed": 0,
+        "approved_completed_count": 0,
+        "approved_confirmed_completed_count": 0,
+        "approved_auto_done_count": 0,
+        "approved_in_progress_count": 0,
+        "approved_paused_count": 0,
         "historical": 0,
         "current": 0,
         "status_counts": {status: 0 for status in FI_DASHBOARD_STATUSES},
@@ -897,21 +944,28 @@ def _is_khmt_considered(record: SKCTKTModel) -> bool:
 
 
 def _is_completion_done(record: SKCTKTModel) -> bool:
-    return bool(
-        record.status == SKStatus.COMPLETED.value
-        or record.completed_at is not None
-        or completion_plan_indicates_done(record.completion_plan)
-    )
+    return is_record_completed(record)
 
 
 def _add_record_to_bucket(bucket: dict[str, Any], record: SKCTKTModel) -> None:
     status = record.status
     bucket["total"] += 1
     bucket["status_counts"][status] = bucket["status_counts"].get(status, 0) + 1
-    if status in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}:
+    is_done = _is_completion_done(record)
+    if status in EXECUTION_EDITABLE_STATUSES:
         bucket["approved"] += 1
         bucket["review_passed"] += 1
-    if _is_completion_done(record):
+        if is_record_paused(record):
+            bucket["approved_paused_count"] += 1
+        elif is_done:
+            bucket["approved_completed_count"] += 1
+            if is_record_auto_done(record):
+                bucket["approved_auto_done_count"] += 1
+            else:
+                bucket["approved_confirmed_completed_count"] += 1
+        else:
+            bucket["approved_in_progress_count"] += 1
+    if is_done:
         bucket["completed"] += 1
         bucket["completed_count"] += 1
     else:
@@ -1045,7 +1099,8 @@ def export_fi_reports_to_excel(
     ).scalars().all()
     matrix_payload = build_fi_dashboard_matrix_payload(db, matrix_records, year=resolved_matrix_year)
     _write_fi_export_summary(summary_sheet, records, filters, generated_at, matrix_payload["khmt_matrix"])
-    _write_fi_export_rows(data_sheet, records, generated_at)
+    completion_image_counts = _completion_image_counts(db, [record.id for record in records])
+    _write_fi_export_rows(data_sheet, records, generated_at, completion_image_counts)
     _style_fi_export_workbook(workbook)
 
     export_dir = settings.storage_dir / "exports"
@@ -1134,7 +1189,7 @@ def _fi_export_record_matches(record: SKCTKTModel, filters: dict[str, set[Any]],
                 return False
         elif "out" not in khmt:
             return False
-    if completion and _fi_completion_filter(record) not in completion:
+    if completion and not _fi_completion_matches(record, completion):
         return False
     author_id = effective_author_user_id(record, db) or record.author_user_id
     if authors and not _fi_person_filter_matches(author_id, record.author_name, record.team, authors):
@@ -1250,11 +1305,48 @@ def _fi_khmt_filter(record: SKCTKTModel) -> str:
 
 
 def _fi_completion_filter(record: SKCTKTModel) -> str:
-    if record.status == SKStatus.COMPLETED.value:
-        return "done"
-    if record.completed_at is not None:
-        return "done"
-    return "done" if completion_plan_indicates_done(record.completion_plan) else "pending"
+    return "done" if is_record_completed(record) else "pending"
+
+
+def _fi_completion_matches(record: SKCTKTModel, selected: set[str]) -> bool:
+    if not selected:
+        return True
+    done = is_record_completed(record)
+    if "done" in selected and done:
+        return True
+    if "pending" in selected and not done:
+        return True
+    if "auto_done" in selected and is_record_auto_done(record):
+        return True
+    if "paused" in selected and record.status in EXECUTION_EDITABLE_STATUSES and is_record_paused(record):
+        return True
+    return False
+
+
+def _fi_export_execution_label(record: SKCTKTModel) -> str:
+    if record.status not in EXECUTION_EDITABLE_STATUSES:
+        return "Đã hoàn thành" if is_record_completed(record) else "Chưa áp dụng"
+    if is_record_paused(record):
+        return "Tạm dừng"
+    if is_record_auto_done(record):
+        return "Đã hoàn thành (tự ghi nhận)"
+    if is_record_completed(record):
+        return "Đã hoàn thành"
+    return "Đang thực hiện"
+
+
+def _completion_image_counts(db: Session, record_ids: list[str]) -> dict[str, int]:
+    if not record_ids:
+        return {}
+    rows = db.execute(
+        select(SKImageModel.sk_ctkt_id, func.count(SKImageModel.id))
+        .where(
+            SKImageModel.sk_ctkt_id.in_(record_ids),
+            SKImageModel.stage == IMAGE_STAGE_COMPLETION,
+        )
+        .group_by(SKImageModel.sk_ctkt_id)
+    ).all()
+    return {str(sk_id): int(count) for sk_id, count in rows}
 
 
 def _fi_registration_label(record: SKCTKTModel) -> str:
@@ -1572,7 +1664,13 @@ def _write_counter_table(sheet, start_row: int, start_col: int, title: str, labe
     return row_index - 1
 
 
-def _write_fi_export_rows(sheet, records: list[SKCTKTModel], generated_at: datetime) -> None:
+def _write_fi_export_rows(
+    sheet,
+    records: list[SKCTKTModel],
+    generated_at: datetime,
+    completion_image_counts: dict[str, int] | None = None,
+) -> None:
+    counts_by_id = completion_image_counts or {}
     sheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(FI_EXPORT_DATA_HEADERS))
     sheet["A1"] = "DANH SÁCH FI/SK-CTKT"
     sheet.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(FI_EXPORT_DATA_HEADERS))
@@ -1594,8 +1692,10 @@ def _write_fi_export_rows(sheet, records: list[SKCTKTModel], generated_at: datet
             FI_DECISION_LABELS[_fi_decision_filter(record)],
             _fi_khmt_label(record),
             f"T{record.khmt_month}/{record.khmt_year}" if record.khmt_month and record.khmt_year else "",
-            FI_COMPLETION_LABELS[_fi_completion_filter(record)],
+            _fi_export_execution_label(record),
             record.completion_plan,
+            record.execution_note or "",
+            counts_by_id.get(record.id, 0),
             record.content_description,
             _fi_review_note(record),
             record.decision_note or "",
@@ -1725,7 +1825,7 @@ def _style_fi_data_sheet(sheet) -> None:
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     sheet.row_dimensions[FI_EXPORT_DATA_HEADER_ROW].height = 36
 
-    centered_cols = {1, 6, 7, 8, 9, 10, 11, 12}
+    centered_cols = {1, 6, 7, 8, 9, 10, 11, 12, 15}
     tone_cols = (8, 9, 10, 12)
     for row_index in range(FI_EXPORT_DATA_HEADER_ROW + 1, sheet.max_row + 1):
         striped = row_index % 2 == 0
@@ -1754,11 +1854,13 @@ def _style_fi_data_sheet(sheet) -> None:
         10,   # Đội/tổ
         12,   # Tháng đăng ký
         15,   # Trạng thái
-        14,   # Kết luận LĐX
+        14,   # Kết luận xét duyệt
         16,   # KHMT
         12,   # Tháng KHMT
-        15,   # Hoàn thành
+        22,   # Tình hình thực hiện
         24,   # Kế hoạch hoàn thành
+        30,   # Ghi chú thực hiện
+        14,   # Ảnh hoàn thành
         50,   # Nội dung
         34,   # Nhận xét FI/BM01
         30,   # Ghi chú quyết định
@@ -1790,13 +1892,15 @@ def _fi_export_tone(value: str) -> tuple[str, str] | None:
         "Đã hoàn thành",
     } or value.startswith("KHMT "):
         return "DCFCE7", "166534"
+    if value == "Đã hoàn thành (tự ghi nhận)":
+        return "ECFDF5", "047857"
     if value in {"Không đồng ý", "Từ chối", "Đã hủy"}:
         return "FEE2E2", "991B1B"
-    if value in {"Xem xét sau", "Cần bổ sung", "Chưa hoàn thành"}:
+    if value in {"Xem xét sau", "Cần bổ sung", "Chưa hoàn thành", "Tạm dừng"}:
         return "FEF3C7", "92400E"
-    if value in {"Chờ xét duyệt", "Đã xem xét", "Chưa duyệt"}:
+    if value in {"Chờ xét duyệt", "Đã xem xét", "Chưa duyệt", "Đang thực hiện"}:
         return "DBEAFE", "1E3A8A"
-    if value == "Chưa vào KHMT":
+    if value in {"Chưa vào KHMT", "Chưa áp dụng"}:
         return "F1F5F9", "475569"
     return None
 

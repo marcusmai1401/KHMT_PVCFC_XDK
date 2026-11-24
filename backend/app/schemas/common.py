@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -51,6 +51,13 @@ class SKUpdate(BaseModel):
     completion_plan: str | None = None
     completion_done: bool | None = None
     completion_date: date | None = None
+    expected_revision: int | None = Field(default=None, ge=0)
+
+
+class SKExecutionUpdate(BaseModel):
+    execution_status: Literal["in_progress", "paused", "completed"]
+    completion_date: date | None = None
+    execution_note: str | None = Field(default=None, max_length=1000)
     expected_revision: int | None = Field(default=None, ge=0)
 
 

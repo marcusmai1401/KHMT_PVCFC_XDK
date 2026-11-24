@@ -197,6 +197,10 @@ class SKCTKTModel(Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    execution_status: Mapped[str | None] = mapped_column(String(32), index=True)
+    execution_note: Mapped[str | None] = mapped_column(Text)
+    execution_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    execution_updated_by: Mapped[str | None] = mapped_column(String)
 
 
 class FIMonthlyAllocationModel(Base):
@@ -270,6 +274,12 @@ class SKImageModel(Base):
     file_path: Mapped[str] = mapped_column(Text, nullable=False)
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)
     content_type: Mapped[str | None] = mapped_column(String)
+    stage: Mapped[str] = mapped_column(
+        String(32),
+        default="registration",
+        server_default="registration",
+        nullable=False,
+    )
     uploaded_by: Mapped[str] = mapped_column(String, nullable=False)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

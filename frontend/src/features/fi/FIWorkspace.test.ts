@@ -21,6 +21,19 @@ describe("FI ownership lists", () => {
     expect(ownershipBucketForItem({ status: "Submitted" })).toBe("pending");
     expect(ownershipBucketForItem({ status: "NeedMoreInfo" })).toBe("pending");
     expect(ownershipBucketForItem({ status: "Approved" })).toBe("implementation");
+    expect(
+      ownershipBucketForItem({
+        status: "Approved",
+        execution_status: "completed",
+        completed_at: "2026-07-04T00:00:00Z",
+      }),
+    ).toBe("history");
+    expect(
+      ownershipBucketForItem({
+        status: "Approved",
+        execution_status: "paused",
+      }),
+    ).toBe("implementation");
     expect(ownershipBucketForItem({ status: "Rejected" })).toBe("history");
     expect(ownershipBucketForItem({ status: "Deferred" })).toBe("history");
     expect(ownershipBucketForItem({ status: "Completed" })).toBe("history");
@@ -166,17 +179,23 @@ describe("FI action visibility", () => {
       .toMatchObject({ tone: "done", date: "2026-10-20", dateText: "20/10/2026", note: null, auto: false });
     expect(completionState({ completion_plan: "Dự kiến hoàn thành 30/10/2026" }, today))
       .toMatchObject({ tone: "planned", date: "2026-10-30" });
-    // Reaching the planned date counts as done (the backend schedule records it).
-    expect(completionState({ completion_plan: "Dự kiến hoàn thành 15/10/2026" }, today))
+    // Reaching the planned date counts as done ONLY for Approved (not paused) records.
+    expect(completionState({ status: "Approved", completion_plan: "Dự kiến hoàn thành 15/10/2026" }, today))
       .toMatchObject({ tone: "done", label: "Đã hoàn thành", dateText: "15/10/2026", auto: true });
-    expect(completionState({ completion_plan: "Dự kiến hoàn thành 23/10/2026" }, today))
+    expect(completionState({ status: "Approved", completion_plan: "Dự kiến hoàn thành 23/10/2026" }, today))
       .toMatchObject({ tone: "done", auto: true });
-    expect(completionState({ completion_plan: "Dự kiến T8/2026" }, today))
+    expect(completionState({ status: "Approved", completion_plan: "Dự kiến T8/2026" }, today))
       .toMatchObject({ tone: "done", date: "2026-08-31", dateText: "31/08/2026" });
+    expect(completionState({ status: "Approved", execution_status: "paused", completion_plan: "Dự kiến hoàn thành 15/10/2026" }, today))
+      .toMatchObject({ tone: "paused", label: "Tạm dừng", auto: false });
     expect(completionState({ status: "Cancelled", completion_plan: "Dự kiến hoàn thành 15/10/2026" }, today))
       .toMatchObject({ tone: "planned" });
-    // Drafts and rejected SK are not being implemented, so a reached date is not done.
+    // Unapproved records (Draft, Submitted, Deferred, Rejected) never auto-complete on due date.
     expect(completionState({ status: "Draft", completion_plan: "Dự kiến hoàn thành 15/10/2026" }, today))
+      .toMatchObject({ tone: "planned" });
+    expect(completionState({ status: "Submitted", completion_plan: "Dự kiến hoàn thành 15/10/2026" }, today))
+      .toMatchObject({ tone: "planned" });
+    expect(completionState({ status: "Deferred", completion_plan: "Dự kiến hoàn thành 15/10/2026" }, today))
       .toMatchObject({ tone: "planned" });
     expect(completionState({ status: "Rejected", completion_plan: "Dự kiến hoàn thành 15/10/2026" }, today))
       .toMatchObject({ tone: "planned" });
@@ -202,13 +221,13 @@ describe("FI action visibility", () => {
     expect(completionState({ completion_plan: "" }, today)).toMatchObject({ tone: "unknown", label: "Chưa ghi kế hoạch" });
   });
 
-  it("lets owners update only the completion plan after the decision is Approved", () => {
+  it("lets owners update execution progress after the decision is Approved or Completed", () => {
     const approved = { status: "Approved", author_user_id: "u1" };
 
     expect(visibleActionsForSk("Staff", "u1", approved)).toEqual(["updatePlan"]);
     expect(isPlanOnlyEdit(approved)).toBe(true);
     expect(visibleActionsForSk("Staff", "u2", approved)).toEqual([]);
-    expect(visibleActionsForSk("Staff", "u1", { ...approved, status: "Completed" })).toEqual([]);
+    expect(visibleActionsForSk("Staff", "u1", { ...approved, status: "Completed" })).toEqual(["updatePlan"]);
     expect(isPlanOnlyEdit({ ...approved, status: "Deferred" })).toBe(false);
   });
 
@@ -247,7 +266,7 @@ describe("FI action visibility", () => {
       "delete",
     ]);
     expect(visibleActionsForSk("Team_Account", "TBCH", approved)).toEqual(["updatePlan", "assignKhmt"]);
-    expect(visibleActionsForSk("Team_Account", "haint", { status: "Approved", author_user_id: "tungtp", team: "TBĐL" }, false, "TBĐL")).toEqual(["assignKhmt"]);
+    expect(visibleActionsForSk("Team_Account", "haint", { status: "Approved", author_user_id: "tungtp", team: "TBĐL" }, false, "TBĐL")).toEqual(["updatePlan", "assignKhmt"]);
     expect(visibleActionsForSk("Team_Account", "TBĐL", approved)).toEqual([]);
     expect(visibleActionsForSk("Workshop_Leader", "leader", approved)).toEqual([]);
   });
@@ -277,8 +296,8 @@ describe("FI action visibility", () => {
     expect(hasKhmtPendingChange("", "")).toBe(false);
   });
 
-  it("does not allow FI_Coordinator to delete approved items", () => {
-    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Approved" })).toEqual(["reviewDecision"]);
+  it("allows FI_Coordinator to update execution progress on approved items but not delete them", () => {
+    expect(visibleActionsForSk("FI_Coordinator", "coord", { status: "Approved" })).toEqual(["updatePlan", "reviewDecision"]);
   });
 });
 

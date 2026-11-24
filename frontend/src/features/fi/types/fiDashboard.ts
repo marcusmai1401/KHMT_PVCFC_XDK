@@ -3,6 +3,25 @@ export type KhmtQuotaStatus = "matched" | "shortage" | "excess" | "missing_fi" |
 export type MatrixViewMode = "khmt" | "registration";
 export type MatrixRangeMode = "full" | "ytd";
 
+export type FiExecutionStatusValue = "in_progress" | "paused" | "completed" | "not_applicable";
+export type FiExecutionRawStatus = "in_progress" | "paused" | "completed" | "auto_completed" | null;
+
+export type FiExecutionState = {
+  status: FiExecutionStatusValue;
+  raw_status: FiExecutionRawStatus;
+  is_auto_done: boolean;
+  applicable: boolean;
+  due_date: string | null;
+  completed_date: string | null;
+  note: string | null;
+  updated_at: string | null;
+  updated_by: string | null;
+  updated_by_name: string | null;
+  can_update?: boolean;
+  update_blocked_reason?: string | null;
+  can_upload_completion_image?: boolean;
+};
+
 export type KhmtMatrixCell = {
   month: number;
   count: number;
@@ -107,6 +126,11 @@ export type FiDashboardSummary = {
   completed_count: number;
   completed?: number;
   not_completed: number;
+  approved_completed_count?: number;
+  approved_confirmed_completed_count?: number;
+  approved_auto_done_count?: number;
+  approved_in_progress_count?: number;
+  approved_paused_count?: number;
 };
 
 export type FiDashboardPayload = {

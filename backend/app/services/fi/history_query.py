@@ -84,13 +84,50 @@ def expressions(db):
     month = case((valid_month, raw_month), else_=extract("month", FI.created_at))
     year = case((valid_month, func.coalesce(func.nullif(raw_year,0), extract("year", FI.created_at), FI.khmt_year, datetime.now(timezone.utc).year)), else_=func.coalesce(extract("year", FI.created_at), func.nullif(raw_year,0), datetime.now(timezone.utc).year))
     decision = case((FI.status.in_(["Approved","Completed"]), "approved"), (FI.status == "Rejected", "rejected"), (FI.status == "Deferred", "deferred"), else_="pending")
+    is_approved = FI.status.in_(["Approved", "Completed"])
     plan = normalized(FI.completion_plan)
     negative_pattern = "chua thuc hien|chua hoan thanh|du kien|co the thuc hien|se thuc hien"
     not_done = RegexMatches(plan, literal(negative_pattern))
     done_pattern = r"(^|[^a-z0-9_])(da (hoan thanh|thuc hien|trien khai|lap))([^a-z0-9_]|$)|^hoan thanh([^a-z0-9_]|$)"
     plan_done = RegexMatches(plan, literal(done_pattern))
-    done = case((FI.status == "Completed", True), (FI.completed_at.is_not(None), True), (plan_done, ~not_done), else_=False)
-    return dict(month=month, year=year, decision=decision, done=done, author_id=author_id, submitter_id=submitter_id, submitter_name=submitter_name), users
+    # Legacy rows keep execution_status NULL; compare a coalesced value so NOT(paused)
+    # stays TRUE for them instead of SQL NULL (which would drop them from counts).
+    execution_status = func.coalesce(FI.execution_status, "")
+    paused = and_(is_approved, execution_status == "paused")
+    auto_done = and_(
+        is_approved,
+        or_(
+            execution_status == "auto_completed",
+            and_(
+                FI.execution_status.is_(None),
+                FI.completed_at.is_not(None),
+                cast(FI.status_history, String).contains("completion_auto_done"),
+                ~cast(FI.status_history, String).contains("completion_plan_update"),
+                ~cast(FI.status_history, String).contains("execution_update"),
+            ),
+        ),
+    )
+    done = case(
+        (execution_status == "paused", False),
+        (execution_status == "in_progress", False),
+        (FI.status == "Completed", True),
+        (and_(is_approved, execution_status.in_(["completed", "auto_completed"])), True),
+        (FI.completed_at.is_not(None), True),
+        (plan_done, ~not_done),
+        else_=False,
+    )
+    return dict(
+        month=month,
+        year=year,
+        decision=decision,
+        is_approved=is_approved,
+        done=done,
+        paused=paused,
+        auto_done=auto_done,
+        author_id=author_id,
+        submitter_id=submitter_id,
+        submitter_name=submitter_name,
+    ), users
 
 def person_filter(keys, identity, name):
     clauses = []

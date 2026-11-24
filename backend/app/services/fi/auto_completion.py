@@ -27,9 +27,14 @@ AUTO_DONE_REASON = "completion_auto_done"
 AUTO_PLANNED_REASON = "completion_auto_planned"
 # Đã hủy hoặc đã kết thúc quy trình thì không còn kế hoạch để theo dõi.
 SKIPPED_STATUSES = {SKStatus.CANCELLED.value, SKStatus.COMPLETED.value}
-# Nháp chưa gửi và SK bị Không đồng ý không được triển khai, nên tới ngày dự
-# kiến cũng không tự coi là đã hoàn thành.
-NOT_AUTO_DONE_STATUSES = {SKStatus.DRAFT.value, SKStatus.REJECTED.value}
+# Chỉ SK đã được Đồng ý (và không tạm dừng) mới tự động ghi nhận hoàn thành khi tới ngày dự kiến.
+AUTO_DONE_ELIGIBLE_STATUSES = {SKStatus.APPROVED.value}
+# Giữ hằng số tương thích ngược cho script/test cũ: mọi trạng thái không thuộc Approved/Completed.
+NOT_AUTO_DONE_STATUSES = {
+    status.value
+    for status in SKStatus
+    if status not in {SKStatus.APPROVED, SKStatus.COMPLETED}
+}
 
 _FULL_DATE = re.compile(r"\b(0?[1-9]|[12]\d|3[01])\s*[./-]\s*(0?[1-9]|1[0-2])\s*[./-]\s*(20\d{2})\b")
 _MONTH = re.compile(r"(?:\bt|thang)?\s*(1[0-2]|0?[1-9])\s*[./-]\s*(20\d{2})\b")
@@ -68,20 +73,22 @@ def _local_date(value: datetime) -> date:
     return (aware.astimezone(timezone.utc) + timedelta(hours=7)).date()
 
 
-def _plan_transition(record: SKCTKTModel, today: date) -> tuple[str, str, datetime | None] | None:
+def _plan_transition(record: SKCTKTModel, today: date) -> tuple[str, str, datetime | None, str] | None:
     if record.status in SKIPPED_STATUSES:
         return None
     if record.completed_at is not None:
         completed_on = _local_date(record.completed_at)
         if completed_on > today:
-            return AUTO_PLANNED_REASON, format_plan(False, completed_on), None
+            return AUTO_PLANNED_REASON, format_plan(False, completed_on), None, "in_progress"
         return None
-    if record.status in NOT_AUTO_DONE_STATUSES or completion_plan_indicates_done(record.completion_plan):
+    if record.status not in AUTO_DONE_ELIGIBLE_STATUSES:
+        return None
+    if record.execution_status == "paused" or completion_plan_indicates_done(record.completion_plan):
         return None
     due = completion_plan_due_date(record.completion_plan)
     if due is None or due > today:
         return None
-    return AUTO_DONE_REASON, format_plan(True, due), completion_date_to_datetime(due)
+    return AUTO_DONE_REASON, format_plan(True, due), completion_date_to_datetime(due), "auto_completed"
 
 
 def apply_completion_schedule(db: Session, *, today: date | None = None) -> int:
@@ -101,12 +108,16 @@ def apply_completion_schedule(db: Session, *, today: date | None = None) -> int:
         if record is None or transition is None:
             db.rollback()
             continue
-        reason, plan, completed_at = transition
+        reason, plan, completed_at, next_exec_status = transition
         previous_plan = record.completion_plan
         previous_completed_at = record.completed_at
+        previous_exec_status = record.execution_status
         now = datetime.now(timezone.utc)
         record.completion_plan = plan
         record.completed_at = completed_at
+        record.execution_status = next_exec_status
+        record.execution_updated_at = now
+        record.execution_updated_by = SYSTEM_ACTOR
         record.revision += 1
         history: list[dict[str, Any]] = record.status_history if isinstance(record.status_history, list) else []
         record.status_history = [
@@ -118,6 +129,8 @@ def apply_completion_schedule(db: Session, *, today: date | None = None) -> int:
                 "changed_at": now.isoformat(),
                 "reason": reason,
                 "comments": {
+                    "previous_execution_status": previous_exec_status,
+                    "execution_status": next_exec_status,
                     "previous_completion_plan": previous_plan,
                     "completion_plan": plan,
                     "previous_completed_at": previous_completed_at.isoformat() if previous_completed_at else None,

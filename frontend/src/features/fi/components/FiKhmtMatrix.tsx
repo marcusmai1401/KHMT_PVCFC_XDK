@@ -29,6 +29,7 @@ export function FiKhmtMatrix({
   selectedYear,
   currentYear,
   currentMonth,
+  role,
   currentTeam,
   activeSelection,
   onSelect,
@@ -38,10 +39,12 @@ export function FiKhmtMatrix({
   selectedYear: number;
   currentYear: number;
   currentMonth: number;
+  role?: string;
   currentTeam?: string | null;
   activeSelection: MatrixDrawerSelection | null;
   onSelect: (selection: MatrixDrawerSelection) => void;
 }) {
+  const canEditKhmtMatrix = role === "Team_Account" || role === "Admin";
   const [mode, setMode] = useState<MatrixViewMode>("khmt");
   const [rangeMode, setRangeMode] = useState<MatrixRangeMode>("full");
   const [mobileLayout, setMobileLayout] = useState<"cards" | "table">("cards");
@@ -163,7 +166,9 @@ export function FiKhmtMatrix({
           </div>
           <p className="muted fi-matrix-subtitle">
             {mode === "khmt"
-              ? "Nhìn ngay số FI mỗi đội/tổ đang xét vào KHMT từ T1 đến T12. Bấm vào bất kỳ ô nào để xem danh sách SK và gán/bỏ trực tiếp."
+              ? canEditKhmtMatrix
+                ? "Nhìn ngay số FI mỗi đội/tổ đang xét vào KHMT từ T1 đến T12. Bấm vào bất kỳ ô nào để xem danh sách SK và gán/bỏ trực tiếp."
+                : "Nhìn ngay số FI mỗi đội/tổ đang xét vào KHMT từ T1 đến T12. Bấm vào bất kỳ ô nào để xem danh sách SK chi tiết."
               : "Theo dõi nhịp độ đăng ký sáng kiến mới của 4 đội/tổ theo từng tháng đăng ký. Bấm vào ô để xem chi tiết."}
           </p>
         </div>

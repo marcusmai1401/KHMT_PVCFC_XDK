@@ -40,8 +40,11 @@ def test_revert_restores_plan_only_where_the_auto_tick_is_untouched(db_session):
         [
             _auto_done_record("rejected", "Rejected"),
             _auto_done_record("draft", "Draft"),
-            # Still in review: the schedule keeps ticking these, so leave them.
+            # Non-approved records (Submitted, Deferred) are now also revert candidates.
             _auto_done_record("deferred", "Deferred"),
+            _auto_done_record("submitted", "Submitted"),
+            # Approved records are NOT reverted (allowlist keeps them).
+            _auto_done_record("approved", "Approved"),
             # The author confirmed progress afterwards.
             _auto_done_record("confirmed", "Rejected", later=[{"reason": "completion_plan_update", "comments": {}}]),
             # The plan was rewritten by a content edit after the tick.
@@ -54,12 +57,12 @@ def test_revert_restores_plan_only_where_the_auto_tick_is_untouched(db_session):
 
     dry_run = revert_auto_done(db_session, apply=False)
     assert dry_run["dry_run"] is True
-    assert {item["id"] for item in dry_run["candidates"]} == {"rejected", "draft", "rejected-later"}
+    assert {item["id"] for item in dry_run["candidates"]} == {"rejected", "draft", "deferred", "submitted", "rejected-later"}
     assert dry_run["reverted_ids"] == []
     assert db_session.get(SKCTKTModel, "rejected").completion_plan == "Đã hoàn thành 15/09/2026"
 
     applied = revert_auto_done(db_session, apply=True)
-    assert set(applied["reverted_ids"]) == {"rejected", "draft", "rejected-later"}
+    assert set(applied["reverted_ids"]) == {"rejected", "draft", "deferred", "submitted", "rejected-later"}
 
     rejected = db_session.get(SKCTKTModel, "rejected")
     assert rejected.completion_plan == "Dự kiến hoàn thành 15/09/2026"
@@ -67,7 +70,9 @@ def test_revert_restores_plan_only_where_the_auto_tick_is_untouched(db_session):
     assert rejected.revision == 3
     assert rejected.status == "Rejected"
     assert rejected.status_history[-1]["reason"] == "completion_auto_done_reverted"
-    assert db_session.get(SKCTKTModel, "deferred").completed_at is not None
+    assert db_session.get(SKCTKTModel, "deferred").completed_at is None
+    assert db_session.get(SKCTKTModel, "submitted").completed_at is None
+    assert db_session.get(SKCTKTModel, "approved").completed_at is not None
     assert db_session.get(SKCTKTModel, "confirmed").completed_at is not None
     assert db_session.get(SKCTKTModel, "edited").completion_plan == "Đã hoàn thành 01/09/2026"
 

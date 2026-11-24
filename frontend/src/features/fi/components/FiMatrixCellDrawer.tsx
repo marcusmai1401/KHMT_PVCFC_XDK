@@ -10,6 +10,7 @@ import {
   Info,
   Loader2,
   Lock,
+  PauseCircle,
   Plus,
   Search,
   Trash2,
@@ -22,6 +23,7 @@ import type {
   FiKhmtMatrixData,
   MatrixDrawerSelection,
 } from "../types/fiDashboard";
+import { canUpdateExecution, resolveExecutionView } from "../utils/fiExecution";
 import { displayTeamLabel, formatCount, krTierLabel } from "../utils/fiMetrics";
 import { FiKhmtMonthPicker } from "./FiKhmtMonthPicker";
 
@@ -41,11 +43,28 @@ function formatDateShort(value: string | null | undefined): string {
   return parsed.toLocaleDateString("vi-VN");
 }
 
-function isItemCompleted(item: any): boolean {
-  if (!item) return false;
-  if (item.completed_at || item.status === "Completed") return true;
-  const plan = String(item.completion_plan ?? "").trim();
-  return /^đã\s+hoàn\s+thành/i.test(plan);
+function renderDrawerExecutionPill(item: any) {
+  const view = resolveExecutionView(item);
+  if (view.tone === "done") {
+    return (
+      <span className={`fi-drawer-pill ${view.auto ? "tone-auto" : "tone-done"}`}>
+        <CheckCircle2 size={12} /> {view.auto ? "Tự ghi nhận" : "Đã hoàn thành"}
+        {view.dateText ? ` ${view.dateText}` : ""}
+      </span>
+    );
+  }
+  if (view.tone === "paused") {
+    return (
+      <span className="fi-drawer-pill tone-paused">
+        <PauseCircle size={12} /> Tạm dừng
+      </span>
+    );
+  }
+  return (
+    <span className="fi-drawer-pill tone-planned">
+      <Clock3 size={12} /> {view.dateText ? `Dự kiến ${view.dateText}` : "Đang thực hiện"}
+    </span>
+  );
 }
 
 function regPeriodText(item: any): string {
@@ -66,24 +85,30 @@ function regPeriodText(item: any): string {
 export function FiMatrixCellDrawer({
   selection,
   role,
+  currentUserId = "",
+  currentTeam = null,
   editMode,
   khmtMatrix,
   suspended = false,
   refreshNonce = 0,
   onClose,
   onOpenDetail,
+  onUpdateExecution,
   onOpenInHistory,
   onOpenReviewForTeam,
   onDataChanged,
 }: {
   selection: MatrixDrawerSelection | null;
   role: string;
+  currentUserId?: string;
+  currentTeam?: string | null;
   editMode: boolean;
   khmtMatrix?: FiKhmtMatrixData | null;
   suspended?: boolean;
   refreshNonce?: number;
   onClose: () => void;
   onOpenDetail: (item: any) => void;
+  onUpdateExecution?: (item: any) => void;
   onOpenInHistory: (filters: {
     team: string;
     khmt?: "in" | "out";
@@ -391,15 +416,7 @@ export function FiMatrixCellDrawer({
                         </button>
                         <div className="fi-drawer-item-sub">
                           <span>Tác giả: <strong>{item.author_name}</strong></span>
-                          {isItemCompleted(item) ? (
-                            <span className="fi-drawer-pill tone-done">
-                              <CheckCircle2 size={12} /> Đã hoàn thành
-                            </span>
-                          ) : (
-                            <span className="fi-drawer-pill tone-planned">
-                              <Clock3 size={12} /> Đang thực hiện
-                            </span>
-                          )}
+                          {renderDrawerExecutionPill(item)}
                         </div>
                         <div className="fi-drawer-item-actions">
                           <button
@@ -409,6 +426,16 @@ export function FiMatrixCellDrawer({
                           >
                             Xem chi tiết
                           </button>
+                          {onUpdateExecution && canUpdateExecution(role, currentUserId, currentTeam, item, editMode) && (
+                            <button
+                              type="button"
+                              className="fi-drawer-exec-btn"
+                              onClick={() => onUpdateExecution(item)}
+                            >
+                              <CheckCircle2 size={13} />
+                              Cập nhật tiến độ
+                            </button>
+                          )}
                           {selection.mode === "khmt" && effectiveCanEditCell && (
                             <>
                               <FiKhmtMonthPicker
@@ -587,6 +614,7 @@ export function FiMatrixCellDrawer({
                         </button>
                         <div className="fi-drawer-item-sub">
                           <span>Tác giả: <strong>{item.author_name}</strong></span>
+                          {selection.poolKind === "unassigned_approved" && renderDrawerExecutionPill(item)}
                         </div>
                         <div className="fi-drawer-item-actions">
                           <button
@@ -596,6 +624,18 @@ export function FiMatrixCellDrawer({
                           >
                             Xem chi tiết
                           </button>
+                          {selection.poolKind === "unassigned_approved" &&
+                            onUpdateExecution &&
+                            canUpdateExecution(role, currentUserId, currentTeam, item, editMode) && (
+                              <button
+                                type="button"
+                                className="fi-drawer-exec-btn"
+                                onClick={() => onUpdateExecution(item)}
+                              >
+                                <CheckCircle2 size={13} />
+                                Cập nhật tiến độ
+                              </button>
+                            )}
                           {selection.poolKind === "unassigned_approved" && effectiveCanEditPool && (
                             <FiKhmtMonthPicker
                               item={item}

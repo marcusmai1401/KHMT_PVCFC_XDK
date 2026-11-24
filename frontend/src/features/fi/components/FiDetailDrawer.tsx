@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import type { FiKhmtMatrixData } from "../types/fiDashboard";
+import { EXECUTION_EDITABLE_STATUSES, splitImagesByStage } from "../utils/fiExecution";
 import { displayTeamLabel } from "../utils/fiMetrics";
 import { FiKhmtMonthPicker } from "./FiKhmtMonthPicker";
 
@@ -92,6 +93,12 @@ export function FiDetailDrawer({
 
   if (!item) return null;
 
+  const isApprovedStage = EXECUTION_EDITABLE_STATUSES.includes(item.status);
+  const stagedImages = splitImagesByStage(images);
+  const indexById = new Map<string, number>();
+  images.forEach((img, idx) => indexById.set(String(img.id), idx));
+  const uploadLabel = isApprovedStage ? "Thêm ảnh hoàn thành" : "Thêm ảnh";
+
   return (
     <div
       className="fi-drawer-backdrop fi-detail-drawer-backdrop"
@@ -150,13 +157,13 @@ export function FiDetailDrawer({
           {canUploadImages && (
             <button
               className="fi-detail-action"
-              title="Tải ảnh bằng chứng"
+              title={isApprovedStage ? "Tải ảnh bằng chứng hoàn thành" : "Tải ảnh bằng chứng"}
               type="button"
               disabled={uploadingImages}
               onClick={onTriggerImageUpload}
             >
               <ImagePlus size={16} />
-              {uploadingImages ? "Đang tải..." : "Thêm ảnh"}
+              {uploadingImages ? "Đang tải..." : uploadLabel}
             </button>
           )}
           {actions.includes("delete") && (
@@ -243,7 +250,53 @@ export function FiDetailDrawer({
             {(images.length > 0 || canUploadImages) && (
               <div className="image-list">
                 <h3>Ảnh bằng chứng ({images.length})</h3>
-                {images.length === 0 ? (
+                {isApprovedStage ? (
+                  <div className="fi-evidence-stages">
+                    {stagedImages.registration.length > 0 && (
+                      <div className="fi-evidence-stage-group">
+                        <div className="fi-evidence-stage-head">
+                          <span className="fi-evidence-stage-title">
+                            Ảnh đăng ký <em>({stagedImages.registration.length})</em>
+                          </span>
+                        </div>
+                        <div className="image-card-grid">
+                          {stagedImages.registration.map((img) =>
+                            renderImageCard(img, indexById.get(String(img.id)) ?? 0),
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <div className="fi-evidence-stage-group is-completion">
+                      <div className="fi-evidence-stage-head">
+                        <span className="fi-evidence-stage-title">
+                          Ảnh hoàn thành <em>({stagedImages.completion.length})</em>
+                        </span>
+                        {canUploadImages && (
+                          <button
+                            type="button"
+                            className="fi-evidence-upload-btn"
+                            onClick={onTriggerImageUpload}
+                            disabled={uploadingImages}
+                          >
+                            <ImagePlus size={14} />
+                            {uploadingImages ? "Đang tải..." : "Thêm ảnh hoàn thành"}
+                          </button>
+                        )}
+                      </div>
+                      {stagedImages.completion.length > 0 ? (
+                        <div className="image-card-grid">
+                          {stagedImages.completion.map((img) =>
+                            renderImageCard(img, indexById.get(String(img.id)) ?? 0),
+                          )}
+                        </div>
+                      ) : (
+                        <div className="image-empty">
+                          <span>Chưa có ảnh bằng chứng hoàn thành.</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : images.length === 0 ? (
                   <div className="image-empty">
                     <span>Chưa có ảnh bằng chứng.</span>
                     {canUploadImages && (

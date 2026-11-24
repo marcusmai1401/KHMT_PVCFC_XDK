@@ -35,9 +35,22 @@ import { DraftRecoveryStore, downloadDraft } from "../../shared/editing/DraftRec
 import { useNavigationGuard } from "../../shared/editing/NavigationGuardProvider";
 import { FiDashboardView } from "./components/FiDashboardView";
 import { FiDetailDrawer } from "./components/FiDetailDrawer";
+import { FiCompletionPill, FiExecutionBand } from "./components/FiExecutionBand";
+import { FiExecutionUpdateModal, type ExecutionModalInitialStatus } from "./components/FiExecutionUpdateModal";
 import { FiKhmtMonthPicker } from "./components/FiKhmtMonthPicker";
 import { FiMatrixCellDrawer } from "./components/FiMatrixCellDrawer";
 import type { MatrixDrawerSelection } from "./types/fiDashboard";
+import {
+  EXECUTION_EDITABLE_STATUSES,
+  PLAN_HISTORY_REASONS as EXECUTION_PLAN_HISTORY_REASONS,
+  canDeleteSkImage,
+  canUpdateExecution,
+  canUploadCompletionImages,
+  executionBlockedHint,
+  isExecutionCompleted,
+  resolveExecutionView,
+  splitImagesByStage,
+} from "./utils/fiExecution";
 import {
   buildStatusSlices,
   khmtUnassignedApprovedCount,
@@ -137,7 +150,7 @@ type ReviewDecision = "approve" | "request-info" | "defer" | "reject";
 
 type HistoryDecisionFilter = "approved" | "rejected" | "deferred" | "pending";
 type HistoryKhmtFilter = "in" | "out";
-type HistoryCompletionFilter = "done" | "pending";
+type HistoryCompletionFilter = "done" | "pending" | "auto_done" | "paused";
 type EmployeeOption = { id: string; display_name: string; full_name: string; team: string | null; role: string };
 type PersonFilterOption = {
   key: string;
@@ -177,6 +190,8 @@ const historyKhmtFilterOptions: Array<{ value: HistoryKhmtFilter; label: string;
 const historyCompletionFilterOptions: Array<{ value: HistoryCompletionFilter; label: string; tone: string }> = [
   { value: "done", label: "Đã hoàn thành", tone: "success" },
   { value: "pending", label: "Chưa hoàn thành", tone: "warning" },
+  { value: "auto_done", label: "Tự ghi nhận · cần xác nhận", tone: "info" },
+  { value: "paused", label: "Tạm dừng", tone: "neutral" },
 ];
 
 function decisionFilterForItem(item: any): HistoryDecisionFilter {
@@ -269,10 +284,13 @@ function completionDateFor(done: boolean, current: string) {
   return current && current > today ? current : isoDateInput(addMonths(new Date(), 1));
 }
 
-function completionPlanError(done: boolean, date: string) {
-  if (done && date > todayIsoDate()) return "Ngày hoàn thành không được sau ngày hôm nay.";
-  if (!done && date <= todayIsoDate()) {
-    return "Ngày dự kiến phải sau hôm nay. Nếu sáng kiến đã xong, chọn “Đã hoàn thành”.";
+function completionPlanError(done: boolean, date: string, allowTodayPlanned = true) {
+  const today = todayIsoDate();
+  if (done && date > today) return "Ngày hoàn thành không được sau ngày hôm nay.";
+  if (!done && (allowTodayPlanned ? date < today : date <= today)) {
+    return allowTodayPlanned
+      ? "Ngày dự kiến không được trước ngày hôm nay. Nếu sáng kiến đã xong, chọn “Đã hoàn thành”."
+      : "Ngày dự kiến phải sau hôm nay. Nếu sáng kiến đã xong, chọn “Đã hoàn thành”.";
   }
   return "";
 }
@@ -301,7 +319,9 @@ function ownershipTimestamp(item: any) {
 
 export function ownershipBucketForItem(item: any): OwnershipBucket {
   if (OWNERSHIP_PENDING_STATUSES.has(item?.status)) return "pending";
-  if (item?.status === "Approved") return "implementation";
+  if (item?.status === "Approved") {
+    return isExecutionCompleted(item) ? "history" : "implementation";
+  }
   return "history";
 }
 
@@ -385,22 +405,9 @@ function formatDateForPlan(isoDate: string): string {
   return `${day}/${month}/${year}`;
 }
 
-type CompletionTone = "done" | "planned" | "unknown";
+type CompletionTone = "done" | "planned" | "paused" | "unknown";
 
-const PLAN_HISTORY_REASONS = ["completion_plan_update", "completion_auto_done", "completion_auto_planned"];
-
-function lastPlanHistoryReason(item: any): string | null {
-  const history = Array.isArray(item?.status_history) ? item.status_history : [];
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    if (PLAN_HISTORY_REASONS.includes(history[index]?.reason)) return history[index].reason;
-  }
-  return null;
-}
-
-function endOfMonthIso(isoDate: string) {
-  const [year, month] = isoDate.split("-").map(Number);
-  return isoDateInput(new Date(year, month, 0));
-}
+const PLAN_HISTORY_REASONS = EXECUTION_PLAN_HISTORY_REASONS;
 
 export function completionState(item: any, today = todayIsoDate()): {
   tone: CompletionTone;
@@ -412,27 +419,15 @@ export function completionState(item: any, today = todayIsoDate()): {
   /** Ghi nhận hoàn thành do tới ngày dự kiến, không phải do tác giả xác nhận. */
   auto: boolean;
 } {
-  const raw = String(item?.completion_plan ?? "").trim();
-  const parsed = parseCompletionPlan(raw, item?.completed_at);
-  if (!parsed) {
-    // Free-text legacy plans ("Thực hiện khi dừng máy") are shown verbatim.
-    return { tone: "unknown", label: raw || "Chưa ghi kế hoạch", date: null, dateText: null, note: null, auto: false };
-  }
-  const hasFullDate = Boolean(item?.completed_at) || /\b\d{1,2}\s*[./-]\s*\d{1,2}\s*[./-]\s*20\d{2}\b/.test(raw);
-  const [year, month] = parsed.date.split("-");
-  const dateText = hasFullDate ? formatDateForPlan(parsed.date) : `T${Number(month)}/${year}`;
-  const note = /^(đã hoàn thành|dự kiến hoàn thành)\s+\d{1,2}\/\d{1,2}\/\d{4}$/i.test(raw) ? null : raw || null;
-  // Same rule as the backend schedule: a planned date that has arrived counts as
-  // done, while a "done" date in the future was a mistake and is still planned.
-  if (parsed.done && parsed.date <= today) {
-    const auto = lastPlanHistoryReason(item) === "completion_auto_done";
-    return { tone: "done", label: "Đã hoàn thành", date: parsed.date, dateText, note, auto };
-  }
-  const dueDate = hasFullDate ? parsed.date : endOfMonthIso(parsed.date);
-  if (!parsed.done && dueDate <= today && !NOT_AUTO_DONE_STATUSES.includes(item?.status)) {
-    return { tone: "done", label: "Đã hoàn thành", date: dueDate, dateText: formatDateForPlan(dueDate), note, auto: true };
-  }
-  return { tone: "planned", label: "Dự kiến", date: dueDate, dateText, note, auto: false };
+  const view = resolveExecutionView(item, today);
+  return {
+    tone: view.tone,
+    label: view.label,
+    date: view.date,
+    dateText: view.dateText,
+    note: view.note,
+    auto: view.auto,
+  };
 }
 
 // Form values that already follow the completion rule (see completionState).
@@ -442,61 +437,19 @@ function completionFormValues(item: any) {
   return { completion_done: done, completion_plan_date: completionDateFor(done, state.date ?? "") };
 }
 
-function CompletionPill({ item, compact = false }: { item: any; compact?: boolean }) {
-  const state = completionState(item);
-  const icon = state.tone === "done"
-    ? <CheckCircle2 size={compact ? 12 : 14} />
-    : <Clock3 size={compact ? 12 : 14} />;
-  return (
-    <span
-      className={`fi-completion-pill tone-${state.tone} ${compact ? "is-compact" : ""}`}
-      title={state.auto ? "Hệ thống tự ghi nhận khi tới ngày dự kiến" : undefined}
-    >
-      {icon}
-      <span>{state.label}</span>
-      {state.dateText && <strong>{state.dateText}</strong>}
-    </span>
-  );
-}
-
-function CompletionBand({ item, canUpdate, onUpdate, hint }: { item: any; canUpdate: boolean; onUpdate: () => void; hint?: string }) {
-  const state = completionState(item);
-  return (
-    <section className={`fi-completion-band tone-${state.tone}`} aria-label="Tiến độ thực hiện">
-      <div className="fi-completion-band-main">
-        <span className="fi-completion-band-label">Tiến độ thực hiện</span>
-        <CompletionPill item={item} />
-        {state.note && <small className="fi-completion-note">Ghi chú gốc: {state.note}</small>}
-        {state.auto && (
-          <small className="fi-completion-auto">
-            Hệ thống tự ghi nhận hoàn thành khi tới ngày dự kiến.
-            {canUpdate && " Nếu thực tế chưa xong, bấm “Cập nhật tiến độ” để đặt ngày dự kiến mới."}
-          </small>
-        )}
-      </div>
-      {canUpdate ? (
-        <button className="fi-completion-update" onClick={onUpdate} type="button">
-          <CheckCircle2 size={16} />
-          Cập nhật tiến độ
-        </button>
-      ) : hint ? (
-        <small className="fi-completion-hint">{hint}</small>
-      ) : null}
-    </section>
-  );
-}
-
 function CompletionPlanField({
   idPrefix,
   done,
   date,
   disabled = false,
+  allowTodayPlanned = true,
   onChange,
 }: {
   idPrefix: string;
   done: boolean;
   date: string;
   disabled?: boolean;
+  allowTodayPlanned?: boolean;
   onChange: (next: { done: boolean; date: string }) => void;
 }) {
   const choose = (nextDone: boolean) => {
@@ -534,7 +487,7 @@ function CompletionPlanField({
         <input
           id={`${idPrefix}-date`}
           max={done ? todayIsoDate() : undefined}
-          min={done ? undefined : tomorrowIsoDate()}
+          min={done ? undefined : allowTodayPlanned ? todayIsoDate() : tomorrowIsoDate()}
           onChange={(event) => onChange({ done, date: event.target.value })}
           required
           type="date"
@@ -544,134 +497,9 @@ function CompletionPlanField({
       <small className="fi-plan-field-hint">
         {done
           ? "Chọn ngày sáng kiến đã áp dụng xong (không sau hôm nay)."
-          : "Tới ngày dự kiến, hệ thống tự ghi nhận “Đã hoàn thành”. Nếu chưa xong, bạn cập nhật lại ngày dự kiến sau."}
+          : "Chỉ áp dụng tự ghi nhận hoàn thành sau khi SK được Đồng ý. Nếu chưa xong, có thể gia hạn hoặc tạm dừng sau."}
       </small>
     </fieldset>
-  );
-}
-
-function CompletionPlanDialog({
-  item,
-  onClose,
-  onSaved,
-}: {
-  item: any;
-  onClose: () => void;
-  onSaved: (updated: any) => void;
-}) {
-  const current = completionState(item);
-  const today = todayIsoDate();
-  // Most updates on an approved FI are "it is done now", so offer that first.
-  const [done, setDone] = useState(current.tone !== "unknown");
-  const [doneDate, setDoneDate] = useState(current.tone === "done" && current.date ? current.date : today);
-  const [plannedDate, setPlannedDate] = useState(
-    current.date && current.tone === "planned" && current.date > today ? current.date : isoDateInput(addMonths(new Date(), 1)),
-  );
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  const save = async () => {
-    const date = done ? doneDate : plannedDate;
-    if (!date) {
-      setError(done ? "Vui lòng chọn ngày hoàn thành." : "Vui lòng chọn ngày dự kiến hoàn thành.");
-      return;
-    }
-    const invalid = completionPlanError(done, date);
-    if (invalid) {
-      setError(invalid);
-      return;
-    }
-    setSaving(true);
-    setError("");
-    try {
-      const updated = await api.updateSkRevision(item.id, {
-        completion_plan: formatCompletionPlan(done, date),
-        completion_done: done,
-        completion_date: date,
-      }, {
-        expectedRevision: item.server_revision ?? item.revision ?? 0,
-      });
-      onSaved(updated);
-    } catch (err: any) {
-      setError(err?.message || "Không lưu được tiến độ.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div
-      className="fi-edit-modal-backdrop"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !saving) onClose();
-      }}
-    >
-      <section aria-labelledby="fi-plan-dialog-title" aria-modal="true" className="fi-plan-dialog" role="dialog">
-        <header className="fi-plan-dialog-head">
-          <div>
-            <h2 id="fi-plan-dialog-title">Cập nhật tiến độ thực hiện</h2>
-            <p>{item.sk_code ? `${item.sk_code} · ` : ""}{item.title}</p>
-          </div>
-          <button aria-label="Đóng" className="fi-edit-modal-close" disabled={saving} onClick={onClose} type="button">
-            <X size={18} />
-          </button>
-        </header>
-
-        <div className="fi-plan-dialog-current">
-          <span>Hiện tại</span>
-          <CompletionPill item={item} />
-          {current.note && <small>{current.note}</small>}
-        </div>
-
-        <div className="fi-plan-options" role="radiogroup" aria-label="Tiến độ thực hiện">
-          <div className={`fi-plan-option tone-done ${done ? "selected" : ""}`}>
-            <button aria-checked={done} className="fi-plan-option-choice" disabled={saving} onClick={() => setDone(true)} role="radio" type="button">
-              <CheckCircle2 size={20} />
-              <span>
-                <strong>Đã hoàn thành</strong>
-                <small>Sáng kiến đã được áp dụng xong</small>
-              </span>
-            </button>
-            {done && (
-              <label className="fi-plan-option-date">
-                <span>Ngày hoàn thành</span>
-                <input disabled={saving} max={today} onChange={(event) => setDoneDate(event.target.value)} type="date" value={doneDate} />
-              </label>
-            )}
-          </div>
-          <div className={`fi-plan-option tone-planned ${!done ? "selected" : ""}`}>
-            <button aria-checked={!done} className="fi-plan-option-choice" disabled={saving} onClick={() => setDone(false)} role="radio" type="button">
-              <Clock3 size={20} />
-              <span>
-                <strong>Đang thực hiện</strong>
-                <small>Chưa xong, cập nhật ngày dự kiến</small>
-              </span>
-            </button>
-            {!done && (
-              <label className="fi-plan-option-date">
-                <span>Ngày dự kiến hoàn thành</span>
-                <input disabled={saving} min={tomorrowIsoDate()} onChange={(event) => setPlannedDate(event.target.value)} type="date" value={plannedDate} />
-                <small>Tới ngày này hệ thống tự ghi nhận “Đã hoàn thành”.</small>
-              </label>
-            )}
-          </div>
-        </div>
-
-        <p className="fi-plan-dialog-note">
-          <Info size={14} />
-          Trạng thái xét duyệt và KHMT giữ nguyên. Lần cập nhật này được ghi vào lịch sử của sáng kiến.
-        </p>
-        {error && <p className="error" role="alert">{error}</p>}
-
-        <footer className="fi-plan-dialog-actions">
-          <button className="btn-secondary" disabled={saving} onClick={onClose} type="button">Hủy</button>
-          <button className="btn-primary" disabled={saving} onClick={() => void save()} type="button">
-            {saving ? "Đang lưu…" : "Lưu tiến độ"}
-          </button>
-        </footer>
-      </section>
-    </div>
   );
 }
 
@@ -728,11 +556,17 @@ function makeIdempotencyKey(prefix: string) {
   return `${prefix}:${random}`;
 }
 
-async function uploadWithRetry(skId: string, file: File, idempotencyKey: string, expectedRevision: number) {
+async function uploadWithRetry(
+  skId: string,
+  file: File,
+  idempotencyKey: string,
+  expectedRevision: number,
+  stage?: "registration" | "completion",
+) {
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return await api.uploadSkImageWithOptions(skId, file, { idempotencyKey, expectedRevision });
+      return await api.uploadSkImageWithOptions(skId, file, { idempotencyKey, expectedRevision, stage });
     } catch (error) {
       lastError = error;
       const transient = !(error instanceof ApiError)
@@ -747,9 +581,11 @@ async function uploadWithRetry(skId: string, file: File, idempotencyKey: string,
 }
 
 function historyActionLabel(history: any) {
+  if (history.reason === "execution_update") return "Cập nhật tình hình thực hiện";
   if (history.reason === "completion_plan_update") return "Cập nhật kế hoạch hoàn thành";
   if (history.reason === "completion_auto_done") return "Tự ghi nhận hoàn thành (tới ngày dự kiến)";
   if (history.reason === "completion_auto_planned") return "Chuyển về dự kiến (ngày hoàn thành ở tương lai)";
+  if (history.reason === "completion_auto_done_reverted") return "Hoàn tác tự ghi nhận hoàn thành";
   if (!history.from_status && history.to_status === "Draft") return "Ghi nhận đăng ký";
   if (!history.from_status && history.to_status === "Submitted") return "Đăng ký xét duyệt";
   if (!history.from_status) return displayStatus(history.to_status);
@@ -785,7 +621,10 @@ function historyDetail(history: any) {
   if (PLAN_HISTORY_REASONS.includes(reason)) {
     const previous = String(structuredComments?.previous_completion_plan || "Chưa ghi");
     const next = String(structuredComments?.completion_plan || "Chưa ghi");
-    return { label: "Kế hoạch", text: `${previous} → ${next}` };
+    const execNote = typeof structuredComments?.execution_note === "string" && structuredComments.execution_note.trim()
+      ? ` · Ghi chú: ${structuredComments.execution_note.trim()}`
+      : "";
+    return { label: reason === "execution_update" ? "Tình hình thực hiện" : "Kế hoạch", text: `${previous} → ${next}${execNote}` };
   }
   if (reason === "khmt_unassignment") {
     const month = structuredComments?.previous_khmt_month;
@@ -1036,10 +875,10 @@ export function visibleActionsForSk(
   // tác giả thật ở backend nên vẫn đi theo cùng quyền owner.
   // Sau khi sửa, FI/Admin sẽ nhận noti SK_CONTENT_EDITED để xét duyệt lại.
   const canEdit = canManageAsOwner && AUTHOR_EDITABLE_STATUSES.includes(item.status);
-  // Progress has its own quick dialog: on an approved FI it is the only edit
-  // (author/submitter, or Admin in edit mode); before that the owner may use it
-  // too, e.g. to reset a plan the system marked done when its date arrived.
-  const canUpdatePlan = (isPlanOnlyEdit(item) && (canManageAsOwner || role === ADMIN_ROLE)) || (canEdit && item.status !== "Draft");
+  // Execution / progress updates: on Approved/Completed FIs, Author/Submitter,
+  // same-team Team_Account, FI_Coordinator, or Admin (in edit mode) may update;
+  // pre-approval, the owner may still adjust the planned date.
+  const canUpdatePlan = canUpdateExecution(role, currentUserId, currentTeam, item, editMode);
   // FI_Coordinator không được xét duyệt SK do chính mình đăng ký (xung đột lợi ích).
   const canReviewDecision =
     REVIEWER_ROLES.includes(role) &&
@@ -1063,7 +902,17 @@ export function visibleActionsForSk(
 
 const isReviewerRole = (role: string) => REVIEWER_ROLES.includes(role);
 
-function canUploadImages(role: string, currentUserId: string, item: any, editMode = true) {
+function canUploadImages(
+  role: string,
+  currentUserId: string,
+  item: any,
+  editMode = true,
+  currentTeam?: string | null,
+) {
+  if (!item) return false;
+  if (EXECUTION_EDITABLE_STATUSES.includes(item.status)) {
+    return canUploadCompletionImages(role, currentUserId, currentTeam, item, editMode);
+  }
   if (role === ADMIN_ROLE) return editMode;
   return (
     AUTHOR_ROLES.includes(role) &&
@@ -1673,7 +1522,35 @@ export function FIWorkspace({
   const [actionTarget, setActionTarget] = useState<{ id: string; label: string; decision: ReviewDecision; revision: number } | null>(null);
   const [actionNote, setActionNote] = useState("");
   const [editTarget, setEditTarget] = useState<any>(null);
-  const [planTarget, setPlanTarget] = useState<any>(null);
+  const [planTarget, setPlanTarget] = useState<{ item: any; initialStatus?: ExecutionModalInitialStatus } | null>(null);
+  const [confirmingAutoDoneId, setConfirmingAutoDoneId] = useState<string | null>(null);
+  const openExecutionModal = (item: any, initialStatus?: ExecutionModalInitialStatus) => {
+    setError("");
+    setPlanTarget({ item, initialStatus });
+  };
+  const handleQuickConfirmAutoDone = async (item: any) => {
+    if (!item?.id || confirmingAutoDoneId) return;
+    setConfirmingAutoDoneId(item.id);
+    setError("");
+    setNotice("");
+    try {
+      const view = resolveExecutionView(item);
+      const updated = await api.updateSkExecution(item.id, {
+        execution_status: "completed",
+        completion_date: view.date || todayIsoDate(),
+        execution_note: view.executionNote ?? null,
+        expected_revision: item.server_revision ?? item.revision ?? 0,
+      });
+      setSelectedItem((current: any) => (current?.id === updated.id ? { ...current, ...updated } : current));
+      setNotice(`Đã xác nhận hoàn thành ${updated.sk_code || updated.title}.`);
+      reload();
+      setMatrixRefreshNonce((n) => n + 1);
+    } catch (err: any) {
+      setError(err?.message || "Không thể xác nhận hoàn thành.");
+    } finally {
+      setConfirmingAutoDoneId(null);
+    }
+  };
   const [editForm, setEditForm] = useState({
     title: "",
     content_description: "",
@@ -2337,7 +2214,8 @@ export function FIWorkspace({
 
   const handleEditSave = async () => {
     if (!editTarget || savingEdit || loadingEdit) return;
-    const planError = completionPlanError(editForm.completion_done, editForm.completion_plan_date);
+    const planOnly = isPlanOnlyEdit(editTarget);
+    const planError = completionPlanError(editForm.completion_done, editForm.completion_plan_date, !planOnly);
     if (planError) {
       setError(planError);
       return;
@@ -2346,7 +2224,6 @@ export function FIWorkspace({
     setError("");
     setNotice("");
     const wasSubmitted = editTarget.status && editTarget.status !== "Draft";
-    const planOnly = isPlanOnlyEdit(editTarget);
     const planFields = {
       completion_plan: formatCompletionPlan(editForm.completion_done, editForm.completion_plan_date),
       completion_done: editForm.completion_done,
@@ -2540,7 +2417,7 @@ export function FIWorkspace({
     return full;
   };
 
-  const uploadImagesForItem = async (skId: string, files: File[]) => {
+  const uploadImagesForItem = async (skId: string, files: File[], stage?: "registration" | "completion") => {
     if (files.length === 0 || uploadingImages) return;
     setUploadingImages(true);
     setError("");
@@ -2549,13 +2426,14 @@ export function FIWorkspace({
       const batchKey = makeIdempotencyKey(`fi-image:${skId}`);
       // Image uploads share the SK revision. A tiny serialized queue keeps the
       // CAS token current while still bounding the queue to the active form.
-      let revision = selectedItem?.id === skId
-        ? (selectedItem.server_revision ?? selectedItem.revision ?? 0)
-        : (editTarget?.server_revision ?? editTarget?.revision ?? 0);
+      const targetRecord = selectedItem?.id === skId ? selectedItem : editTarget;
+      const effectiveStage: "registration" | "completion" =
+        stage ?? (EXECUTION_EDITABLE_STATUSES.includes(targetRecord?.status) ? "completion" : "registration");
+      let revision = targetRecord?.server_revision ?? targetRecord?.revision ?? 0;
       const results: Array<PromiseSettledResult<any>> = [];
       for (const [index, file] of files.entries()) {
         try {
-          const response = await uploadWithRetry(skId, file, `${batchKey}:${index}`, revision);
+          const response = await uploadWithRetry(skId, file, `${batchKey}:${index}`, revision, effectiveStage);
           revision = response.server_revision ?? revision + 1;
           results.push({ status: "fulfilled", value: response });
         } catch (reason) {
@@ -2569,7 +2447,11 @@ export function FIWorkspace({
         const firstError = results.find((result) => result.status === "rejected") as PromiseRejectedResult | undefined;
         setError(`Có ${failedCount}/${files.length} ảnh chưa tải lên được${firstError?.reason?.message ? `: ${firstError.reason.message}` : "."}`);
       } else {
-        setNotice(`Đã tải lên ${files.length} ảnh bằng chứng.`);
+        setNotice(
+          effectiveStage === "completion"
+            ? `Đã tải lên ${files.length} ảnh bằng chứng hoàn thành.`
+            : `Đã tải lên ${files.length} ảnh bằng chứng.`,
+        );
       }
     } finally {
       setUploadingImages(false);
@@ -2703,10 +2585,14 @@ export function FIWorkspace({
   };
   const selectedImages = Array.isArray(selectedItem?.supporting_images) ? selectedItem.supporting_images : [];
   const selectedHistory = Array.isArray(selectedItem?.status_history) ? selectedItem.status_history : [];
-  const canUploadForSelected = selectedItem ? canUploadImages(role, currentUserId, selectedItem, editMode) : false;
+  const canUploadForSelected = selectedItem
+    ? canUploadImages(role, currentUserId, selectedItem, editMode, currentTeam)
+    : false;
   const selectedActions = selectedItem ? visibleActionsForSk(role, currentUserId, selectedItem, editMode, currentTeam) : [];
   const editImages = Array.isArray(editTarget?.supporting_images) ? editTarget.supporting_images : [];
-  const canManageEditImages = editTarget ? canUploadImages(role, currentUserId, editTarget, editMode) : false;
+  const canManageEditImages = editTarget
+    ? canUploadImages(role, currentUserId, editTarget, editMode, currentTeam)
+    : false;
   const historyItems = allHistoryItems;
   const historyTeamCounts: Record<string, number> = Object.fromEntries((historyMeta?.facets?.teams ?? []).map((row: any) => [row.value, row.count]));
   const historyMonthOptions: Array<[number, number]> = (() => {
@@ -2719,8 +2605,10 @@ export function FIWorkspace({
   const historyAuthorOptions = useMemo(() => personFacets("authors"), [historyMeta]);
   const historySubmitterOptions = useMemo(() => personFacets("submitters"), [historyMeta]);
   const historyDecisionCounts: Record<HistoryDecisionFilter, number> = {
-    approved: historyMeta?.summary?.approved ?? 0, rejected: historyMeta?.summary?.rejected ?? 0,
-    deferred: historyMeta?.summary?.deferred ?? 0, pending: historyMeta?.summary?.pending ?? 0,
+    approved: historyMeta?.facets?.decisions?.approved ?? historyMeta?.summary?.approved ?? 0,
+    rejected: historyMeta?.facets?.decisions?.rejected ?? historyMeta?.summary?.rejected ?? 0,
+    deferred: historyMeta?.facets?.decisions?.deferred ?? historyMeta?.summary?.deferred ?? 0,
+    pending: historyMeta?.facets?.decisions?.pending ?? historyMeta?.summary?.pending ?? 0,
   };
   const historyKhmtCounts = {
     in: historyMeta?.facets?.khmt?.in ?? historyMeta?.summary?.khmt_considered ?? 0,
@@ -2776,7 +2664,39 @@ export function FIWorkspace({
       : `${historyKhmtPeriods.length} kỳ`;
     return historyKhmt.includes("out") ? `2 mục · ${periodLabel}` : periodLabel;
   })();
-  const historyCompletionCounts = {done: historyMeta?.summary?.completed_count ?? 0, pending: historyMeta?.summary?.not_completed ?? 0};
+  const historyCompletionCounts: Record<HistoryCompletionFilter, number> = {
+    done: historyMeta?.summary?.completed_count ?? 0,
+    pending: historyMeta?.summary?.not_completed ?? 0,
+    auto_done: historyMeta?.summary?.approved_auto_done_count ?? 0,
+    paused: historyMeta?.summary?.approved_paused_count ?? 0,
+  };
+  const ownTeamCode = teamFromAccount && FI_TEAMS.includes(teamFromAccount) ? teamFromAccount : null;
+  const isMyTeamInProgressActive = Boolean(
+    ownTeamCode
+      ? historyTeams.length === 1 &&
+        historyTeams[0] === ownTeamCode &&
+        historyDecisions.length === 1 &&
+        historyDecisions[0] === "approved" &&
+        historyCompletion.length === 1 &&
+        historyCompletion[0] === "pending"
+      : historyTeams.length === 0 &&
+        historyDecisions.length === 1 &&
+        historyDecisions[0] === "approved" &&
+        historyCompletion.length === 1 &&
+        historyCompletion[0] === "pending",
+  );
+  const toggleMyTeamInProgress = () => {
+    if (isMyTeamInProgressActive) {
+      setHistoryTeams([]);
+      setHistoryDecisions([]);
+      setHistoryCompletion([]);
+    } else {
+      setHistoryTeams(ownTeamCode ? [ownTeamCode] : []);
+      setHistoryDecisions(["approved"]);
+      setHistoryCompletion(["pending"]);
+    }
+    setSelectedItem(null);
+  };
   const historyActiveFilterCount =
     Number(Boolean(historyQuery)) + Number(Boolean(historyYear)) +
     historyTeams.length +
@@ -2917,7 +2837,7 @@ export function FIWorkspace({
             <strong>{item.title}</strong>
             <p>{item.content_description || "Chưa có mô tả nội dung."}</p>
             <div className="fi-inline-review-content-foot">
-              <CompletionPill item={item} compact />
+              <FiCompletionPill item={item} compact />
               <button className="link-button" onClick={() => showItemDetail(item.id)} type="button">
                 Xem ảnh và chi tiết
               </button>
@@ -3010,13 +2930,18 @@ export function FIWorkspace({
                 {item.submitted_at && item.status === "Submitted" && ` · đăng ký ngày ${new Date(item.submitted_at).toLocaleDateString("vi-VN")}`}
                 {isKhmtConsidered(item) && ` · ${khmtLabel(item)}`}
               </small>
+              {EXECUTION_EDITABLE_STATUSES.includes(item.status) && (
+                <div style={{ marginTop: 4 }}>
+                  <FiCompletionPill item={item} compact />
+                </div>
+              )}
             </button>
             <div className="toolbar">
               {actions.includes("updatePlan") && !actions.includes("edit") && (
                 <button
                   className="fi-completion-update is-inline"
-                  onClick={() => setPlanTarget(item)}
-                  title="Cập nhật tiến độ thực hiện"
+                  onClick={() => openExecutionModal(item)}
+                  title="Cập nhật tình hình thực hiện"
                   type="button"
                 >
                   <CheckCircle2 size={15} />
@@ -3955,39 +3880,42 @@ export function FIWorkspace({
           images={selectedImages}
           historyEntries={selectedHistory}
           completionBand={
-            <CompletionBand
+            <FiExecutionBand
               item={selectedItem}
-              canUpdate={selectedActions.includes("updatePlan")}
-              onUpdate={() => setPlanTarget(selectedItem)}
-              hint={
-                role === ADMIN_ROLE && !editMode && isPlanOnlyEdit(selectedItem)
-                  ? "Bật “Chỉnh sửa” ở góc trên để cập nhật tiến độ"
-                  : undefined
-              }
+              canUpdate={canUpdateExecution(role, currentUserId, currentTeam, selectedItem, editMode)}
+              confirmingAutoDone={confirmingAutoDoneId === selectedItem.id}
+              onUpdate={() => openExecutionModal(selectedItem)}
+              onQuickConfirm={() => void handleQuickConfirmAutoDone(selectedItem)}
+              onQuickExtend={() => openExecutionModal(selectedItem, "in_progress")}
+              hint={executionBlockedHint(role, currentUserId, currentTeam, selectedItem, editMode)}
+              actorName={displayUser}
             />
           }
           reviewPanel={renderReviewDecisionPanel(selectedItem)}
-          renderImageCard={(img, index) => (
-            <div className="image-card" key={img.id}>
-              <AuthenticatedSkImage
-                skId={selectedItem.id}
-                image={img}
-                onOpen={() => setImagePreviewIndex(index)}
-              />
-              <small title={img.file_name}>{img.file_name}</small>
-              {canUploadForSelected && (
-                <button
-                  aria-label={`Xóa ảnh ${img.file_name}`}
-                  className="image-card-delete"
-                  title="Xóa ảnh"
-                  onClick={() => handleDeleteImage(selectedItem.id, img.id)}
-                  type="button"
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </div>
-          )}
+          renderImageCard={(img, index) => {
+            const allowDeleteImg = canDeleteSkImage(role, currentUserId, currentTeam, selectedItem, img, editMode);
+            return (
+              <div className="image-card" key={img.id}>
+                <AuthenticatedSkImage
+                  skId={selectedItem.id}
+                  image={img}
+                  onOpen={() => setImagePreviewIndex(index)}
+                />
+                <small title={img.file_name}>{img.file_name}</small>
+                {allowDeleteImg && (
+                  <button
+                    aria-label={`Xóa ảnh ${img.file_name}`}
+                    className="image-card-delete"
+                    title="Xóa ảnh"
+                    onClick={() => handleDeleteImage(selectedItem.id, img.id)}
+                    type="button"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+            );
+          }}
           historyActionLabel={historyActionLabel}
           actorLabel={displayUser}
           historyDetail={historyDetail}
@@ -4013,6 +3941,7 @@ export function FIWorkspace({
             loading={dashboardLoading}
             error={error}
             selectedYear={dashboardYear}
+            role={role}
             currentTeam={currentTeam}
             activeSelection={matrixDrawer}
             exportingExcel={exportingHistoryExcel}
@@ -4027,12 +3956,15 @@ export function FIWorkspace({
           <FiMatrixCellDrawer
             selection={matrixDrawer}
             role={role}
+            currentUserId={currentUserId}
+            currentTeam={currentTeam}
             editMode={editMode}
             khmtMatrix={dashboard?.khmt_matrix ?? null}
-            suspended={Boolean(selectedItem)}
+            suspended={Boolean(selectedItem) || Boolean(planTarget)}
             refreshNonce={matrixRefreshNonce}
             onClose={() => setMatrixDrawer(null)}
             onOpenDetail={(item) => showItemDetail(item.id)}
+            onUpdateExecution={(item) => openExecutionModal(item)}
             onOpenInHistory={(filters) => void jumpToHistoryWithFilters(filters)}
             onOpenReviewForTeam={canReview ? (team) => void jumpToReviewForTeam(team) : undefined}
             onDataChanged={() => reload(dashboardYear)}
@@ -4141,6 +4073,20 @@ export function FIWorkspace({
             </div>
 
             <div className="fi-history-toolbar-filters">
+              <button
+                type="button"
+                className={`fi-history-quick-chip ${isMyTeamInProgressActive ? "is-active" : ""}`}
+                aria-pressed={isMyTeamInProgressActive}
+                onClick={toggleMyTeamInProgress}
+                title={
+                  ownTeamCode
+                    ? `Lọc nhanh SK đã đồng ý đang triển khai của đội ${displayTeam(ownTeamCode)}`
+                    : "Lọc nhanh toàn bộ SK đã đồng ý chưa hoàn thành"
+                }
+              >
+                <Clock3 size={13} />
+                {ownTeamCode ? `Đang thực hiện đội ${displayTeam(ownTeamCode)}` : "SK duyệt chưa xong"}
+              </button>
               <FilterChip<string>
                 label="Đội/tổ"
                 icon={<Users2 size={14} />}
@@ -4265,15 +4211,27 @@ export function FIWorkspace({
             </div>
           </div>
           {historyTeamSummary && (() => {
-            const passed = reviewPassedCount(historyTeamSummary);
-            const failed = reviewFailedCount(historyTeamSummary);
-            const deferred = historyTeamSummary.deferred ?? 0;
-            const pending = historyTeamSummary.pending ?? 0;
+            // Use disjunctive decision facet counts so selecting one decision card
+            // does not zero out the other 3 decision cards.
+            const facetDecisions = historyMeta?.facets?.decisions;
+            const passed = facetDecisions?.approved ?? reviewPassedCount(historyTeamSummary);
+            const failed = facetDecisions?.rejected ?? reviewFailedCount(historyTeamSummary);
+            const deferred = facetDecisions?.deferred ?? (historyTeamSummary.deferred ?? 0);
+            const pending = facetDecisions?.pending ?? (historyTeamSummary.pending ?? 0);
             const khmtConsidered = historyTeamSummary.khmt_considered ?? 0;
             const unassignedApproved = khmtUnassignedApprovedCount(historyTeamSummary);
-            const completed = historyTeamSummary.completed_count ?? historyTeamSummary.completed ?? 0;
-            const notCompleted = historyTeamSummary.not_completed ?? 0;
+            const hasApprovedExec = historyTeamSummary.approved_completed_count !== undefined;
+            const approvedInScope = reviewPassedCount(historyTeamSummary);
+            const completed = hasApprovedExec
+              ? Number(historyTeamSummary.approved_completed_count ?? 0)
+              : Number(historyTeamSummary.completed_count ?? historyTeamSummary.completed ?? 0);
+            const notCompleted = hasApprovedExec
+              ? Number(historyTeamSummary.approved_in_progress_count ?? 0) + Number(historyTeamSummary.approved_paused_count ?? 0)
+              : Number(historyTeamSummary.not_completed ?? 0);
             const totalForRate = historyTeamSummary.total ?? 0;
+            const totalAllDecisions = facetDecisions
+              ? passed + failed + deferred + pending
+              : totalForRate;
             return (
               <div className={`fi-history-summary ${historyFiltersOpen ? "" : "is-collapsed"}`} role="group" aria-label="Tóm tắt — nhấn để lọc nhanh">
                 <button
@@ -4296,7 +4254,7 @@ export function FIWorkspace({
                 >
                   <span>Đã xét đồng ý</span>
                   <strong>{formatCount(passed)}</strong>
-                  <small>{percent(passed, totalForRate)}%</small>
+                  <small>{percent(passed, totalAllDecisions)}%</small>
                 </button>
                 <button
                   type="button"
@@ -4347,7 +4305,9 @@ export function FIWorkspace({
                   title="Lọc các SK đã hoàn thành"
                 >
                   <span>Hoàn thành</span>
-                  <strong>{formatCount(completed)}</strong>
+                  <strong>
+                    {hasApprovedExec ? `${formatCount(completed)}/${formatCount(approvedInScope)}` : formatCount(completed)}
+                  </strong>
                   <small>{formatCount(notCompleted)} chưa xong</small>
                 </button>
               </div>
@@ -4408,7 +4368,7 @@ export function FIWorkspace({
                         )}
                       </div>
                       <div className="legacy-row-meta">
-                        <CompletionPill item={item} compact />
+                        <FiCompletionPill item={item} compact />
                         {isKhmtConsidered(item) && (
                           <small className="legacy-row-meta-khmt-mobile">{khmtLabel(item)}</small>
                         )}
@@ -4422,6 +4382,18 @@ export function FIWorkspace({
                       })()}
                       {renderKhmtControl(item)}
                       <div className="legacy-row-controls">
+                        {EXECUTION_EDITABLE_STATUSES.includes(item.status) &&
+                          canUpdateExecution(role, currentUserId, currentTeam, item, editMode) && (
+                            <button
+                              className="fi-drawer-exec-btn"
+                              title="Cập nhật tình hình thực hiện"
+                              onClick={() => openExecutionModal(item)}
+                              type="button"
+                            >
+                              <CheckCircle2 size={14} />
+                              <span>Tiến độ</span>
+                            </button>
+                          )}
                         {actions.includes("edit") && (
                           <button
                             aria-label={`Sửa ${item.sk_code || item.title}`}
@@ -4486,11 +4458,15 @@ export function FIWorkspace({
                           <strong>{khmtLabel(detail)}</strong>
                         </div>
                       </div>
-                      <CompletionBand
+                      <FiExecutionBand
                         item={detail}
-                        canUpdate={actions.includes("updatePlan")}
-                        onUpdate={() => setPlanTarget(detail)}
-                        hint={role === ADMIN_ROLE && !editMode && isPlanOnlyEdit(detail) ? "Bật “Chỉnh sửa” ở góc trên để cập nhật tiến độ" : undefined}
+                        canUpdate={canUpdateExecution(role, currentUserId, currentTeam, detail, editMode)}
+                        confirmingAutoDone={confirmingAutoDoneId === detail.id}
+                        onUpdate={() => openExecutionModal(detail)}
+                        onQuickConfirm={() => void handleQuickConfirmAutoDone(detail)}
+                        onQuickExtend={() => openExecutionModal(detail, "in_progress")}
+                        hint={executionBlockedHint(role, currentUserId, currentTeam, detail, editMode)}
+                        actorName={displayUser}
                       />
                       <div className="legacy-expanded-content">
                         <section>
@@ -4515,13 +4491,9 @@ export function FIWorkspace({
                             <p>{detail.decision_note}</p>
                           </section>
                         )}
-                        <section className={isKhmtConsidered(detail) ? "legacy-khmt-note" : ""}>
-                          <span>Đã xem xét vào KHMT</span>
-                          <p>{khmtLabel(detail)}</p>
-                        </section>
                         {planUpdateHistory(detail).length > 0 && (
                           <section className="legacy-plan-history">
-                            <span>Lịch sử cập nhật kế hoạch</span>
+                            <span>Lịch sử cập nhật tình hình thực hiện</span>
                             <ul>
                               {planUpdateHistory(detail).map((history: any, index: number) => (
                                 <li key={`${history.changed_at}-${index}`}>
@@ -4536,45 +4508,112 @@ export function FIWorkspace({
                           </section>
                         )}
                       </div>
-                      <div className="legacy-evidence">
-                        <div className="legacy-evidence-head">
-                          <span className="legacy-evidence-title">
-                            <ImageIcon size={15} />
-                            Ảnh bằng chứng
-                            {detailImages.length > 0 && <em>({detailImages.length})</em>}
-                          </span>
-                          {isHistorical && detailImages.length === 0 && (
-                            <small className="muted"><Info size={13} /> Chưa có ảnh minh chứng.</small>
-                          )}
-                        </div>
-                        {detailImages.length > 0 ? (
-                          <div className="legacy-evidence-grid">
-                            {detailImages.map((img: any, idx: number) => (
-                              <div
-                                key={img.id}
-                                className="legacy-evidence-thumb"
-                                title={img.file_name}
-                              >
-                                <AuthenticatedSkImage
-                                  skId={detail.id}
-                                  image={img}
-                                  onOpen={() => {
-                                    setSelectedItem(detail);
-                                    setImagePreviewIndex(idx);
-                                  }}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          !isHistorical && (
-                            <div className="legacy-evidence-empty">
-                              <ImageIcon size={20} />
-                              <span>Chưa có ảnh bằng chứng cho SK này.</span>
+                      {(() => {
+                        const isApprovedItem = EXECUTION_EDITABLE_STATUSES.includes(detail.status);
+                        const canUploadHere = canUploadImages(role, currentUserId, detail, editMode, currentTeam);
+                        const staged = splitImagesByStage(detailImages);
+                        const idxById = new Map<string, number>();
+                        detailImages.forEach((img: any, idx: number) => idxById.set(String(img.id), idx));
+                        const renderThumb = (img: any) => {
+                          const canDel = canDeleteSkImage(role, currentUserId, currentTeam, detail, img, editMode);
+                          return (
+                            <div key={img.id} className="legacy-evidence-thumb image-card" title={img.file_name}>
+                              <AuthenticatedSkImage
+                                skId={detail.id}
+                                image={img}
+                                onOpen={() => {
+                                  setSelectedItem(detail);
+                                  setImagePreviewIndex(idxById.get(String(img.id)) ?? 0);
+                                }}
+                              />
+                              {canDel && (
+                                <button
+                                  aria-label={`Xóa ảnh ${img.file_name}`}
+                                  className="image-card-delete"
+                                  title="Xóa ảnh"
+                                  onClick={() => handleDeleteImage(detail.id, img.id)}
+                                  type="button"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
                             </div>
-                          )
-                        )}
-                      </div>
+                          );
+                        };
+
+                        return (
+                          <div className="legacy-evidence">
+                            <div className="legacy-evidence-head">
+                              <span className="legacy-evidence-title">
+                                <ImageIcon size={15} />
+                                Ảnh bằng chứng
+                                {detailImages.length > 0 && <em>({detailImages.length})</em>}
+                              </span>
+                              {!isApprovedItem && isHistorical && detailImages.length === 0 && (
+                                <small className="muted"><Info size={13} /> Chưa có ảnh minh chứng.</small>
+                              )}
+                            </div>
+                            {isApprovedItem ? (
+                              <div className="fi-evidence-stages">
+                                {staged.registration.length > 0 && (
+                                  <div className="fi-evidence-stage-group">
+                                    <div className="fi-evidence-stage-head">
+                                      <span className="fi-evidence-stage-title">
+                                        Ảnh đăng ký <em>({staged.registration.length})</em>
+                                      </span>
+                                    </div>
+                                    <div className="legacy-evidence-grid">
+                                      {staged.registration.map(renderThumb)}
+                                    </div>
+                                  </div>
+                                )}
+                                <div className="fi-evidence-stage-group is-completion">
+                                  <div className="fi-evidence-stage-head">
+                                    <span className="fi-evidence-stage-title">
+                                      Ảnh hoàn thành <em>({staged.completion.length})</em>
+                                    </span>
+                                    {canUploadHere && (
+                                      <button
+                                        type="button"
+                                        className="fi-evidence-upload-btn"
+                                        disabled={uploadingImages}
+                                        onClick={() => {
+                                          setSelectedItem(detail);
+                                          detailFileInputRef.current?.click();
+                                        }}
+                                      >
+                                        <ImagePlus size={14} />
+                                        {uploadingImages ? "Đang tải..." : "Thêm ảnh hoàn thành"}
+                                      </button>
+                                    )}
+                                  </div>
+                                  {staged.completion.length > 0 ? (
+                                    <div className="legacy-evidence-grid">
+                                      {staged.completion.map(renderThumb)}
+                                    </div>
+                                  ) : (
+                                    <div className="legacy-evidence-empty">
+                                      <ImageIcon size={18} />
+                                      <span>Chưa có ảnh bằng chứng hoàn thành cho SK này.</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ) : detailImages.length > 0 ? (
+                              <div className="legacy-evidence-grid">
+                                {detailImages.map(renderThumb)}
+                              </div>
+                            ) : (
+                              !isHistorical && (
+                                <div className="legacy-evidence-empty">
+                                  <ImageIcon size={20} />
+                                  <span>Chưa có ảnh bằng chứng cho SK này.</span>
+                                </div>
+                              )
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
@@ -4634,13 +4673,15 @@ export function FIWorkspace({
       )}
 
       {planTarget && (
-        <CompletionPlanDialog
-          item={planTarget}
+        <FiExecutionUpdateModal
+          item={planTarget.item}
+          initialStatus={planTarget.initialStatus}
+          canUploadImages={canUploadCompletionImages(role, currentUserId, currentTeam, planTarget.item, editMode)}
           onClose={() => setPlanTarget(null)}
-          onSaved={(updated) => {
+          onSaved={(updated, message) => {
             setPlanTarget(null);
-            setSelectedItem((current: any) => current?.id === updated.id ? { ...current, ...updated } : current);
-            setNotice(`Đã cập nhật tiến độ: ${completionState(updated).label}${completionState(updated).dateText ? ` ${completionState(updated).dateText}` : ""}.`);
+            setSelectedItem((current: any) => (current?.id === updated.id ? { ...current, ...updated } : current));
+            setNotice(message);
             reload();
             setMatrixRefreshNonce((n) => n + 1);
           }}
@@ -4650,7 +4691,14 @@ export function FIWorkspace({
       {/* Global image viewer — works from both Register and History tabs */}
       {imagePreviewIndex !== null && selectedItem && selectedImages[imagePreviewIndex] && (
         <SkImageViewer
-          canDelete={canUploadForSelected}
+          canDelete={canDeleteSkImage(
+            role,
+            currentUserId,
+            currentTeam,
+            selectedItem,
+            selectedImages[imagePreviewIndex],
+            editMode,
+          )}
           images={selectedImages}
           index={imagePreviewIndex}
           onClose={() => setImagePreviewIndex(null)}

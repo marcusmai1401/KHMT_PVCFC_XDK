@@ -82,6 +82,7 @@ def create_schema() -> None:
     _ensure_personnel_extra_columns()
     _ensure_competency_item_text_columns()
     _ensure_sk_ctkt_completed_at_column()
+    _ensure_sk_ctkt_execution_columns()
 
 
 def _ensure_sqlite_web_input_columns() -> None:
@@ -120,6 +121,32 @@ def _ensure_sk_ctkt_completed_at_column() -> None:
         return
     with engine.begin() as connection:
         connection.execute(text("ALTER TABLE sk_ctkt ADD COLUMN completed_at DATETIME"))
+
+
+def _ensure_sk_ctkt_execution_columns() -> None:
+    if engine.dialect.name != "sqlite":
+        return
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+    with engine.begin() as connection:
+        if "sk_ctkt" in table_names:
+            existing = {column["name"] for column in inspector.get_columns("sk_ctkt")}
+            statements = {
+                "execution_status": "ALTER TABLE sk_ctkt ADD COLUMN execution_status VARCHAR(32)",
+                "execution_note": "ALTER TABLE sk_ctkt ADD COLUMN execution_note TEXT",
+                "execution_updated_at": "ALTER TABLE sk_ctkt ADD COLUMN execution_updated_at DATETIME",
+                "execution_updated_by": "ALTER TABLE sk_ctkt ADD COLUMN execution_updated_by VARCHAR",
+            }
+            for column_name, statement in statements.items():
+                if column_name not in existing:
+                    connection.execute(text(statement))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_sk_ctkt_execution_status ON sk_ctkt (execution_status)"))
+        if "sk_images" in table_names:
+            existing_img = {column["name"] for column in inspector.get_columns("sk_images")}
+            if "stage" not in existing_img:
+                connection.execute(
+                    text("ALTER TABLE sk_images ADD COLUMN stage VARCHAR(32) NOT NULL DEFAULT 'registration'")
+                )
 
 
 def _ensure_personnel_extra_columns() -> None:

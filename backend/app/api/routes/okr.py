@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import Role, require_role
-from app.db.session import get_db
+from app.db.session import get_db, is_sandbox_session, storage_root_for
 from app.models.domain import HistoricalSnapshotModel, KRMappingModel, SystemConfigModel, TeamHeadcountModel, TeamReportModel, WarningModel
 from app.schemas.common import LeaderKPIAllocationUpdate, WarningResolveRequest
 from app.services.cache import cache_delete_prefix, cache_get, cache_set
@@ -281,7 +281,7 @@ def upload_report(
     data = file.file.read(settings.max_excel_upload_mb * 1024 * 1024 + 1)
     if len(data) > settings.max_excel_upload_mb * 1024 * 1024:
         raise HTTPException(status_code=400, detail={"error_code": "FILE_TOO_LARGE", "message": "Tệp Excel vượt quá dung lượng cho phép"})
-    upload_dir = settings.storage_dir / "uploads"
+    upload_dir = storage_root_for(db) / "uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
     file_hash = hashlib.sha256(data).hexdigest()
     safe_name = _safe_filename(file.filename)
@@ -453,7 +453,9 @@ def list_reports(_: dict = Depends(require_role(Role.ADMIN, Role.WORKSHOP_LEADER
 
 @router.get("/reports/template")
 def report_template(_: dict = Depends(require_role(*REFERENCE_VIEW_ROLES)), db: Session = Depends(get_db)):
-    path = generate_standard_report_template(_mapping_records(db))
+    # A sandbox session must not overwrite the production template file.
+    output_path = storage_root_for(db) / "templates" / TEMPLATE_FILENAME if is_sandbox_session(db) else None
+    path = generate_standard_report_template(_mapping_records(db), output_path=output_path)
     return FileResponse(path, filename=TEMPLATE_FILENAME)
 
 

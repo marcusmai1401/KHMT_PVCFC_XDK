@@ -311,6 +311,14 @@ Không commit password, `.env.production`, private key hoặc thông tin nhạy 
 
 Chi tiết thêm: `docs/GITHUB_ACTIONS_DEPLOY.md`.
 
+### Môi trường "Kiểm thử" trên production
+
+Nút **Kiểm thử** (Admin) mở một bản sao dữ liệu riêng (`storage/sandbox/okr_sandbox.db`) để giả lập mọi tài khoản mà không ghi vào dữ liệu thật. Trên production nó chỉ bật khi `OKR_SANDBOX_ENABLED: "true"` trong `docker-compose.prod.yml`; đổi sang `"false"` rồi deploy lại thì nút biến mất và mọi phiên kiểm thử đang mở bị từ chối ngay.
+
+- Chỉ Admin đã đăng nhập mới vào được; đăng nhập trực tiếp `test` / mật khẩu chung luôn bị tắt trên production.
+- Khi sao chép, mật khẩu (mã băm) của mọi tài khoản bị thay bằng giá trị không dùng được.
+- Ảnh/file tải lên trong sandbox nằm dưới `storage/sandbox`; xóa ảnh hay SK trong sandbox không bao giờ xóa file của production.
+
 ---
 
 ## Dữ liệu tự động nạp khi khởi động lần đầu

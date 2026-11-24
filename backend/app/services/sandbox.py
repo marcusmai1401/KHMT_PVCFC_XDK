@@ -7,8 +7,9 @@ from pathlib import Path
 from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import Role, hash_password
-from app.db.session import Base, create_session, sandbox_engine
+from app.db.session import Base, create_session, sandbox_dir, sandbox_engine
 from app.models import et_domain  # noqa: F401 - register ET tables for sandbox metadata
 from app.models.domain import SystemConfigModel, User
 from app.services.bootstrap import seed_baseline
@@ -19,6 +20,8 @@ from app.services.cache import cache_delete_prefix
 SANDBOX_LOGIN_ID = "test"
 SANDBOX_PASSWORD = "PVCFC@123"
 SANDBOX_INITIALIZED_KEY = "sandbox_initialized_from_production"
+# Not a bcrypt hash, so verify_password can never accept any input for it.
+UNUSABLE_PASSWORD_HASH = "!sandbox-clone-no-login"
 
 
 @dataclass(frozen=True)
@@ -41,7 +44,8 @@ SANDBOX_IDENTITIES = {
 
 
 def _seed_sandbox_users(db: Session) -> None:
-    password_hash = hash_password(SANDBOX_PASSWORD)
+    # The shared password only exists where the "test" login is allowed.
+    password_hash = UNUSABLE_PASSWORD_HASH if settings.is_production else hash_password(SANDBOX_PASSWORD)
     for identity in SANDBOX_IDENTITIES.values():
         user = db.get(User, identity.id)
         if user is None:
@@ -61,11 +65,33 @@ def _seed_sandbox_users(db: Session) -> None:
         user.is_active = True
 
 
+# Replay records hold whole API responses and are meaningless in the copy.
+SKIPPED_CLONE_TABLES = {"idempotency_keys"}
+
+
+def _scrub_row(table_name: str, row: dict) -> dict:
+    """Drop secrets the sandbox never needs.
+
+    Real password hashes are replaced by an unusable value: sandbox sessions are
+    minted by an Admin through switch-role, never by a password, so a copy of the
+    sandbox database cannot be used to crack production passwords.
+    """
+    if table_name == "users":
+        row["password_hash"] = UNUSABLE_PASSWORD_HASH
+    return row
+
+
 def _clone_production_data(sandbox_db: Session) -> dict[str, int]:
     counts: dict[str, int] = {}
     with create_session() as production_db:
         for table in Base.metadata.sorted_tables:
-            rows = [dict(row) for row in production_db.execute(select(table)).mappings().all()]
+            if table.name in SKIPPED_CLONE_TABLES:
+                counts[table.name] = 0
+                continue
+            rows = [
+                _scrub_row(table.name, dict(row))
+                for row in production_db.execute(select(table)).mappings().all()
+            ]
             if not rows:
                 counts[table.name] = 0
                 continue

@@ -784,6 +784,8 @@ export function App() {
   }
 
   const isAdminProd = role === "Admin" && !sandbox;
+  // The server decides: production keeps the sandbox off unless it is enabled there.
+  const canEnterSandbox = isAdminProd && capabilityMap["sandbox.enter"] === true;
 
   const effectiveEditMode = role === "Admin" ? adminEditMode : true;
   const unreadNotificationCount = notifications.filter(isUnreadNotification).length;
@@ -926,7 +928,7 @@ export function App() {
                     <span>Đổi mật khẩu</span>
                   </button>
                 )}
-                {isAdminProd && (
+                {canEnterSandbox && (
                   <button
                     className="account-action"
                     onClick={enterSandbox}
@@ -996,7 +998,7 @@ export function App() {
                   <KeyRound size={16} />
                 </button>
               )}
-              {isAdminProd && (
+              {canEnterSandbox && (
                 <button
                   aria-label="Vào môi trường kiểm thử"
                   className="mobile-account-button"

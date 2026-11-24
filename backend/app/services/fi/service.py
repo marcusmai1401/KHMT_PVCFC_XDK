@@ -13,6 +13,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.db.session import may_delete_stored_file
 from app.core.security import Role
 from app.models.domain import SKCTKTModel, SKCodeSequenceModel, SKImageModel, User
 from app.services.fi.auto_completion import format_plan
@@ -1930,7 +1931,8 @@ def delete_sk_ctkt(
     audit(db, actor, "SK_CTKT", record_id, "delete", {"record": model_to_dict(record), "image_count": len(images)})
     for image in images:
         try:
-            Path(image.file_path).unlink(missing_ok=True)
+            if may_delete_stored_file(db, image.file_path):
+                Path(image.file_path).unlink(missing_ok=True)
         except OSError:
             pass
         db.delete(image)

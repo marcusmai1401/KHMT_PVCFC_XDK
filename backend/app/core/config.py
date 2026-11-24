@@ -108,6 +108,10 @@ class Settings(BaseSettings):
     )
     # Chu kỳ (giây) áp quy ước ngày hoàn thành FI; 0 = tắt (bộ test tự gọi trực tiếp).
     fi_completion_schedule_seconds: int = 900
+    # Production keeps the Admin "Kiểm thử" sandbox off unless explicitly enabled.
+    # Outside production it is always available. The shared "test" password login
+    # stays disabled in production either way.
+    sandbox_enabled: bool = False
     llm_enabled: bool = Field(
         default=True,
         validation_alias=AliasChoices("OKR_LLM_ENABLED", "LLM_ENABLED"),
@@ -135,6 +139,15 @@ class Settings(BaseSettings):
                 "OKR_JWT_SECRET must be a non-placeholder secret of at least 32 characters in production"
             )
         return self
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment.strip().lower() == "production"
+
+    @property
+    def sandbox_available(self) -> bool:
+        """Whether an Admin may open the isolated "Kiểm thử" sandbox."""
+        return not self.is_production or self.sandbox_enabled
 
     @cached_property
     def effective_database_url(self) -> str:

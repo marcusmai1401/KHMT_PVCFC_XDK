@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from app.core.concurrency import require_expected_revision
 from app.core.config import settings
 from app.core.security import Role, require_role
-from app.db.session import get_db
+from app.db.session import get_db, is_sandbox_session, may_delete_stored_file, storage_root_for
 from app.models.domain import SKCTKTModel, SKImageModel, User
 from app.schemas.common import KHMTAssignRequest, SKCreate, SKExecutionUpdate, SKUpdate, TransitionRequest
 from app.services.cache import cache_delete_prefix
@@ -925,12 +925,13 @@ def upload_image(
             content_type = detected
     except (OSError, ValueError, SyntaxError, UnidentifiedImageError, Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
         raise HTTPException(status_code=400, detail="Ảnh bị hỏng hoặc nội dung không khớp định dạng khai báo") from exc
-    image_dir = settings.storage_dir / "uploads" / "images"
+    image_dir = storage_root_for(db) / "uploads" / "images"
     image_dir.mkdir(parents=True, exist_ok=True)
     image_id = make_id("img")
     path = image_dir / f"{image_id}-{safe_name}"
-    from app.services.artifacts import register_artifact
-    register_artifact(path, "fi-image")
+    if not is_sandbox_session(db):
+        from app.services.artifacts import register_artifact
+        register_artifact(path, "fi-image")
     temp_fd, temp_name = tempfile.mkstemp(prefix=".upload-", suffix=".tmp", dir=image_dir)
     os.close(temp_fd)
     temp_path = Path(temp_name)
@@ -1041,7 +1042,8 @@ def delete_image(
             detail=blocked_reason or "Chỉ người đăng ký mới được xóa ảnh của hồ sơ đang chỉnh sửa",
         )
     try:
-        Path(image.file_path).unlink(missing_ok=True)
+        if may_delete_stored_file(db, image.file_path):
+            Path(image.file_path).unlink(missing_ok=True)
     except OSError:
         pass
     db.delete(image)

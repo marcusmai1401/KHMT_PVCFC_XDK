@@ -39,7 +39,13 @@ class SandboxRoleRequest(BaseModel):
 
 
 def _sandbox_enabled() -> bool:
-    return settings.environment.strip().lower() != "production"
+    return settings.sandbox_available
+
+
+def _shared_test_login_enabled() -> bool:
+    # The well-known "test" password must never open a session in production,
+    # even when Admins are allowed into the sandbox.
+    return not settings.is_production
 
 
 def _require_sandbox(principal: dict = Depends(current_principal)) -> dict:
@@ -97,7 +103,7 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
             headers={"Retry-After": str(retry_after)},
         )
     if (
-        _sandbox_enabled()
+        _shared_test_login_enabled()
         and user_id.lower() == SANDBOX_LOGIN_ID
         and payload.password.strip() == SANDBOX_PASSWORD
     ):
@@ -223,6 +229,7 @@ def capabilities(principal: dict = Depends(current_principal)) -> dict:
             },
             "admin.read": is_admin,
             "admin.write": is_admin,
+            "sandbox.enter": is_admin and not principal.get("sandbox") and _sandbox_enabled(),
         },
     }
 
@@ -289,8 +296,10 @@ def enter_sandbox(
     if principal.get("sandbox"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Đang ở môi trường kiểm thử")
     if not _sandbox_enabled():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sandbox is disabled in production")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Môi trường kiểm thử đang tắt trên máy chủ này")
     ensure_sandbox_data()
+    audit(db, principal["user_id"], "Account", principal["user_id"], "sandbox_enter", {})
+    db.commit()
     identity = sandbox_identity("admin")
     if identity is None:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Sandbox is not configured")

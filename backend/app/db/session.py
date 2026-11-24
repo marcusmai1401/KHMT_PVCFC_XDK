@@ -61,3 +61,27 @@ def get_db(request: Request):
 
 def create_session(*, sandbox: bool = False) -> Session:
     return SandboxSessionLocal() if sandbox else SessionLocal()
+
+
+def is_sandbox_session(db: Session) -> bool:
+    try:
+        return db.get_bind() is sandbox_engine
+    except Exception:
+        return False
+
+
+def storage_root_for(db: Session) -> Path:
+    """Where a request may write files: sandbox sessions stay under storage/sandbox."""
+    return sandbox_dir if is_sandbox_session(db) else settings.storage_dir
+
+
+def may_delete_stored_file(db: Session, path: str | Path) -> bool:
+    """Sandbox rows are copies of production rows, so the files they point to
+    belong to production. A sandbox session may only delete its own files."""
+    if not is_sandbox_session(db):
+        return True
+    try:
+        Path(path).resolve().relative_to(sandbox_dir.resolve())
+    except (ValueError, OSError):
+        return False
+    return True

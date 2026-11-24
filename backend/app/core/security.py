@@ -89,6 +89,8 @@ def current_principal(
     payload = decode_token(credentials.credentials)
     user_id = str(payload["sub"])
     if payload.get("sandbox"):
+        if not settings.sandbox_available:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Môi trường kiểm thử đã tắt")
         from app.services.sandbox import ensure_sandbox_data
 
         ensure_sandbox_data()

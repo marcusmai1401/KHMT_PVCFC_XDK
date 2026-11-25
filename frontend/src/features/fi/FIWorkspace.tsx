@@ -297,13 +297,12 @@ function completionDateFor(done: boolean, current: string) {
   return current && current > today ? current : isoDateInput(addMonths(new Date(), 1));
 }
 
-function completionPlanError(done: boolean, date: string, allowTodayPlanned = true) {
-  const today = todayIsoDate();
+// Mirror rules: "Đã hoàn thành" takes today or earlier, "Đang thực hiện" only a
+// date after today (reaching the planned date is recorded as done).
+export function completionPlanError(done: boolean, date: string, today = todayIsoDate()) {
   if (done && date > today) return "Ngày hoàn thành không được sau ngày hôm nay.";
-  if (!done && (allowTodayPlanned ? date < today : date <= today)) {
-    return allowTodayPlanned
-      ? "Ngày dự kiến không được trước ngày hôm nay. Nếu sáng kiến đã xong, chọn “Đã hoàn thành”."
-      : "Ngày dự kiến phải sau hôm nay. Nếu sáng kiến đã xong, chọn “Đã hoàn thành”.";
+  if (!done && date <= today) {
+    return "Ngày dự kiến hoàn thành phải sau hôm nay. Nếu sáng kiến đã xong, chọn “Đã hoàn thành”.";
   }
   return "";
 }
@@ -455,14 +454,12 @@ function CompletionPlanField({
   done,
   date,
   disabled = false,
-  allowTodayPlanned = true,
   onChange,
 }: {
   idPrefix: string;
   done: boolean;
   date: string;
   disabled?: boolean;
-  allowTodayPlanned?: boolean;
   onChange: (next: { done: boolean; date: string }) => void;
 }) {
   const choose = (nextDone: boolean) => {
@@ -500,7 +497,7 @@ function CompletionPlanField({
         <input
           id={`${idPrefix}-date`}
           max={done ? todayIsoDate() : undefined}
-          min={done ? undefined : allowTodayPlanned ? todayIsoDate() : tomorrowIsoDate()}
+          min={done ? undefined : tomorrowIsoDate()}
           onChange={(event) => onChange({ done, date: event.target.value })}
           required
           type="date"
@@ -2310,7 +2307,7 @@ export function FIWorkspace({
         return;
       }
     }
-    const planError = completionPlanError(editForm.completion_done, editForm.completion_plan_date, !planOnly);
+    const planError = completionPlanError(editForm.completion_done, editForm.completion_plan_date);
     if (planError) {
       setError(planError);
       return;

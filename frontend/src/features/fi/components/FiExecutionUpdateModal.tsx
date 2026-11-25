@@ -161,8 +161,7 @@ export function FiExecutionUpdateModal({
       return "";
     }
     if (!plannedDate) return "Chọn ngày dự kiến.";
-    if (isApproved && plannedDate <= today) return "Ngày dự kiến phải sau hôm nay.";
-    if (!isApproved && plannedDate < today) return "Ngày dự kiến không được trước hôm nay.";
+    if (plannedDate <= today) return "Ngày dự kiến phải sau hôm nay.";
     return "";
   };
 
@@ -327,7 +326,7 @@ export function FiExecutionUpdateModal({
               <input
                 disabled={locked}
                 id="fi-exec-date"
-                min={isApproved ? tomorrowIsoDate() : today}
+                min={tomorrowIsoDate()}
                 onChange={(event) => setPlannedDate(event.target.value)}
                 type="date"
                 value={plannedDate}

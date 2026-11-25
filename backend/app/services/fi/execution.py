@@ -393,8 +393,8 @@ def update_sk_execution(
                 status_code=400,
                 detail="Ngày dự kiến phải sau hôm nay. Nếu đã xong chọn “Đã hoàn thành”; nếu đang chờ dừng máy/vật tư chọn “Tạm dừng”.",
             )
-        if not is_approved and completion_date < today:
-            raise HTTPException(status_code=400, detail="Ngày dự kiến không được trước ngày hôm nay.")
+        if not is_approved and completion_date <= today:
+            raise HTTPException(status_code=400, detail="Ngày dự kiến hoàn thành phải sau ngày hôm nay.")
         next_plan = format_plan(False, completion_date)
         next_completed_at = None
     else:

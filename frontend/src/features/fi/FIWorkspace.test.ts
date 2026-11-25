@@ -13,6 +13,7 @@ import {
   ownershipBucketForItem,
   recordSubmitterId,
   completionState,
+  completionPlanError,
   isPlanOnlyEdit,
   visibleActionsForSk,
 } from "./FIWorkspace";
@@ -347,5 +348,19 @@ describe("FI content template validation", () => {
     expect(isBlankContentTemplate(CONTENT_TEMPLATE)).toBe(true);
     expect(isBlankContentTemplate(`${CONTENT_TEMPLATE}  \n `)).toBe(true);
     expect(isBlankContentTemplate("Hiện trạng bơm chạy rung -> thay bạc đạn")).toBe(false);
+  });
+});
+
+describe("completionPlanError", () => {
+  const today = "2026-11-25";
+  it("only accepts a planned date after today for in-progress work", () => {
+    expect(completionPlanError(false, "2026-11-24", today)).toMatch(/phải sau hôm nay/);
+    expect(completionPlanError(false, today, today)).toMatch(/phải sau hôm nay/);
+    expect(completionPlanError(false, "2026-11-26", today)).toBe("");
+  });
+  it("only accepts today or earlier for completed work", () => {
+    expect(completionPlanError(true, "2026-11-26", today)).toMatch(/không được sau/);
+    expect(completionPlanError(true, today, today)).toBe("");
+    expect(completionPlanError(true, "2026-10-01", today)).toBe("");
   });
 });

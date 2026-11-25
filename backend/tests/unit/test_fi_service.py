@@ -1068,25 +1068,28 @@ def test_historical_approved_can_be_revised_by_fi_coordinator(db_session):
     assert updated.is_counted_for_okr is False
 
 
-def test_create_sk_treats_reached_planned_date_as_done(db_session):
-    planned_on = factory_today() - timedelta(days=3)
-    record = create_sk_ctkt(
-        db_session,
-        {
-            "author_name": "A",
-            "team": "TBCH",
-            "title": "Plan already reached",
-            "content_description": "Content",
-            "completion_plan": "Dự kiến hoàn thành",
-            "completion_done": False,
-            "completion_date": planned_on,
-            "year": planned_on.year,
-        },
-        "u1",
-    )
+@pytest.mark.parametrize("days_ago", [0, 3])
+def test_create_sk_rejects_in_progress_plan_not_after_today(db_session, days_ago):
+    planned_on = factory_today() - timedelta(days=days_ago)
+    with pytest.raises(HTTPException) as exc:
+        create_sk_ctkt(
+            db_session,
+            {
+                "author_name": "A",
+                "team": "TBCH",
+                "title": "Plan already reached",
+                "content_description": "Content",
+                "completion_plan": "Dự kiến hoàn thành",
+                "completion_done": False,
+                "completion_date": planned_on,
+                "year": planned_on.year,
+            },
+            "u1",
+        )
 
-    assert record.completed_at is not None and record.completed_at.date() == planned_on
-    assert record.completion_plan == f"Đã hoàn thành {planned_on.strftime('%d/%m/%Y')}"
+    assert exc.value.status_code == 400
+    assert "phải sau ngày hôm nay" in str(exc.value.detail)
+    assert db_session.query(SKCTKTModel).count() == 0
 
 
 def _plan_record(record_id: str, status: str, plan: str, completed_at: datetime | None = None) -> SKCTKTModel:

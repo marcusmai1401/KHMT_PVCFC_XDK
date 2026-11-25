@@ -218,7 +218,24 @@ log "Starting containers"
 {compose} restart caddy
 log "Checking services"
 {compose} ps
-curl -fsS http://127.0.0.1/health
+# Caddy was restarted a moment ago and the backend healthcheck is still
+# "starting", so a single probe races the restart (curl exit 56). Poll for up
+# to ~2 minutes before declaring the deploy failed.
+health_ok=0
+for attempt in $(seq 1 24); do
+  if curl -fsS --max-time 5 http://127.0.0.1/health; then
+    health_ok=1
+    break
+  fi
+  log "Health check attempt $attempt failed; retrying in 5s"
+  sleep 5
+done
+if [ "$health_ok" -ne 1 ]; then
+  {compose} ps
+  {compose} logs --tail=80 backend caddy || true
+  echo "Service health check did not pass after deploy" >&2
+  exit 1
+fi
 echo
 log "Deploy complete"
 """

@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock3, Loader2, PauseCircle, Sparkles } from "lucide-react";
+import { CheckCircle2, Clock3, Loader2, PauseCircle } from "lucide-react";
 import { resolveExecutionView } from "../utils/fiExecution";
 
 function formatShortTime(value: string | null | undefined): string {
@@ -115,51 +115,35 @@ export function FiExecutionBand({
         ) : null}
       </div>
 
-      {view.auto && (
-        <div className="fi-execution-auto-banner" role="note">
-          <div className="fi-execution-auto-text">
-            <Sparkles size={14} aria-hidden="true" />
-            <span>
-              <strong>Tự ghi nhận · cần xác nhận:</strong> Hệ thống tự đánh dấu hoàn thành khi tới ngày dự kiến.
-            </span>
+      {view.auto && canUpdate && (onQuickConfirm || onQuickExtend) && (
+        <div className="fi-execution-auto-banner" role="group" aria-label="Xác nhận tự ghi nhận">
+          <div className="fi-execution-auto-actions">
+            {onQuickConfirm && (
+              <button
+                type="button"
+                className="fi-execution-quick-confirm"
+                disabled={confirmingAutoDone}
+                onClick={onQuickConfirm}
+              >
+                {confirmingAutoDone ? <Loader2 size={13} className="icon-spin" /> : <CheckCircle2 size={13} />}
+                {confirmingAutoDone ? "Đang xác nhận..." : "Xác nhận đã xong"}
+              </button>
+            )}
+            {onQuickExtend && (
+              <button
+                type="button"
+                className="fi-execution-quick-extend"
+                disabled={confirmingAutoDone}
+                onClick={onQuickExtend}
+              >
+                Gia hạn
+              </button>
+            )}
           </div>
-          {canUpdate && (onQuickConfirm || onQuickExtend) && (
-            <div className="fi-execution-auto-actions">
-              {onQuickConfirm && (
-                <button
-                  type="button"
-                  className="fi-execution-quick-confirm"
-                  disabled={confirmingAutoDone}
-                  onClick={onQuickConfirm}
-                >
-                  {confirmingAutoDone ? <Loader2 size={13} className="icon-spin" /> : <CheckCircle2 size={13} />}
-                  {confirmingAutoDone ? "Đang xác nhận..." : "Xác nhận đã xong"}
-                </button>
-              )}
-              {onQuickExtend && (
-                <button
-                  type="button"
-                  className="fi-execution-quick-extend"
-                  disabled={confirmingAutoDone}
-                  onClick={onQuickExtend}
-                >
-                  Gia hạn / Tạm dừng
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {view.executionNote && (
-        <div className="fi-execution-note-box">
-          <strong>Ghi chú thực hiện:</strong>
-          <p>{view.executionNote}</p>
         </div>
       )}
 
       <div className="fi-execution-band-foot">
-        {view.note && <small className="fi-completion-note">Kế hoạch gốc: {view.note}</small>}
         {(updatedByText || updatedTime) && (
           <small className="fi-execution-updated-meta">
             Cập nhật gần nhất{updatedByText ? ` bởi ${updatedByText}` : ""}

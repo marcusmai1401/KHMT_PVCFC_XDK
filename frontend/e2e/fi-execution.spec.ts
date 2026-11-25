@@ -179,24 +179,23 @@ test("Team_Account updates teammate Approved SK in Lịch sử FI end-to-end", a
   await expect(page.getByText(/Ảnh đăng ký/)).toBeVisible();
   await expect(page.getByText(/Ảnh hoàn thành/)).toBeVisible();
 
-  // Click CTA -> fill note -> save
+  // Click CTA -> pick "Đã hoàn thành" -> save
   await cta.click();
-  const dialog = page.getByRole("dialog", { name: "Cập nhật tình hình thực hiện" });
+  const dialog = page.getByRole("dialog", { name: "Tiến độ thực hiện" });
   await expect(dialog).toBeVisible();
-  // The dialog keeps the current state (in progress) selected until the user picks another one.
-  await expect(dialog.getByRole("radio", { name: /Đang thực hiện/ })).toHaveAttribute("aria-checked", "true");
-  await dialog.getByRole("radio", { name: /Đã hoàn thành/ }).click();
-  await dialog.locator("#fi-exec-note").fill("Đã lắp đặt hoàn chỉnh tại hiện trường");
-  await dialog.getByRole("button", { name: "Lưu tình hình thực hiện" }).click();
+  // Only two states, and the current one (in progress) stays selected until the user picks another.
+  await expect(dialog.getByRole("radio")).toHaveCount(2);
+  await expect(dialog.getByRole("radio", { name: "Đang thực hiện" })).toHaveAttribute("aria-checked", "true");
+  await dialog.getByRole("radio", { name: "Đã hoàn thành" }).click();
+  await dialog.getByRole("button", { name: "Lưu" }).click();
 
   await expect(dialog).toBeHidden();
   expect(executionWrites).toHaveLength(1);
   expect(executionWrites[0]).toMatchObject({
     execution_status: "completed",
-    execution_note: "Đã lắp đặt hoàn chỉnh tại hiện trường",
+    execution_note: null,
     expected_revision: 3,
   });
-  await expect(page.getByText("Đã lắp đặt hoàn chỉnh tại hiện trường")).toBeVisible();
 });
 
 test("FiExecutionUpdateModal opens ABOVE FiDetailDrawer (no z-index occlusion) and works on mobile", async ({ page }) => {
@@ -303,10 +302,10 @@ test("FiExecutionUpdateModal opens ABOVE FiDetailDrawer (no z-index occlusion) a
 
   const detailDrawer = page.locator(".fi-detail-drawer");
   await expect(detailDrawer).toBeVisible();
-  await expect(detailDrawer.getByText(/Tự ghi nhận · cần xác nhận/)).toBeVisible();
+  await expect(detailDrawer.getByText("Tự ghi nhận").first()).toBeVisible();
 
   await detailDrawer.getByRole("button", { name: "Cập nhật tình hình thực hiện" }).click();
-  const modal = page.locator(".fi-execution-modal");
+  const modal = page.locator(".fi-exec-sheet");
   await expect(modal).toBeVisible();
 
   // Verify hit-testing: modal is NOT occluded by FiDetailDrawer (z-index 200 > 160)

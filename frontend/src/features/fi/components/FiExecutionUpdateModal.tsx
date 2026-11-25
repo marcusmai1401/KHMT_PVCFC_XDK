@@ -1,44 +1,24 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Clock3,
-  ImagePlus,
-  Info,
-  Loader2,
-  PauseCircle,
-  RefreshCw,
-  Trash2,
-  X,
-} from "lucide-react";
+import { Loader2, Plus, X } from "lucide-react";
 import { ApiError, api } from "../../../api/client";
 import {
   EXECUTION_EDITABLE_STATUSES,
-  addDaysIso,
   addMonthsIso,
-  endOfYearIso,
   resolveExecutionView,
   todayIsoDate,
   tomorrowIsoDate,
 } from "../utils/fiExecution";
-import { FiCompletionPill } from "./FiExecutionBand";
 
-export type ExecutionModalInitialStatus = "in_progress" | "paused" | "completed";
+export type ExecutionModalInitialStatus = "in_progress" | "completed";
 
 type StagedFile = {
   id: string;
   file: File;
   previewUrl: string;
   status: "pending" | "uploading" | "done" | "failed";
-  error?: string;
 };
 
-const QUICK_NOTES = [
-  "Đã lắp đặt & nghiệm thu tại hiện trường",
-  "Chờ dừng máy bảo dưỡng để triển khai",
-  "Đang chờ vật tư / thiết bị",
-  "Cần thêm thời gian theo dõi vận hành",
-];
+const IMAGE_NAME = /\.(heic|heif|jfif|bmp|tiff?|avif|jpe?g|png|webp|gif)$/i;
 
 function makeIdemKey(prefix: string): string {
   const rand =
@@ -46,6 +26,13 @@ function makeIdemKey(prefix: string): string {
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   return `${prefix}:${rand}`;
+}
+
+function initialDates(view: ReturnType<typeof resolveExecutionView>, today: string) {
+  return {
+    completed: view.tone === "done" && view.date && view.date <= today ? view.date : today,
+    planned: view.tone === "planned" && view.date && view.date > today ? view.date : addMonthsIso(1),
+  };
 }
 
 export function FiExecutionUpdateModal({
@@ -62,83 +49,51 @@ export function FiExecutionUpdateModal({
   onSaved: (updated: any, message: string) => void;
 }) {
   const isApproved = EXECUTION_EDITABLE_STATUSES.includes(item?.status);
-  const currentView = resolveExecutionView(item);
   const today = todayIsoDate();
-  const tomorrow = tomorrowIsoDate();
-
-  const defaultStatus: ExecutionModalInitialStatus = (() => {
-    if (initialStatus) {
-      if (initialStatus === "paused" && !isApproved) return "in_progress";
-      return initialStatus;
-    }
-    // Keep the current state pre-selected so opening the dialog never proposes a
-    // change the user did not choose (e.g. silently marking an SK completed).
-    if (isApproved && currentView.tone === "paused") return "paused";
-    return currentView.tone === "done" ? "completed" : "in_progress";
-  })();
+  const currentView = resolveExecutionView(item);
+  const dates = initialDates(currentView, today);
 
   const [activeRecord, setActiveRecord] = useState<any>(item);
-  const [status, setStatus] = useState<ExecutionModalInitialStatus>(defaultStatus);
-  const [completedDate, setCompletedDate] = useState<string>(
-    currentView.tone === "done" && currentView.date && currentView.date <= today ? currentView.date : today,
+  const [status, setStatus] = useState<ExecutionModalInitialStatus>(
+    initialStatus ?? (currentView.tone === "done" ? "completed" : "in_progress"),
   );
-  const [plannedDate, setPlannedDate] = useState<string>(
-    currentView.tone === "planned" && currentView.date && currentView.date > today
-      ? currentView.date
-      : addMonthsIso(1),
-  );
-  const [pausedDate, setPausedDate] = useState<string>(
-    currentView.tone === "paused" && currentView.date && currentView.date >= today ? currentView.date : "",
-  );
-  const [note, setNote] = useState<string>(currentView.executionNote ?? "");
+  const [completedDate, setCompletedDate] = useState(dates.completed);
+  const [plannedDate, setPlannedDate] = useState(dates.planned);
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
-  const [dragOver, setDragOver] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [reloadingConflict, setReloadingConflict] = useState(false);
-  const [conflictDetected, setConflictDetected] = useState(false);
+  const [conflict, setConflict] = useState(false);
   const [executionSaved, setExecutionSaved] = useState(false);
   const [savedRecord, setSavedRecord] = useState<any>(null);
   const [error, setError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const allowPhotos = canUploadImages && isApproved;
 
-  // Revoke object URLs on unmount to avoid leaking memory
   const stagedRef = useRef<StagedFile[]>([]);
   stagedRef.current = stagedFiles;
-  useEffect(() => {
-    return () => {
-      stagedRef.current.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
-    };
-  }, []);
+  useEffect(() => () => stagedRef.current.forEach((entry) => URL.revokeObjectURL(entry.previewUrl)), []);
 
-  // Close the dialog; when the execution status was already saved (only some
-  // images failed), hand the saved record back so every open view resyncs.
+  // Once the status is saved (only some photos failed), closing hands the saved
+  // record back so every open view resyncs.
   const dismiss = () => {
-    if (executionSaved && savedRecord) {
-      onSaved(savedRecord, "Đã lưu tình hình thực hiện.");
-    } else {
-      onClose();
-    }
+    if (executionSaved && savedRecord) onSaved(savedRecord, "Đã lưu tình hình thực hiện.");
+    else onClose();
   };
   const dismissRef = useRef(dismiss);
   dismissRef.current = dismiss;
 
-  // Capture Escape so only this modal closes and parent FiDetailDrawer remains open
+  // Escape closes only this dialog; the drawer underneath stays open.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.stopPropagation();
-        if (!saving) dismissRef.current();
-      }
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      if (!saving) dismissRef.current();
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [saving]);
 
   const appendFiles = (incoming: File[]) => {
-    const valid = incoming.filter(
-      (file) =>
-        file.type.startsWith("image/") || /\.(heic|heif|jfif|bmp|tiff?|avif|jpe?g|png|webp|gif)$/i.test(file.name),
-    );
+    const valid = incoming.filter((file) => file.type.startsWith("image/") || IMAGE_NAME.test(file.name));
     if (valid.length === 0) return;
     setError("");
     setStagedFiles((prev) => [
@@ -154,28 +109,26 @@ export function FiExecutionUpdateModal({
 
   const removeStagedFile = (id: string) => {
     setStagedFiles((prev) => {
-      const target = prev.find((f) => f.id === id);
+      const target = prev.find((entry) => entry.id === id);
       if (target) URL.revokeObjectURL(target.previewUrl);
-      return prev.filter((f) => f.id !== id);
+      return prev.filter((entry) => entry.id !== id);
     });
   };
 
   const handlePaste = (event: React.ClipboardEvent) => {
-    if (!canUploadImages || !isApproved) return;
-    const clipboardItems = Array.from(event.clipboardData?.items ?? []);
+    if (!allowPhotos) return;
     const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
     const files: File[] = [];
-    clipboardItems.forEach((entry, idx) => {
-      if (entry.kind === "file" && entry.type.startsWith("image/")) {
-        const raw = entry.getAsFile();
-        if (!raw) return;
-        const ext = (raw.type.split("/")[1] || "png").replace("jpeg", "jpg");
-        const named =
-          raw.name && raw.name !== "image.png"
-            ? raw
-            : new File([raw], `hoan-thanh-${stamp}-${idx + 1}.${ext}`, { type: raw.type || "image/png" });
-        files.push(named);
-      }
+    Array.from(event.clipboardData?.items ?? []).forEach((entry, idx) => {
+      if (entry.kind !== "file" || !entry.type.startsWith("image/")) return;
+      const raw = entry.getAsFile();
+      if (!raw) return;
+      const ext = (raw.type.split("/")[1] || "png").replace("jpeg", "jpg");
+      files.push(
+        raw.name && raw.name !== "image.png"
+          ? raw
+          : new File([raw], `hoan-thanh-${stamp}-${idx + 1}.${ext}`, { type: raw.type || "image/png" }),
+      );
     });
     if (files.length > 0) {
       event.preventDefault();
@@ -183,80 +136,58 @@ export function FiExecutionUpdateModal({
     }
   };
 
-  const reloadLatestRecord = async () => {
-    setReloadingConflict(true);
+  const reloadLatest = async () => {
     setError("");
     try {
       const fresh = await api.getSk(activeRecord.id);
+      const view = resolveExecutionView(fresh);
+      const next = initialDates(view, today);
       setActiveRecord(fresh);
-      setConflictDetected(false);
+      setConflict(false);
       setExecutionSaved(false);
       setSavedRecord(null);
-      const freshView = resolveExecutionView(fresh);
-      setNote(freshView.executionNote ?? "");
-      if (freshView.tone === "paused") {
-        setStatus("paused");
-        setPausedDate(freshView.date && freshView.date >= today ? freshView.date : "");
-      } else if (freshView.tone === "done") {
-        setStatus("completed");
-        setCompletedDate(freshView.date && freshView.date <= today ? freshView.date : today);
-      } else {
-        setStatus("in_progress");
-        setPlannedDate(freshView.date && freshView.date > today ? freshView.date : addMonthsIso(1));
-      }
+      setStatus(view.tone === "done" ? "completed" : "in_progress");
+      setCompletedDate(next.completed);
+      setPlannedDate(next.planned);
     } catch (err: any) {
-      setError(err?.message || "Không thể tải lại phiên bản mới nhất.");
-    } finally {
-      setReloadingConflict(false);
+      setError(err?.message || "Không tải lại được hồ sơ.");
     }
   };
 
   const validate = (): string => {
     if (status === "completed") {
-      if (!completedDate) return "Vui lòng chọn ngày hoàn thành.";
-      if (completedDate > today) return "Ngày hoàn thành không được sau ngày hôm nay.";
-    } else if (status === "in_progress") {
-      if (!plannedDate) return "Vui lòng chọn ngày dự kiến hoàn thành.";
-      if (isApproved && plannedDate <= today) {
-        return "Ngày dự kiến phải sau hôm nay. Nếu đã xong chọn “Đã hoàn thành”; nếu đang chờ dừng máy/vật tư chọn “Tạm dừng”.";
-      }
-      if (!isApproved && plannedDate < today) {
-        return "Ngày dự kiến không được trước ngày hôm nay.";
-      }
-    } else if (status === "paused") {
-      if (pausedDate && pausedDate < today) {
-        return "Ngày dự kiến mới không được trước ngày hôm nay.";
-      }
+      if (!completedDate) return "Chọn ngày hoàn thành.";
+      if (completedDate > today) return "Ngày hoàn thành không được sau hôm nay.";
+      return "";
     }
+    if (!plannedDate) return "Chọn ngày dự kiến.";
+    if (isApproved && plannedDate <= today) return "Ngày dự kiến phải sau hôm nay.";
+    if (!isApproved && plannedDate < today) return "Ngày dự kiến không được trước hôm nay.";
     return "";
   };
 
   const handleSave = async () => {
     if (saving) return;
     if (!executionSaved) {
-      const validationError = validate();
-      if (validationError) {
-        setError(validationError);
+      const invalid = validate();
+      if (invalid) {
+        setError(invalid);
         return;
       }
     }
-
     setSaving(true);
     setError("");
-    setConflictDetected(false);
-
+    setConflict(false);
     try {
       let currentRec = savedRecord ?? activeRecord;
       let currentRev = Number(currentRec.server_revision ?? currentRec.revision ?? 0);
 
-      // Step 1: Save execution status (skip if already saved in a previous attempt where image upload partially failed)
       if (!executionSaved) {
-        const targetDate =
-          status === "completed" ? completedDate : status === "paused" ? pausedDate || null : plannedDate;
         const updated = await api.updateSkExecution(activeRecord.id, {
           execution_status: status,
-          completion_date: targetDate,
-          execution_note: note.trim() || null,
+          completion_date: status === "completed" ? completedDate : plannedDate,
+          // The dialog no longer edits notes; keep whatever is already recorded.
+          execution_note: resolveExecutionView(activeRecord).executionNote ?? null,
           expected_revision: currentRev,
         });
         currentRec = updated;
@@ -266,18 +197,11 @@ export function FiExecutionUpdateModal({
         setExecutionSaved(true);
       }
 
-      // Step 2: Upload any pending/failed completion evidence images sequentially
-      const pendingFiles = stagedFiles.filter((entry) => entry.status !== "done");
-      let uploadedCount = stagedFiles.filter((entry) => entry.status === "done").length;
-      let failedCount = 0;
-
-      if (canUploadImages && isApproved && pendingFiles.length > 0) {
-        for (const entry of pendingFiles) {
-          setStagedFiles((prev) =>
-            prev.map((itemFile) =>
-              itemFile.id === entry.id ? { ...itemFile, status: "uploading", error: undefined } : itemFile,
-            ),
-          );
+      let uploaded = stagedFiles.filter((entry) => entry.status === "done").length;
+      let failed = 0;
+      if (allowPhotos) {
+        for (const entry of stagedFiles.filter((file) => file.status !== "done")) {
+          setStagedFiles((prev) => prev.map((file) => (file.id === entry.id ? { ...file, status: "uploading" } : file)));
           try {
             const response = await api.uploadSkImageWithOptions(activeRecord.id, entry.file, {
               expectedRevision: currentRev,
@@ -285,20 +209,11 @@ export function FiExecutionUpdateModal({
               stage: "completion",
             });
             currentRev = Number(response.server_revision ?? currentRev + 1);
-            uploadedCount += 1;
-            setStagedFiles((prev) =>
-              prev.map((itemFile) => (itemFile.id === entry.id ? { ...itemFile, status: "done" } : itemFile)),
-            );
-          } catch (uploadErr: any) {
-            failedCount += 1;
-            setStagedFiles((prev) =>
-              prev.map((itemFile) =>
-                itemFile.id === entry.id
-                  ? { ...itemFile, status: "failed", error: uploadErr?.message || "Lỗi tải ảnh" }
-                  : itemFile,
-              ),
-            );
-            // Reconcile latest revision in case a previous image committed
+            uploaded += 1;
+            setStagedFiles((prev) => prev.map((file) => (file.id === entry.id ? { ...file, status: "done" } : file)));
+          } catch {
+            failed += 1;
+            setStagedFiles((prev) => prev.map((file) => (file.id === entry.id ? { ...file, status: "failed" } : file)));
             const latest = await api.getSk(activeRecord.id).catch(() => null);
             if (latest) {
               currentRec = latest;
@@ -310,367 +225,174 @@ export function FiExecutionUpdateModal({
         }
       }
 
-      if (failedCount > 0) {
-        setError(
-          `Đã lưu tình hình thực hiện, nhưng ${failedCount} ảnh chưa tải lên được. Bạn có thể bấm “Thử lại ảnh lỗi” hoặc đóng cửa sổ.`,
-        );
+      if (failed > 0) {
+        setError(`Đã lưu. ${failed} ảnh chưa tải lên được.`);
         return;
       }
-
-      // Re-fetch full SK detail (including supporting_images) when images were uploaded
-      const finalRecord =
-        uploadedCount > 0 ? await api.getSk(activeRecord.id).catch(() => currentRec) : currentRec;
-      const finalView = resolveExecutionView(finalRecord);
-      const statusText = `${finalView.label}${finalView.dateText ? ` ${finalView.dateText}` : ""}`;
-      const message =
-        uploadedCount > 0
-          ? `Đã cập nhật tình hình thực hiện (${statusText}) và tải lên ${uploadedCount} ảnh hoàn thành.`
-          : `Đã cập nhật tình hình thực hiện: ${statusText}.`;
-      onSaved(finalRecord, message);
+      const finalRecord = uploaded > 0 ? await api.getSk(activeRecord.id).catch(() => currentRec) : currentRec;
+      const view = resolveExecutionView(finalRecord);
+      const label = `${view.label}${view.dateText ? ` ${view.dateText}` : ""}`;
+      onSaved(
+        finalRecord,
+        uploaded > 0 ? `Đã cập nhật: ${label} · ${uploaded} ảnh.` : `Đã cập nhật: ${label}.`,
+      );
     } catch (err: any) {
       if (err instanceof ApiError && (err.status === 409 || err.code === "VERSION_CONFLICT")) {
-        setConflictDetected(true);
-        setError("Hồ sơ này vừa được người khác cập nhật. Vui lòng tải lại phiên bản mới trước khi lưu.");
+        setConflict(true);
+        setError("Hồ sơ vừa được người khác cập nhật.");
       } else {
-        setError(err?.message || "Không lưu được tình hình thực hiện.");
+        setError(err?.message || "Không lưu được.");
       }
     } finally {
       setSaving(false);
     }
   };
 
-  const hasPendingFailedImages = executionSaved && stagedFiles.some((f) => f.status === "failed");
+  const hasFailedPhotos = executionSaved && stagedFiles.some((file) => file.status === "failed");
+  const locked = saving || executionSaved;
 
   return (
     <div
-      className="fi-edit-modal-backdrop fi-execution-modal-backdrop"
+      className="fi-edit-modal-backdrop fi-exec-sheet-backdrop"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !saving) dismiss();
       }}
     >
       <section
-        aria-labelledby="fi-exec-modal-title"
+        aria-labelledby="fi-exec-sheet-title"
         aria-modal="true"
-        className="fi-plan-dialog fi-execution-modal"
+        className="fi-exec-sheet"
         role="dialog"
         onPaste={handlePaste}
+        onDragOver={(event) => {
+          if (allowPhotos) event.preventDefault();
+        }}
+        onDrop={(event) => {
+          if (!allowPhotos) return;
+          event.preventDefault();
+          appendFiles(Array.from(event.dataTransfer?.files ?? []));
+        }}
       >
-        <header className="fi-plan-dialog-head">
+        <header className="fi-exec-sheet-head">
           <div>
-            <h2 id="fi-exec-modal-title">Cập nhật tình hình thực hiện</h2>
-            <p>
-              {activeRecord.sk_code ? `${activeRecord.sk_code} · ` : ""}
-              {activeRecord.title}
-            </p>
+            <h2 id="fi-exec-sheet-title">Tiến độ thực hiện</h2>
+            <p>{activeRecord.sk_code || activeRecord.title}</p>
           </div>
-          <button
-            aria-label="Đóng"
-            className="fi-edit-modal-close"
-            disabled={saving}
-            onClick={dismiss}
-            type="button"
-          >
-            <X size={18} />
+          <button aria-label="Đóng" className="fi-exec-sheet-close" disabled={saving} onClick={dismiss} type="button">
+            <X size={16} />
           </button>
         </header>
 
-        <div className="fi-execution-modal-body">
-          <div className="fi-plan-dialog-current">
-            <span>Hiện tại</span>
-            <FiCompletionPill item={activeRecord} />
-            {currentView.note && <small>{currentView.note}</small>}
-          </div>
+        <div className="fi-exec-segmented" role="radiogroup" aria-label="Tình trạng">
+          {(
+            [
+              ["in_progress", "Đang thực hiện"],
+              ["completed", "Đã hoàn thành"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              aria-checked={status === value}
+              className={status === value ? "is-selected" : ""}
+              disabled={locked}
+              key={value}
+              onClick={() => {
+                setStatus(value);
+                setError("");
+              }}
+              role="radio"
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
-          <div className="fi-plan-options fi-execution-options" role="radiogroup" aria-label="Trạng thái thực hiện">
-            {/* Option 1: Completed */}
-            <div className={`fi-plan-option tone-done ${status === "completed" ? "selected" : ""}`}>
-              <button
-                aria-checked={status === "completed"}
-                className="fi-plan-option-choice"
-                disabled={saving || executionSaved}
-                onClick={() => setStatus("completed")}
-                role="radio"
-                type="button"
-              >
-                <CheckCircle2 size={20} />
-                <span>
-                  <strong>Đã hoàn thành</strong>
-                  <small>Sáng kiến đã áp dụng xong tại hiện trường</small>
-                </span>
-              </button>
-              {status === "completed" && (
-                <div className="fi-plan-option-date">
-                  <label htmlFor="fi-exec-completed-date">
-                    Ngày hoàn thành <span className="fi-required">*</span>
-                  </label>
-                  <div className="fi-exec-date-row">
-                    <input
-                      id="fi-exec-completed-date"
-                      disabled={saving || executionSaved}
-                      max={today}
-                      onChange={(event) => setCompletedDate(event.target.value)}
-                      type="date"
-                      value={completedDate}
-                    />
-                    <div className="fi-exec-date-chips">
-                      <button
-                        type="button"
-                        disabled={saving || executionSaved}
-                        className={completedDate === today ? "is-selected" : ""}
-                        onClick={() => setCompletedDate(today)}
-                      >
-                        Hôm nay
-                      </button>
-                      <button
-                        type="button"
-                        disabled={saving || executionSaved}
-                        className={completedDate === addDaysIso(-1) ? "is-selected" : ""}
-                        onClick={() => setCompletedDate(addDaysIso(-1))}
-                      >
-                        Hôm qua
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Option 2: In Progress */}
-            <div className={`fi-plan-option tone-planned ${status === "in_progress" ? "selected" : ""}`}>
-              <button
-                aria-checked={status === "in_progress"}
-                className="fi-plan-option-choice"
-                disabled={saving || executionSaved}
-                onClick={() => setStatus("in_progress")}
-                role="radio"
-                type="button"
-              >
-                <Clock3 size={20} />
-                <span>
-                  <strong>Đang thực hiện</strong>
-                  <small>Đang triển khai, cập nhật ngày dự kiến hoàn thành</small>
-                </span>
-              </button>
-              {status === "in_progress" && (
-                <div className="fi-plan-option-date">
-                  <label htmlFor="fi-exec-planned-date">
-                    Ngày dự kiến hoàn thành <span className="fi-required">*</span>
-                  </label>
-                  <div className="fi-exec-date-row">
-                    <input
-                      id="fi-exec-planned-date"
-                      disabled={saving || executionSaved}
-                      min={isApproved ? tomorrow : today}
-                      onChange={(event) => setPlannedDate(event.target.value)}
-                      type="date"
-                      value={plannedDate}
-                    />
-                    <div className="fi-exec-date-chips">
-                      <button
-                        type="button"
-                        disabled={saving || executionSaved}
-                        onClick={() => setPlannedDate(addDaysIso(15))}
-                      >
-                        +15 ngày
-                      </button>
-                      <button
-                        type="button"
-                        disabled={saving || executionSaved}
-                        onClick={() => setPlannedDate(addMonthsIso(1))}
-                      >
-                        +1 tháng
-                      </button>
-                      <button
-                        type="button"
-                        disabled={saving || executionSaved}
-                        onClick={() => setPlannedDate(endOfYearIso())}
-                      >
-                        Cuối năm
-                      </button>
-                    </div>
-                  </div>
-                  <small>
-                    {isApproved
-                      ? "Tới ngày dự kiến, hệ thống tự ghi nhận “Tự ghi nhận · cần xác nhận”."
-                      : "Chỉ áp dụng tự ghi nhận sau khi SK được Đồng ý."}
-                  </small>
-                </div>
-              )}
-            </div>
-
-            {/* Option 3: Paused (only for Approved/Completed) */}
-            {isApproved && (
-              <div className={`fi-plan-option tone-paused ${status === "paused" ? "selected" : ""}`}>
-                <button
-                  aria-checked={status === "paused"}
-                  className="fi-plan-option-choice"
-                  disabled={saving || executionSaved}
-                  onClick={() => setStatus("paused")}
-                  role="radio"
-                  type="button"
-                >
-                  <PauseCircle size={20} />
-                  <span>
-                    <strong>Tạm dừng / Chờ dừng máy</strong>
-                    <small>Đang chờ vật tư, dừng máy hoặc điều kiện vận hành</small>
-                  </span>
-                </button>
-                {status === "paused" && (
-                  <div className="fi-plan-option-date">
-                    <label htmlFor="fi-exec-paused-date">Ngày dự kiến triển khai lại (tùy chọn)</label>
-                    <input
-                      id="fi-exec-paused-date"
-                      disabled={saving || executionSaved}
-                      min={today}
-                      onChange={(event) => setPausedDate(event.target.value)}
-                      type="date"
-                      value={pausedDate}
-                    />
-                    <small>Hệ thống sẽ không tự chuyển sang Đã hoàn thành khi đang tạm dừng.</small>
-                  </div>
-                )}
-              </div>
+        <div className="fi-exec-group">
+          <label className="fi-exec-row" htmlFor="fi-exec-date">
+            <span>{status === "completed" ? "Ngày hoàn thành" : "Dự kiến xong"}</span>
+            {status === "completed" ? (
+              <input
+                disabled={locked}
+                id="fi-exec-date"
+                max={today}
+                onChange={(event) => setCompletedDate(event.target.value)}
+                type="date"
+                value={completedDate}
+              />
+            ) : (
+              <input
+                disabled={locked}
+                id="fi-exec-date"
+                min={isApproved ? tomorrowIsoDate() : today}
+                onChange={(event) => setPlannedDate(event.target.value)}
+                type="date"
+                value={plannedDate}
+              />
             )}
-          </div>
+          </label>
 
-          {/* Optional execution note + quick chips */}
-          <div className="fi-exec-note-field">
-            <div className="fi-exec-note-head">
-              <label htmlFor="fi-exec-note">
-                Ghi chú thực hiện <span className="muted">(tùy chọn)</span>
-              </label>
-              <small className="muted">{note.length}/1000</small>
-            </div>
-            <textarea
-              id="fi-exec-note"
-              disabled={saving || executionSaved}
-              maxLength={1000}
-              rows={2}
-              placeholder="Ví dụ: Đã lắp đặt cover bảo vệ, chạy thử ổn định 7 ngày..."
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-            />
-            <div className="fi-exec-quick-notes" role="group" aria-label="Gợi ý ghi chú nhanh">
-              {QUICK_NOTES.map((preset) => (
+          {allowPhotos && (
+            <div className="fi-exec-row fi-exec-photos">
+              <span>Ảnh</span>
+              <div className="fi-exec-photo-strip">
+                {stagedFiles.map((entry) => (
+                  <div className={`fi-exec-photo is-${entry.status}`} key={entry.id}>
+                    <img alt={entry.file.name} src={entry.previewUrl} />
+                    {entry.status === "uploading" && <Loader2 className="icon-spin" size={14} />}
+                    {entry.status !== "done" && entry.status !== "uploading" && !saving && (
+                      <button
+                        aria-label={`Bỏ ảnh ${entry.file.name}`}
+                        onClick={() => removeStagedFile(entry.id)}
+                        type="button"
+                      >
+                        <X size={11} />
+                      </button>
+                    )}
+                  </div>
+                ))}
                 <button
-                  key={preset}
+                  aria-label="Thêm ảnh"
+                  className="fi-exec-photo-add"
+                  disabled={saving}
+                  onClick={() => fileInputRef.current?.click()}
                   type="button"
-                  disabled={saving || executionSaved}
-                  onClick={() => setNote((prev) => (prev.trim() ? `${prev.trim()}; ${preset}` : preset).slice(0, 1000))}
                 >
-                  + {preset}
+                  <Plus size={18} />
                 </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Optional completion evidence photo uploader */}
-          {canUploadImages && isApproved && (
-            <div className="fi-exec-upload-section">
-              <div className="fi-exec-note-head">
-                <label>
-                  Ảnh bằng chứng hoàn thành <span className="muted">(tùy chọn, khuyến khích)</span>
-                </label>
-                {stagedFiles.length > 0 && <small className="muted">{stagedFiles.length} ảnh đã chọn</small>}
               </div>
               <input
-                ref={fileInputRef}
-                type="file"
                 accept="image/*,.heic,.heif,.jfif,.bmp,.tif,.tiff,.avif"
+                hidden
                 multiple
-                style={{ display: "none" }}
                 onChange={(event) => {
                   appendFiles(Array.from(event.target.files ?? []));
                   event.target.value = "";
                 }}
+                ref={fileInputRef}
+                type="file"
               />
-              <div
-                className={`fi-dropzone fi-exec-dropzone ${dragOver ? "is-drag-over" : ""}`}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setDragOver(true);
-                }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  setDragOver(false);
-                  appendFiles(Array.from(event.dataTransfer?.files ?? []));
-                }}
-              >
-                <button type="button" disabled={saving} onClick={() => fileInputRef.current?.click()}>
-                  <ImagePlus size={15} />
-                  Chọn / chụp ảnh hoàn thành
-                </button>
-                <span className="fi-dropzone-hint">kéo thả hoặc dán Ctrl+V ảnh sau triển khai</span>
-              </div>
-
-              {stagedFiles.length > 0 && (
-                <div className="fi-exec-staged-grid">
-                  {stagedFiles.map((entry) => (
-                    <div className={`fi-exec-staged-item is-${entry.status}`} key={entry.id}>
-                      <img src={entry.previewUrl} alt={entry.file.name} />
-                      <div className="fi-exec-staged-meta">
-                        <small title={entry.file.name}>{entry.file.name}</small>
-                        {entry.status === "done" && <span className="tone-done">Đã tải</span>}
-                        {entry.status === "uploading" && <span>Đang tải...</span>}
-                        {entry.status === "failed" && <span className="tone-danger">{entry.error || "Lỗi"}</span>}
-                      </div>
-                      {entry.status !== "done" && !saving && (
-                        <button
-                          type="button"
-                          aria-label={`Bỏ ảnh ${entry.file.name}`}
-                          className="image-card-delete"
-                          onClick={() => removeStagedFile(entry.id)}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          <p className="fi-plan-dialog-note">
-            <Info size={14} />
-            Trạng thái xét duyệt (“Đồng ý”) và tháng KHMT được giữ nguyên. Mọi cập nhật đều lưu vào lịch sử xử lý.
-          </p>
-
-          {error && (
-            <div className="fi-exec-error-box" role="alert">
-              <AlertTriangle size={15} />
-              <div>
-                <p>{error}</p>
-                {conflictDetected && (
-                  <button
-                    type="button"
-                    className="link-button"
-                    disabled={reloadingConflict}
-                    onClick={() => void reloadLatestRecord()}
-                  >
-                    <RefreshCw size={13} className={reloadingConflict ? "icon-spin" : undefined} />
-                    {reloadingConflict ? "Đang tải lại..." : "Tải lại phiên bản mới"}
-                  </button>
-                )}
-              </div>
             </div>
           )}
         </div>
 
-        <footer className="fi-plan-dialog-actions">
-          <button
-            className="btn-secondary"
-            disabled={saving}
-            onClick={dismiss}
-            type="button"
-          >
+        {error && (
+          <p className="fi-exec-sheet-error" role="alert">
+            {error}
+            {conflict && (
+              <button className="link-button" onClick={() => void reloadLatest()} type="button">
+                Tải lại
+              </button>
+            )}
+          </p>
+        )}
+
+        <footer className="fi-exec-sheet-actions">
+          <button className="fi-exec-btn is-plain" disabled={saving} onClick={dismiss} type="button">
             {executionSaved ? "Đóng" : "Hủy"}
           </button>
-          <button className="btn-primary" disabled={saving || reloadingConflict} onClick={() => void handleSave()} type="button">
-            {saving && <Loader2 size={15} className="icon-spin" />}
-            {saving ? "Đang lưu…" : hasPendingFailedImages ? "Thử lại ảnh lỗi" : "Lưu tình hình thực hiện"}
+          <button className="fi-exec-btn is-filled" disabled={saving} onClick={() => void handleSave()} type="button">
+            {saving ? <Loader2 className="icon-spin" size={15} /> : hasFailedPhotos ? "Thử lại" : "Lưu"}
           </button>
         </footer>
       </section>

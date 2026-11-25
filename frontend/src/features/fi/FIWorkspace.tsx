@@ -191,7 +191,6 @@ const historyCompletionFilterOptions: Array<{ value: HistoryCompletionFilter; la
   { value: "done", label: "Đã hoàn thành", tone: "success" },
   { value: "pending", label: "Chưa hoàn thành", tone: "warning" },
   { value: "auto_done", label: "Tự ghi nhận · cần xác nhận", tone: "info" },
-  { value: "paused", label: "Tạm dừng", tone: "neutral" },
 ];
 
 function decisionFilterForItem(item: any): HistoryDecisionFilter {
@@ -494,11 +493,6 @@ function CompletionPlanField({
           value={date}
         />
       </div>
-      <small className="fi-plan-field-hint">
-        {done
-          ? "Chọn ngày sáng kiến đã áp dụng xong (không sau hôm nay)."
-          : "Chỉ áp dụng tự ghi nhận hoàn thành sau khi SK được Đồng ý. Nếu chưa xong, có thể gia hạn hoặc tạm dừng sau."}
-      </small>
     </fieldset>
   );
 }

@@ -29,7 +29,8 @@ def make_id(prefix: str) -> str:
 
 def json_safe(value: Any) -> Any:
     if isinstance(value, datetime):
-        return value.isoformat()
+        aware = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+        return aware.isoformat()
     if isinstance(value, date):
         return value.isoformat()
     if isinstance(value, Enum):

@@ -165,6 +165,16 @@ def _lock_record_context(
     return record, team_guard
 
 
+SK_CODE_TEAM_ALIASES = {
+    "Workshop_Staff": "XQL",
+}
+
+
+def sk_code_team_segment(team: str) -> str:
+    """Rút gọn tên đội trong mã SK (giữ team trong DB để không đổi phân quyền)."""
+    return SK_CODE_TEAM_ALIASES.get(team, team)
+
+
 def generate_sk_code(db: Session, team: str, year: int, month: int) -> str:
     """Sinh mã SK-CTKT theo format FI/MM/YYYY-TEAM-NN.
 
@@ -173,17 +183,31 @@ def generate_sk_code(db: Session, team: str, year: int, month: int) -> str:
       * TBĐL tháng 6/2026: lại quay về -01
       * TBCH tháng 5/2026: -01 (độc lập với TBĐL)
     """
-    prefix = f"FI/{month:02d}/{year}-{team}"
+    code_team = sk_code_team_segment(team)
+    prefix = f"FI/{month:02d}/{year}-{code_team}"
     # Seed the first atomic increment from the highest existing code.  This
     # preserves legacy rows when the sequence table was introduced late.
     max_value = 0
-    for (existing_code,) in db.execute(
-        select(SKCTKTModel.sk_code).where(SKCTKTModel.sk_code.like(f"{prefix}-%"))
-    ).all():
-        try:
-            max_value = max(max_value, int(str(existing_code).rsplit("-", 1)[1]))
-        except (IndexError, ValueError):
+    # Khi đội có mã rút gọn (Workshop_Staff -> XQL), số thứ tự phải nối tiếp cả
+    # các mã/sequence cũ còn mang tên đội đầy đủ.  Nhờ vậy mã mới sinh ra giữa lúc
+    # deploy và lúc chạy script đổi mã không trùng với mã cũ sau khi được đổi tên.
+    legacy_prefix = f"FI/{month:02d}/{year}-{team}" if code_team != team else None
+    for code_prefix in (prefix, legacy_prefix):
+        if code_prefix is None:
             continue
+        for (existing_code,) in db.execute(
+            select(SKCTKTModel.sk_code).where(SKCTKTModel.sk_code.like(f"{code_prefix}-%"))
+        ).all():
+            if not str(existing_code).startswith(f"{code_prefix}-"):
+                continue
+            try:
+                max_value = max(max_value, int(str(existing_code).rsplit("-", 1)[1]))
+            except (IndexError, ValueError):
+                continue
+    if legacy_prefix is not None:
+        legacy_sequence = db.get(SKCodeSequenceModel, legacy_prefix)
+        if legacy_sequence is not None:
+            max_value = max(max_value, int(legacy_sequence.next_value or 1) - 1)
     first_value = max_value + 1
     sequence_table = SKCodeSequenceModel.__table__
     dialect = db.bind.dialect.name if db.bind is not None else ""
@@ -631,6 +655,11 @@ def transition_sk_ctkt(
             and record.khmt_year is not None
         )
         record.is_counted_for_okr = record.consider_for_khmt
+    elif record.status not in {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}:
+        record.consider_for_khmt = False
+        record.is_counted_for_okr = False
+        record.khmt_month = None
+        record.khmt_year = None
     if record.status == SKStatus.SUBMITTED.value:
         record.submitted_at = now
     elif record.status == SKStatus.REVIEWED.value:
@@ -665,7 +694,8 @@ def transition_sk_ctkt(
     if before_pool_state != after_pool_state:
         team_guard.revision = int(team_guard.revision or 0) + 1
     audit(db, actor, "SK_CTKT", record_id, f"transition:{action}", history)
-    _notify_transition(db, record, record_id)
+    if before != record.status:
+        _notify_transition(db, record, record_id)
     db.commit()
     db.refresh(record)
     return record
@@ -1306,27 +1336,32 @@ def _fi_khmt_filter(record: SKCTKTModel) -> str:
 
 
 def _fi_completion_filter(record: SKCTKTModel) -> str:
-    return "done" if is_record_completed(record) else "pending"
+    return (
+        "done"
+        if record.status in EXECUTION_EDITABLE_STATUSES and is_record_completed(record)
+        else "pending"
+    )
 
 
 def _fi_completion_matches(record: SKCTKTModel, selected: set[str]) -> bool:
     if not selected:
         return True
-    done = is_record_completed(record)
+    is_approved = record.status in EXECUTION_EDITABLE_STATUSES
+    done = is_approved and is_record_completed(record)
     if "done" in selected and done:
         return True
-    if "pending" in selected and not done:
+    if "pending" in selected and is_approved and not done:
         return True
     if "auto_done" in selected and is_record_auto_done(record):
         return True
-    if "paused" in selected and record.status in EXECUTION_EDITABLE_STATUSES and is_record_paused(record):
+    if "paused" in selected and is_approved and is_record_paused(record):
         return True
     return False
 
 
 def _fi_export_execution_label(record: SKCTKTModel) -> str:
     if record.status not in EXECUTION_EDITABLE_STATUSES:
-        return "Đã hoàn thành" if is_record_completed(record) else "Chưa áp dụng"
+        return "Chưa áp dụng"
     if is_record_paused(record):
         return "Tạm dừng"
     if is_record_auto_done(record):
@@ -1437,6 +1472,7 @@ def _write_fi_export_summary(
             Counter(FI_DECISION_LABELS[_fi_decision_filter(record)] for record in records),
         ),
     ]
+    approved_records = [record for record in records if record.status in EXECUTION_EDITABLE_STATUSES]
     second_stats_row = max(first_group_rows) + 3
     second_end_rows = [
         _write_counter_table(
@@ -1451,9 +1487,9 @@ def _write_fi_export_summary(
             sheet,
             second_stats_row,
             4,
-            "Theo hoàn thành",
+            "Theo hoàn thành (SK đồng ý)",
             "Hoàn thành",
-            Counter(FI_COMPLETION_LABELS[_fi_completion_filter(record)] for record in records),
+            Counter(FI_COMPLETION_LABELS[_fi_completion_filter(record)] for record in approved_records),
         ),
     ]
     if khmt_matrix is not None:

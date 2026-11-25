@@ -517,14 +517,32 @@ def test_auto_completion_allowlist_and_history_filters_and_export(client, admin_
     hist = client.get("/api/v1/fi/history?decisions=approved", headers=admin_headers).json()
     assert hist["total"] == 5
     assert hist["facets"]["decisions"] == {"approved": 5, "rejected": 1, "deferred": 1, "pending": 1}
+    assert hist["facets"]["completion"] == {"done": 2, "pending": 3, "auto_done": 1, "paused": 1}
     assert hist["summary"]["approved_completed_count"] == 2
+    assert hist["summary"]["completed_count"] == 2
     assert hist["summary"]["approved_confirmed_completed_count"] == 1
     assert hist["summary"]["approved_auto_done_count"] == 1
     assert hist["summary"]["approved_in_progress_count"] == 2
     assert hist["summary"]["approved_paused_count"] == 1
     assert hist["summary"]["not_completed"] == 3
 
-    pending_res = client.get("/api/v1/fi/history?decisions=approved&completion=pending", headers=admin_headers).json()
+    # Unfiltered history still counts completion strictly across Approved/Completed SKs
+    with create_session() as db:
+        sub_done = db.get(SKCTKTModel, "sub-past")
+        sub_done.completed_at = datetime(2026, 10, 15, tzinfo=timezone.utc)
+        sub_done.completion_plan = "Đã hoàn thành 15/10/2026"
+        db.commit()
+
+    all_hist = client.get("/api/v1/fi/history", headers=admin_headers).json()
+    assert all_hist["total"] == 8
+    assert all_hist["summary"]["completed_count"] == 2
+    assert all_hist["summary"]["not_completed"] == 3
+    assert all_hist["facets"]["completion"] == {"done": 2, "pending": 3, "auto_done": 1, "paused": 1}
+
+    done_res = client.get("/api/v1/fi/history?completion=done", headers=admin_headers).json()
+    assert sorted(item["id"] for item in done_res["items"]) == ["app-auto", "app-confirmed"]
+
+    pending_res = client.get("/api/v1/fi/history?completion=pending", headers=admin_headers).json()
     assert sorted(item["id"] for item in pending_res["items"]) == ["app-inprog", "app-legacy", "app-paused"]
 
     # completion=auto_done returns only app-auto
@@ -564,3 +582,103 @@ def test_auto_completion_allowlist_and_history_filters_and_export(client, admin_
     assert rows_by_code["FI/07/2026-TBHTĐK-app-paused"][note_col] == "Chờ dừng máy"
     assert rows_by_code["FI/07/2026-TBHTĐK-app-confirmed"][exec_col] == "Đã hoàn thành"
     assert rows_by_code["FI/07/2026-TBHTĐK-app-confirmed"][img_col] == 1
+
+
+def test_transition_out_of_approved_clears_khmt_and_reapprove_skips_duplicate_notify(client):
+    headers_for = _seed_users_and_login(client)
+    sk = _create_approved_sk(team="TBHTĐK", author_id="staff_htdk")
+    with create_session() as db:
+        assign_khmt(db, sk.id, 6, 2026, "leader_htdk", "Team_Account", principal_team="TBHTĐK")
+        db.execute(NotificationModel.__table__.delete())
+        db.commit()
+
+        # Re-saving same Approved status does not emit duplicate SK_APPROVED notifications
+        reapproved = transition_sk_ctkt(db, sk.id, "approve", "coord_fi", "FI_Coordinator", note="Cập nhật ghi chú")
+        assert reapproved.consider_for_khmt is True
+        assert db.scalars(select(NotificationModel).where(NotificationModel.event == "SK_APPROVED")).all() == []
+
+        # Transitioning web SK out of Approved clears KHMT/OKR flags cleanly
+        deferred = transition_sk_ctkt(db, sk.id, "defer", "coord_fi", "FI_Coordinator", note="Hoãn lại")
+        assert deferred.status == "Deferred"
+        assert deferred.consider_for_khmt is False
+        assert deferred.is_counted_for_okr is False
+        assert deferred.khmt_month is None
+        assert deferred.khmt_year is None
+
+
+def test_workshop_staff_code_uses_xql_and_team_account_include_team_list(client):
+    headers_for = _seed_users_and_login(client)
+    with create_session() as db:
+        xql_sk = create_sk_ctkt(
+            db,
+            {
+                "author_name": "Nhân viên XQL",
+                "author_user_id": "staff_htdk",
+                "team": "Workshop_Staff",
+                "title": "XQL code check",
+                "content_description": "Nội dung",
+                "completion_plan": "Dự kiến T12/2026",
+                "registration_month": 7,
+                "registration_year": 2026,
+            },
+            "staff_htdk",
+            submit_immediately=True,
+        )
+        assert xql_sk.sk_code == "FI/07/2026-XQL-01"
+
+        teammate_submitted = create_sk_ctkt(
+            db,
+            {
+                "author_name": "Nhân viên TBHTĐK",
+                "author_user_id": "staff_htdk",
+                "team": "TBHTĐK",
+                "title": "Teammate submitted",
+                "content_description": "Nội dung",
+                "completion_plan": "Dự kiến T12/2026",
+            },
+            "staff_htdk",
+            submit_immediately=True,
+        )
+        db.add(
+            SKImageModel(
+                id="img-teammate-sub",
+                sk_ctkt_id=teammate_submitted.id,
+                file_name="evidence.png",
+                file_path="/tmp/evidence.png",
+                file_size=120,
+                content_type="image/png",
+                uploaded_by="staff_htdk",
+                stage="registration",
+            )
+        )
+        teammate_draft = create_sk_ctkt(
+            db,
+            {
+                "author_name": "Nhân viên TBHTĐK",
+                "author_user_id": "staff_htdk",
+                "team": "TBHTĐK",
+                "title": "Teammate draft",
+                "content_description": "Nội dung",
+                "completion_plan": "Dự kiến T12/2026",
+            },
+            "staff_htdk",
+            submit_immediately=False,
+        )
+        submitted_id = teammate_submitted.id
+        draft_id = teammate_draft.id
+        db.commit()
+
+    # Without include_team, Team_Account only sees own/proxy SKs
+    mine_only = client.get("/api/v1/fi/sk-ctkt?mine_only=true", headers=headers_for("leader_htdk")).json()
+    assert [row["id"] for row in mine_only] == []
+
+    # With include_team=true, Team_Account sees submitted/approved teammate SKs (never drafts)
+    with_team = client.get("/api/v1/fi/sk-ctkt?mine_only=true&include_team=true", headers=headers_for("leader_htdk")).json()
+    ids = [row["id"] for row in with_team]
+    assert submitted_id in ids
+    assert draft_id not in ids
+    sub_row = next(row for row in with_team if row["id"] == submitted_id)
+    assert sub_row["image_count"] == 1
+    # Updated timestamp preserves +00:00 / timezone info
+    assert str(with_team[0]["updated_at"]).endswith("+00:00") or str(with_team[0]["updated_at"]).endswith("Z")
+

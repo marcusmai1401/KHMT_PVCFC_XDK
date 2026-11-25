@@ -170,14 +170,16 @@ test("Team_Account updates teammate Approved SK in Lịch sử FI end-to-end", a
   // Quick-filter chip for own team is visible
   await expect(page.getByRole("button", { name: /Đang thực hiện đội TBHTĐK/ })).toBeVisible();
 
-  // Expand inline detail ("Xem chi tiết")
+  // Open FiDetailDrawer ("Xem chi tiết")
   await page.getByRole("button", { name: "Xem chi tiết" }).click();
+  const detailDrawer = page.locator(".fi-detail-drawer");
+  await expect(detailDrawer).toBeVisible();
 
-  // Prominent CTA inside inline detail + 2-stage image headers
-  const cta = page.getByRole("button", { name: "Cập nhật tình hình thực hiện" });
+  // Prominent CTA inside Detail Drawer + 2-stage image headers
+  const cta = detailDrawer.getByRole("button", { name: "Cập nhật tình hình thực hiện" });
   await expect(cta).toBeVisible();
-  await expect(page.getByText(/Ảnh đăng ký/)).toBeVisible();
-  await expect(page.getByText(/Ảnh hoàn thành/)).toBeVisible();
+  await expect(detailDrawer.getByText(/Ảnh đăng ký/)).toBeVisible();
+  await expect(detailDrawer.getByText(/Ảnh hoàn thành/)).toBeVisible();
 
   // Click CTA -> pick "Đã hoàn thành" -> save
   await cta.click();

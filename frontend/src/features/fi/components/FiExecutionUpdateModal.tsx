@@ -275,9 +275,12 @@ export function FiExecutionUpdateModal({
         }}
       >
         <header className="fi-exec-sheet-head">
-          <div>
+          <div className="fi-exec-sheet-head-info">
             <h2 id="fi-exec-sheet-title">Tiến độ thực hiện</h2>
-            <p>{activeRecord.sk_code || activeRecord.title}</p>
+            <p className="fi-exec-sheet-code">{activeRecord.sk_code || activeRecord.title}</p>
+            {activeRecord.sk_code && activeRecord.title && (
+              <p className="fi-exec-sheet-sk-title" title={activeRecord.title}>{activeRecord.title}</p>
+            )}
           </div>
           <button aria-label="Đóng" className="fi-exec-sheet-close" disabled={saving} onClick={dismiss} type="button">
             <X size={16} />

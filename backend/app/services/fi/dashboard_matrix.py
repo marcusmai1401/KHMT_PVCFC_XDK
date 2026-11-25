@@ -24,7 +24,7 @@ from app.services.okr.rules import normalize_assessment
 
 OKR_FI_TEAMS: tuple[str, ...] = ("TBCH", "TBĐL", "TBHTĐK", "TCĐK")
 TEAM_DISPLAY_LABELS: dict[str, str] = {
-    "Workshop_Staff": "Xưởng quản lí",
+    "Workshop_Staff": "XQL",
 }
 ASSIGNABLE_STATUSES: set[str] = {SKStatus.APPROVED.value, SKStatus.COMPLETED.value}
 PENDING_STATUSES: set[str] = {

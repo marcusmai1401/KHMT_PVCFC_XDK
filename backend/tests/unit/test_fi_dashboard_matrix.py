@@ -171,7 +171,7 @@ def test_khmt_matrix_covers_all_12_months_and_separates_workshop_staff(db_sessio
     # Workshop_Staff separated cleanly into non_okr_summary
     assert len(matrix["non_okr_summary"]) == 1
     assert matrix["non_okr_summary"][0]["team"] == "Workshop_Staff"
-    assert matrix["non_okr_summary"][0]["display_name"] == "Xưởng quản lí"
+    assert matrix["non_okr_summary"][0]["display_name"] == "XQL"
     assert matrix["non_okr_summary"][0]["pending_count"] == 1
     assert matrix["workshop_totals"]["year_khmt_total"] == 9
     assert matrix["workshop_totals"]["approved_unassigned_count"] == 1

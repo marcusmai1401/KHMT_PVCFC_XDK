@@ -44,7 +44,7 @@ const tabTitles: Record<Tab, string> = {
 
 function displayTeam(value: string | null | undefined) {
   if (!value) return "";
-  return value === "Workshop_Staff" ? "Xưởng quản lí" : value;
+  return value === "Workshop_Staff" ? "XQL" : value;
 }
 
 const tabSnapshotNames: Record<Tab, string> = {
@@ -263,6 +263,7 @@ export function App() {
     setMustChangePassword(Boolean(response.must_change_password));
     setSandbox(Boolean(payload.sandbox));
     setCapabilityMap({});
+    setFiFocus(null);
     setFiMatrixRequest(null);
     void api.capabilities().then((data: any) => setCapabilityMap(data?.capabilities ?? {})).catch(() => undefined);
     setVoluntaryChange(false);
@@ -303,6 +304,7 @@ export function App() {
       setNotifications([]);
       setSandboxIdentities([]);
       setCapabilityMap({});
+      setFiFocus(null);
       setFiMatrixRequest(null);
       setFeedbackOpen(false);
       if (typeof window !== "undefined") {
@@ -402,6 +404,8 @@ export function App() {
     api.sandboxReset()
       .then(() => {
         setNotice("Đã reset dữ liệu kiểm thử.");
+        setFiFocus(null);
+        setFiMatrixRequest(null);
         setWorkspaceVersion((value) => value + 1);
         loadNotifications();
         loadSandboxIdentities();

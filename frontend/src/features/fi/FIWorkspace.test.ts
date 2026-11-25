@@ -5,6 +5,8 @@ import {
   canSelectKhmtMonth,
   displayTeam,
   hasKhmtPendingChange,
+  isBlankContentTemplate,
+  CONTENT_TEMPLATE,
   isKhmtConsidered,
   khmtLabel,
   matchesHistoryKhmtFilters,
@@ -332,8 +334,18 @@ describe("FI KHMT display", () => {
 });
 
 describe("FI team display", () => {
-  it("uses the Vietnamese label for workshop staff accounts", () => {
-    expect(displayTeam("Workshop_Staff")).toBe("Xưởng quản lí");
+  it("uses XQL label for workshop staff accounts", () => {
+    expect(displayTeam("Workshop_Staff")).toBe("XQL");
     expect(displayTeam("TBCH")).toBe("TBCH");
+  });
+});
+
+describe("FI content template validation", () => {
+  it("rejects empty text and unmodified template placeholder text", () => {
+    expect(isBlankContentTemplate("")).toBe(true);
+    expect(isBlankContentTemplate("   \n  ")).toBe(true);
+    expect(isBlankContentTemplate(CONTENT_TEMPLATE)).toBe(true);
+    expect(isBlankContentTemplate(`${CONTENT_TEMPLATE}  \n `)).toBe(true);
+    expect(isBlankContentTemplate("Hiện trạng bơm chạy rung -> thay bạc đạn")).toBe(false);
   });
 });

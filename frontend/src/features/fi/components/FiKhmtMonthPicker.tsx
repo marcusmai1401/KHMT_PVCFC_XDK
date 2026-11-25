@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Lock, X } from "lucide-react";
 import type { FiKhmtMatrixData } from "../types/fiDashboard";
-import { classifyKhmtCellTone } from "../utils/fiMetrics";
+import { classifyKhmtCellTone, displayTeamLabel } from "../utils/fiMetrics";
 
 const MONTHS = Array.from({ length: 12 }, (_, idx) => idx + 1);
 
@@ -27,12 +27,30 @@ export function FiKhmtMonthPicker({
   const defaultYear = currentYear || khmtMatrix?.year || new Date().getFullYear();
 
   const [open, setOpen] = useState(false);
+  const [flipUp, setFlipUp] = useState(false);
   const [pickerYear, setPickerYear] = useState(defaultYear);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (open) setPickerYear(defaultYear);
   }, [open, defaultYear]);
+
+  useLayoutEffect(() => {
+    if (!open || !containerRef.current) {
+      setFlipUp(false);
+      return;
+    }
+    const updatePlacement = () => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      setFlipUp(spaceBelow < 320 && spaceAbove > spaceBelow);
+    };
+    updatePlacement();
+    window.addEventListener("resize", updatePlacement);
+    return () => window.removeEventListener("resize", updatePlacement);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -92,12 +110,12 @@ export function FiKhmtMonthPicker({
 
       {open && (
         <div
-          className="fi-khmt-picker-popover"
+          className={`fi-khmt-picker-popover ${flipUp ? "is-flip-up" : ""}`}
           role="dialog"
           aria-label={`Chọn kỳ KHMT cho ${item?.sk_code || item?.title}`}
         >
           <div className="fi-khmt-picker-head">
-            <span>Chọn kỳ KHMT · <strong>{item?.team}</strong></span>
+            <span>Chọn kỳ KHMT · <strong>{displayTeamLabel(item?.team)}</strong></span>
             <div className="fi-khmt-picker-year">
               <button
                 type="button"

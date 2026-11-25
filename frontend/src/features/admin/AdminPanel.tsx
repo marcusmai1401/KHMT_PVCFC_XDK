@@ -193,6 +193,7 @@ export function AdminPanel({
   const [users, setUsers] = useState<any[]>([]);
   const [auditRows, setAuditRows] = useState<any[]>([]);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const [teamFilter, setTeamFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -270,6 +271,7 @@ export function AdminPanel({
     }
     setKhmtBusyTeam(row.team);
     setError("");
+    setNotice("");
     api.adminKhmtFiPreview(row.team, khmtMonth, khmtYear, assessment)
       .then((preview) => {
         setKhmtPreview(preview);
@@ -283,6 +285,7 @@ export function AdminPanel({
     if (!khmtPreview || !khmtReason.trim() || !khmtPreview.can_finalize || khmtBusyTeam) return;
     setKhmtBusyTeam(khmtPreview.team);
     setError("");
+    setNotice("");
     const assessment = khmtAssessments[khmtPreview.team] || khmtPreview.assessment;
     api.adminKhmtFiFinalize(khmtPreview.team, khmtMonth, khmtYear, khmtReason.trim(), assessment, {
       expectedRevision: khmtPreview.report_revision ?? khmtPreview.report?.revision ?? 0,
@@ -292,7 +295,7 @@ export function AdminPanel({
       .then(() => {
         setKhmtPreview(null);
         setKhmtReason("");
-        setError(`Đã chốt ${displayTeam(khmtPreview.team)} và phân bổ ${khmtPreview.required_count} FI cho T${khmtMonth}/${khmtYear}.`);
+        setNotice(`Đã chốt ${displayTeam(khmtPreview.team)} và phân bổ ${khmtPreview.required_count} FI cho T${khmtMonth}/${khmtYear}.`);
         loadKhmtOverview(false);
       })
       .catch((err) => setError(err.message))
@@ -304,11 +307,12 @@ export function AdminPanel({
     if (!reason?.trim()) return;
     setKhmtBusyTeam(row.team);
     setError("");
+    setNotice("");
     api.adminKhmtFiUnlock(row.team, khmtMonth, khmtYear, reason.trim(), {
       expectedRevision: row.report_revision ?? row.report?.revision ?? 0,
     })
       .then(() => {
-        setError(`Đã mở chốt ${displayTeam(row.team)}. Phân bổ hiện tại được giữ cho tới lần chốt lại.`);
+        setNotice(`Đã mở chốt ${displayTeam(row.team)}. Phân bổ hiện tại được giữ cho tới lần chốt lại.`);
         loadKhmtOverview(false);
       })
       .catch((err) => setError(err.message))
@@ -449,6 +453,7 @@ export function AdminPanel({
   const totals = dashboard?.totals ?? {};
   const approvedCount = Number(totals.review_passed ?? fiRows.filter((row) => ["Approved", "Completed"].includes(row.status)).length);
   const pendingCount = Number(totals.pending ?? fiRows.filter((row) => ["Submitted", "NeedMoreInfo", "Reviewed"].includes(row.status)).length);
+  const deferredCount = Number(totals.deferred ?? fiRows.filter((row) => row.status === "Deferred").length);
   const khmtCount = Number(totals.khmt_considered ?? fiRows.filter(isKhmtConsidered).length);
   const activeUsers = users.filter((user) => user.is_active).length;
   const changedPasswordCount = users.filter((user) => !user.must_change_password).length;
@@ -472,9 +477,9 @@ export function AdminPanel({
         </div>
         <div className="admin-fi-kpi">
           <Clock3 size={18} />
-          <span>Chờ xử lý</span>
+          <span>Chờ duyệt</span>
           <strong>{pendingCount}</strong>
-          <small>Cần tiếp tục xét duyệt</small>
+          <small>{deferredCount > 0 ? `${deferredCount} xem xét sau · chờ duyệt tiếp` : "Cần tiếp tục xét duyệt"}</small>
         </div>
         <div className="admin-fi-kpi">
           <CheckCircle2 size={18} />
@@ -1097,7 +1102,8 @@ export function AdminPanel({
       data-snapshot-target="true"
       data-snapshot-name="quan-tri"
     >
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error" role="alert">{error}</p>}
+      {notice && <p className="success" role="status">{notice}</p>}
       <section className="panel wide admin-fi-panel admin-system-panel">
         <div className="panel-header admin-fi-header">
           <div>

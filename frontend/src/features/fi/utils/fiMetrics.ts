@@ -24,7 +24,7 @@ export type TeamProgress = {
 };
 
 const TEAM_DISPLAY_LABELS: Record<string, string> = {
-  Workshop_Staff: "Xưởng quản lí",
+  Workshop_Staff: "XQL",
 };
 
 export function displayTeamLabel(value: string | null | undefined): string {

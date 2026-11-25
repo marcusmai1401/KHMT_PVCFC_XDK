@@ -1,6 +1,8 @@
 import { useEffect, type ReactNode } from "react";
 import {
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   ClipboardCheck,
   History,
   ImagePlus,
@@ -34,6 +36,10 @@ export function FiDetailDrawer({
   historyEntries,
   completionBand,
   reviewPanel,
+  reviewOpen = false,
+  positionLabel,
+  onPrev,
+  onNext,
   renderImageCard,
   historyActionLabel,
   actorLabel,
@@ -66,6 +72,10 @@ export function FiDetailDrawer({
   historyEntries: any[];
   completionBand: ReactNode;
   reviewPanel?: ReactNode;
+  reviewOpen?: boolean;
+  positionLabel?: string;
+  onPrev?: () => void;
+  onNext?: () => void;
   renderImageCard: (img: any, index: number) => ReactNode;
   historyActionLabel: (entry: any) => string;
   actorLabel: (actor: string | null | undefined) => string;
@@ -85,11 +95,29 @@ export function FiDetailDrawer({
   useEffect(() => {
     if (!item || suspended) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      const isEditingField =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable);
+      if (isEditingField) return;
+      if (event.key === "ArrowLeft" && onPrev) {
+        event.preventDefault();
+        onPrev();
+      } else if (event.key === "ArrowRight" && onNext) {
+        event.preventDefault();
+        onNext();
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [item, suspended, onClose]);
+  }, [item, suspended, onClose, onPrev, onNext]);
 
   if (!item) return null;
 
@@ -98,6 +126,7 @@ export function FiDetailDrawer({
   const indexById = new Map<string, number>();
   images.forEach((img, idx) => indexById.set(String(img.id), idx));
   const uploadLabel = isApprovedStage ? "Thêm ảnh hoàn thành" : "Thêm ảnh";
+  const hasPrevNext = Boolean(onPrev || onNext);
 
   return (
     <div
@@ -122,25 +151,52 @@ export function FiDetailDrawer({
             </div>
             <h2>{item.title}</h2>
           </div>
-          <button
-            type="button"
-            className="fi-drawer-close"
-            aria-label="Đóng chi tiết"
-            onClick={onClose}
-          >
-            <X size={18} />
-          </button>
+          <div className="fi-drawer-head-controls">
+            {hasPrevNext && (
+              <div className="fi-drawer-nav" role="group" aria-label="Điều hướng hồ sơ">
+                <button
+                  type="button"
+                  className="fi-drawer-nav-btn"
+                  aria-label="Hồ sơ trước"
+                  title="Hồ sơ trước (mũi tên trái)"
+                  disabled={!onPrev}
+                  onClick={onPrev}
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                {positionLabel && <span className="fi-drawer-nav-pos">{positionLabel}</span>}
+                <button
+                  type="button"
+                  className="fi-drawer-nav-btn"
+                  aria-label="Hồ sơ tiếp theo"
+                  title="Hồ sơ tiếp theo (mũi tên phải)"
+                  disabled={!onNext}
+                  onClick={onNext}
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            )}
+            <button
+              type="button"
+              className="fi-drawer-close"
+              aria-label="Đóng chi tiết"
+              onClick={onClose}
+            >
+              <X size={18} />
+            </button>
+          </div>
         </header>
 
         <div className="fi-detail-drawer-actions">
           {actions.includes("reviewDecision") && (
             <button
-              className="fi-detail-action primary"
+              className={`fi-detail-action ${reviewOpen ? "secondary" : "primary"}`}
               type="button"
               onClick={onReview}
             >
               <ClipboardCheck size={16} />
-              Đánh giá
+              {reviewOpen ? "Đóng đánh giá" : "Đánh giá"}
             </button>
           )}
           {actions.includes("edit") && (
@@ -191,7 +247,7 @@ export function FiDetailDrawer({
             <div className="fi-meta-item">
               <Users2 size={16} />
               <span>Người đăng ký</span>
-              <strong>{submitterLabel}</strong>
+              <strong>{!submitterLabel || submitterLabel === item.author_name ? "Tự đăng ký" : submitterLabel}</strong>
             </div>
             <div className="fi-meta-item">
               <CalendarDays size={16} />
@@ -340,7 +396,7 @@ export function FiDetailDrawer({
                             <span>Người thực hiện</span>
                             <strong>{actorLabel(entry.changed_by)}</strong>
                           </p>
-                          {detail && (
+                          {detail && detail.text && (
                             <div className="fi-timeline-note">
                               <span>{detail.label}</span>
                               <p>{detail.text}</p>

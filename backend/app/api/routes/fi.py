@@ -189,11 +189,28 @@ def _sk_to_dict(
     data["effective_author_user_id"] = effective_author or (None if is_import_actor(record.author_user_id) else record.author_user_id)
     data["execution_state"] = resolve_execution_state(record, principal=principal, db=db)
     if include_images:
-        data["supporting_images"] = [
+        images = [
             sk_image_to_dict(image)
             for image in db.execute(select(SKImageModel).where(SKImageModel.sk_ctkt_id == record.id)).scalars()
         ]
+        data["supporting_images"] = images
+        data["image_count"] = len(images)
+    elif "fi_image_counts" in db.info:
+        data["image_count"] = int(db.info["fi_image_counts"].get(record.id, 0))
     return data
+
+
+def _populate_image_counts(db: Session, records: list[SKCTKTModel]) -> None:
+    """Batch-load attachment counts per SK so list endpoints avoid N+1 queries."""
+    if not records:
+        return
+    record_ids = [record.id for record in records]
+    rows = db.execute(
+        select(SKImageModel.sk_ctkt_id, func.count())
+        .where(SKImageModel.sk_ctkt_id.in_(record_ids))
+        .group_by(SKImageModel.sk_ctkt_id)
+    ).all()
+    db.info["fi_image_counts"] = {sk_id: int(count) for sk_id, count in rows}
 
 
 def _author_user_or_400(db: Session, user_id: str) -> User:
@@ -292,6 +309,7 @@ def list_sk(
     q: str | None = None,
     include_historical: bool = False,
     mine_only: bool = False,
+    include_team: bool = False,
     principal: dict = Depends(require_role(Role.TEAM_ACCOUNT, Role.STAFF, Role.FI_COORDINATOR, Role.WORKSHOP_LEADER, Role.ADMIN)),
     db: Session = Depends(get_db),
 ):
@@ -309,7 +327,19 @@ def list_sk(
     if mine_only:
         actor = principal["user_id"]
         submitted_by = SKCTKTModel.status_history[0]["comments"]["submitted_by"].as_string()
-        query = query.where(or_(SKCTKTModel.author_user_id == actor, submitted_by == actor))
+        ownership_clauses = [SKCTKTModel.author_user_id == actor, submitted_by == actor]
+        principal_team = str(principal.get("team") or "").strip()
+        if not principal_team and principal.get("role") == Role.TEAM_ACCOUNT.value:
+            # Tài khoản đội/tổ cũ có thể chưa gán cột team: mã tài khoản chính là mã đội.
+            principal_team = str(actor or "").strip()
+        if include_team and principal_team:
+            ownership_clauses.append(
+                and_(
+                    SKCTKTModel.team == principal_team,
+                    SKCTKTModel.status != SKStatus.DRAFT.value,
+                )
+            )
+        query = query.where(or_(*ownership_clauses))
     query = query.order_by(
         func.coalesce(SKCTKTModel.created_at, SKCTKTModel.submitted_at, SKCTKTModel.updated_at).desc(),
         SKCTKTModel.id.desc(),
@@ -317,7 +347,7 @@ def list_sk(
     records = db.execute(query).scalars().all()
     if records and "fi_user_directory" not in db.info:
         db.info["fi_user_directory"] = list(db.scalars(select(User)))
-    filtered = []
+    visible = []
     for record in records:
         if not can_view_sk(record, principal):
             continue
@@ -327,8 +357,9 @@ def list_sk(
             haystack = f"{record.title} {record.author_name} {record.content_description}".lower()
             if q.lower() not in haystack:
                 continue
-        filtered.append(_sk_to_dict(record, db, principal=principal))
-    return filtered
+        visible.append(record)
+    _populate_image_counts(db, visible)
+    return [_sk_to_dict(record, db, principal=principal) for record in visible]
 
 
 @router.get("/sk-ctkt/public")
@@ -364,6 +395,7 @@ def public_sk(
     filtered.sort(key=lambda record: record.created_at, reverse=True)
     if filtered and "fi_user_directory" not in db.info:
         db.info["fi_user_directory"] = list(db.scalars(select(User)))
+    _populate_image_counts(db, filtered)
     return [_sk_to_dict(record, db, principal=principal) for record in filtered]
 
 
@@ -430,9 +462,9 @@ def fi_history(
         if "completion" not in exclude and selected_completion:
             completion_clauses = []
             if "done" in selected_completion:
-                completion_clauses.append(expr["done"])
+                completion_clauses.append(and_(expr["is_approved"], expr["done"]))
             if "pending" in selected_completion:
-                completion_clauses.append(~expr["done"])
+                completion_clauses.append(and_(expr["is_approved"], ~expr["done"]))
             if "auto_done" in selected_completion:
                 completion_clauses.append(expr["auto_done"])
             if "paused" in selected_completion:
@@ -477,6 +509,15 @@ def fi_history(
         if decision_value in decision_facet_counts:
             decision_facet_counts[decision_value] = int(count)
 
+    completion_facet_row = db.execute(
+        apply_filters(base_query, exclude={"completion"}).with_only_columns(
+            func.coalesce(func.sum(case((and_(expr["is_approved"], expr["done"]), 1), else_=0)), 0).label("done"),
+            func.coalesce(func.sum(case((and_(expr["is_approved"], ~expr["done"]), 1), else_=0)), 0).label("pending"),
+            func.coalesce(func.sum(case((expr["auto_done"], 1), else_=0)), 0).label("auto_done"),
+            func.coalesce(func.sum(case((expr["paused"], 1), else_=0)), 0).label("paused"),
+        )
+    ).mappings().one()
+
     facets = {
         "teams": sorted(
             [{"value": row[0], "count": row[1]} for row in facet_rows({"teams"}, SKCTKTModel.team) if row[0]],
@@ -487,6 +528,12 @@ def fi_history(
             key=lambda row: row["value"],
         ),
         "decisions": decision_facet_counts,
+        "completion": {
+            "done": int(completion_facet_row["done"] or 0),
+            "pending": int(completion_facet_row["pending"] or 0),
+            "auto_done": int(completion_facet_row["auto_done"] or 0),
+            "paused": int(completion_facet_row["paused"] or 0),
+        },
         "khmt": {"in": khmt_in_count, "out": khmt_out_count},
         "periods": [
             {"month": month, "year": year, "count": count}
@@ -550,12 +597,14 @@ def fi_history(
         counts = dict(db.execute(summary_query).mappings().one())
     total = int(counts["total"] or 0)
     total_pages = (total + page_size - 1) // page_size
-    completed_count = int(counts["completed_count"] or 0)
     approved_completed_count = int(counts["approved_completed_count"] or 0)
     approved_auto_done_count = int(counts["approved_auto_done_count"] or 0)
     approved_paused_count = int(counts["approved_paused_count"] or 0)
     approved_in_progress_count = int(counts["approved_in_progress_count"] or 0)
     approved_confirmed_completed_count = max(0, approved_completed_count - approved_auto_done_count)
+    # Thống nhất hoàn thành trên Lịch sử FI chỉ tính trong SK đã được Đồng ý.
+    completed_count = approved_completed_count
+    not_completed = approved_in_progress_count + approved_paused_count
     decision_counts = {key: int(counts[key] or 0) for key in ("approved", "rejected", "deferred", "pending")}
     applied_filters = {
         "teams": sorted(requested_teams),
@@ -586,7 +635,7 @@ def fi_history(
             "khmt_missing": total - int(counts["khmt_considered"] or 0),
             "khmt_unassigned_approved": int(counts["khmt_unassigned_approved"] or 0),
             "completed_count": completed_count,
-            "not_completed": total - completed_count,
+            "not_completed": not_completed,
             "approved_completed_count": approved_completed_count,
             "approved_confirmed_completed_count": approved_confirmed_completed_count,
             "approved_auto_done_count": approved_auto_done_count,

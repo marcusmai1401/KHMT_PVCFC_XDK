@@ -230,6 +230,7 @@ export function FiDashboardView({
     khmt?: "in" | "out";
     decision?: "approved" | "pending";
     completion?: "done" | "pending" | "auto_done" | "paused";
+    registrationYear?: number;
   }) => void;
   onJumpToReview?: () => void;
 }) {
@@ -356,12 +357,23 @@ export function FiDashboardView({
       )}
       {error && <p className="error" role="alert" tabIndex={-1}>{error}</p>}
 
+      {!dashboard && loading ? (
+        <div className="fi-dashboard-skeleton" aria-busy="true">
+          <div className="fi-dashboard-kpis fi-dashboard-kpis-4">
+            {[0, 1, 2, 3].map((idx) => (
+              <div key={idx} className="fi-dashboard-kpi fi-skeleton-card" />
+            ))}
+          </div>
+          <div className="fi-dashboard-card fi-skeleton-matrix" />
+        </div>
+      ) : (
+        <>
       {/* 4 Balanced KPI Cards */}
       <div className="fi-dashboard-kpis fi-dashboard-kpis-4">
         <button
           type="button"
           className="fi-dashboard-kpi total is-clickable"
-          onClick={() => onJumpToHistory({})}
+          onClick={() => onJumpToHistory(kpiScope === "year" ? { registrationYear: selectedYear } : {})}
           title="Xem toàn bộ SK-CTKT trong Lịch sử FI"
         >
           <div className="fi-dashboard-kpi-icon"><ClipboardList size={20} /></div>
@@ -375,7 +387,12 @@ export function FiDashboardView({
         <button
           type="button"
           className="fi-dashboard-kpi info is-clickable"
-          onClick={() => onJumpToHistory({ khmt: "in" })}
+          onClick={() =>
+            onJumpToHistory({
+              khmt: "in",
+              ...(kpiScope === "year" ? { registrationYear: selectedYear } : {}),
+            })
+          }
           title="Xem danh sách SK đã vào KHMT"
         >
           <div className="fi-dashboard-kpi-icon"><CalendarDays size={20} /></div>
@@ -392,15 +409,20 @@ export function FiDashboardView({
           className="fi-dashboard-kpi warning is-clickable"
           onClick={() => {
             if (canReview && onJumpToReview) onJumpToReview();
-            else onJumpToHistory({ decision: "pending" });
+            else {
+              onJumpToHistory({
+                decision: "pending",
+                ...(kpiScope === "year" ? { registrationYear: selectedYear } : {}),
+              });
+            }
           }}
           title={canReview ? "Mở hàng đợi Xét duyệt SK-CTKT" : "Xem các SK đang chờ duyệt"}
         >
           <div className="fi-dashboard-kpi-icon"><Clock3 size={20} /></div>
-          <span>Chờ xử lý</span>
-          <strong>{formatCount(pendingCount + deferredCount)}</strong>
+          <span>Chờ duyệt</span>
+          <strong>{formatCount(pendingCount)}</strong>
           <small>
-            {formatCount(pendingCount)} chờ duyệt · {formatCount(deferredCount)} xem xét sau
+            {deferredCount > 0 ? `${formatCount(deferredCount)} xem xét sau` : "Đang chờ Đầu mối FI đánh giá"}
           </small>
         </button>
 
@@ -411,6 +433,7 @@ export function FiDashboardView({
             onJumpToHistory({
               decision: "approved",
               completion: notCompletedCount > 0 ? "pending" : "done",
+              ...(kpiScope === "year" ? { registrationYear: selectedYear } : {}),
             })
           }
           title={
@@ -578,6 +601,8 @@ export function FiDashboardView({
             })}
           </div>
         </div>
+      )}
+        </>
       )}
     </section>
   );

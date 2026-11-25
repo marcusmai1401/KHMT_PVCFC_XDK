@@ -68,8 +68,16 @@ const AUTHOR_ROLES = [TEAM_ROLE, STAFF_ROLE, FI_COORDINATOR_ROLE];
 const AUTHOR_PICKER_ROLES = [...AUTHOR_ROLES, ADMIN_ROLE];
 const FI_TEAMS = ["TBCH", "TBĐL", "TBHTĐK", "TCĐK"];
 const TEAM_DISPLAY_LABELS: Record<string, string> = {
-  Workshop_Staff: "Xưởng quản lí",
+  Workshop_Staff: "XQL",
 };
+export const CONTENT_TEMPLATE =
+  "1. Hiện trạng / Vấn đề:\n- \n\n2. Giải pháp cải tiến:\n- \n\n3. Hiệu quả dự kiến:\n- ";
+export function isBlankContentTemplate(value: string | null | undefined): boolean {
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed) return true;
+  const compact = (text: string) => text.replace(/\s+/g, " ").trim();
+  return compact(trimmed) === compact(CONTENT_TEMPLATE);
+}
 const REVIEWER_ROLES = [ADMIN_ROLE, FI_COORDINATOR_ROLE];
 const REVIEW_DECISION_STATUSES = ["Submitted", "Reviewed", "Deferred", "Approved", "Rejected"];
 const REVIEWED_STATUSES = ["Approved", "Rejected", "Deferred", "Reviewed"];
@@ -143,8 +151,14 @@ const fiSnapshotNames: Record<FITab, string> = {
 };
 type ReviewQueueFilter = "pending" | "reviewed" | "all";
 type OwnershipBucket = "pending" | "implementation" | "history";
-type OwnershipMode = "mine" | "sent";
-type OwnershipListKey = "minePending" | "mineImplementation" | "sentPending" | "sentImplementation";
+type OwnershipMode = "mine" | "sent" | "team";
+type OwnershipListKey =
+  | "minePending"
+  | "mineImplementation"
+  | "sentPending"
+  | "sentImplementation"
+  | "teamPending"
+  | "teamImplementation";
 type HistoryMonthGroup = { key: string; month: number | null; year: number; items: any[] };
 type ReviewDecision = "approve" | "request-info" | "defer" | "reject";
 
@@ -575,6 +589,7 @@ async function uploadWithRetry(
 }
 
 function historyActionLabel(history: any) {
+  if (history.reason === "resubmitted_after_edit") return "Đã chỉnh sửa và gửi xét duyệt lại";
   if (history.reason === "execution_update") return "Cập nhật tình hình thực hiện";
   if (history.reason === "completion_plan_update") return "Cập nhật kế hoạch hoàn thành";
   if (history.reason === "completion_auto_done") return "Tự ghi nhận hoàn thành (tới ngày dự kiến)";
@@ -604,6 +619,9 @@ function historyDetail(history: any) {
   const reason = typeof history.reason === "string" ? history.reason.trim() : "";
   const comments = typeof history.comments === "string" ? history.comments.trim() : "";
   const structuredComments = typeof history.comments === "object" && history.comments !== null ? history.comments : null;
+  if (reason === "resubmitted_after_edit") {
+    return { label: "Hành động", text: "Tác giả đã bổ sung và gửi xét duyệt lại" };
+  }
   if (reason === "web_registration") {
     return { label: "Ghi nhận", text: "Đăng ký mới" };
   }
@@ -1451,7 +1469,8 @@ export function FIWorkspace({
   const accountTeam = AUTHOR_ROLES.includes(role) ? teamFromAccount : null;
   const canRegister = AUTHOR_ROLES.includes(role) || (role === ADMIN_ROLE && editMode);
   const canReview = REVIEWER_ROLES.includes(role);
-  const defaultTab: FITab = canRegister ? "register" : canReview ? "review" : "dashboard";
+  const defaultTab: FITab =
+    role === FI_COORDINATOR_ROLE ? "review" : canRegister ? "register" : canReview ? "review" : "dashboard";
   const [items, setItems] = useState<any[]>([]);
   // Legacy (imported) FI still pending a decision are reviewed from the
   // history tab; the review queue only lists records created in the app.
@@ -1497,7 +1516,12 @@ export function FIWorkspace({
     mineImplementation: false,
     sentPending: false,
     sentImplementation: false,
+    teamPending: false,
+    teamImplementation: false,
   });
+  const [ownershipPanelTab, setOwnershipPanelTab] = useState<"team" | "mine" | "sent">(
+    () => (role === TEAM_ROLE && Boolean(accountTeam) ? "team" : "mine"),
+  );
   const [form, setForm] = useState(() => {
     const today = new Date();
     return {
@@ -1513,8 +1537,12 @@ export function FIWorkspace({
     };
   });
   const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
   const [actionTarget, setActionTarget] = useState<{ id: string; label: string; decision: ReviewDecision; revision: number } | null>(null);
   const [actionNote, setActionNote] = useState("");
+  // Ghi chú đang soạn cho kết luận "Đồng ý": giữ lại khi người duyệt lỡ chuyển sang
+  // kết luận khác rồi quay lại, để không mất phần đã gõ.
+  const approveNoteDraftRef = useRef<string | null>(null);
   const [editTarget, setEditTarget] = useState<any>(null);
   const [planTarget, setPlanTarget] = useState<{ item: any; initialStatus?: ExecutionModalInitialStatus } | null>(null);
   const [confirmingAutoDoneId, setConfirmingAutoDoneId] = useState<string | null>(null);
@@ -1608,6 +1636,7 @@ export function FIWorkspace({
   }), [registerGuard, currentUserId, formDirty, creating, form, evidenceFiles]);
   const resetRegistration = () => {
     recoveryStore.remove(); setRecovery(null); setOperation(null); operationRef.current = null;
+    setFormError("");
     setForm((current) => ({
       ...current,
       title: "",
@@ -1622,7 +1651,11 @@ export function FIWorkspace({
     const epoch = ++reloadEpoch.current;
     const yearToLoad = overrideYear ?? dashboardYear;
     setDashboardLoading(true);
-    const listFilters = canReview ? {} : { mine_only: true };
+    const listFilters = canReview
+      ? {}
+      : role === TEAM_ROLE && accountTeam
+        ? { mine_only: true, include_team: true }
+        : { mine_only: true };
     const historyRequest = activeTab === "history"
       ? api.fiHistory({
           q: historyQuery || undefined,
@@ -1718,10 +1751,9 @@ export function FIWorkspace({
     setAuthorQuery(accountAuthorName);
   }, [role, accountAuthorName, accountTeam, canUseAuthorPicker, currentUserId, defaultFormTeam]);
 
-  // Nạp danh sách nhân sự cho combobox tác giả (chỉ với vai trò được phép đăng ký).
-  // Nếu không tải được vẫn cho nhập tay tên tác giả nên lỗi được bỏ qua êm.
+  // Nạp danh bạ nhân sự cho toàn bộ vai trò FI (combobox tác giả + hiển thị đầy đủ họ tên
+  // người thực hiện trong Lịch sử xử lý thay vì mã tài khoản như quyenpt/minhvq).
   useEffect(() => {
-    if (!canUseAuthorPicker) return;
     let active = true;
     api.listTaggableEmployees()
       .then((rows) => {
@@ -1731,7 +1763,17 @@ export function FIWorkspace({
     return () => {
       active = false;
     };
-  }, [canUseAuthorPicker]);
+  }, []);
+
+  useEffect(() => {
+    setOwnershipPanelTab(role === TEAM_ROLE && Boolean(accountTeam) ? "team" : "mine");
+  }, [role, accountTeam]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 6000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   // Sắp xếp: chính mình lên đầu → cùng đội/tổ → còn lại theo bảng chữ cái (tiếng Việt).
   const sortedAuthorOptions = useMemo(() => {
@@ -1763,10 +1805,42 @@ export function FIWorkspace({
     form.author_user_id.trim().length > 0 &&
     form.author_user_id !== currentUserId;
 
+  const groupedAuthors = useMemo(() => {
+    const self: EmployeeOption[] = [];
+    const sameTeam: EmployeeOption[] = [];
+    const otherTeams: EmployeeOption[] = [];
+    filteredAuthors.forEach((row) => {
+      if (row.id === currentUserId) self.push(row);
+      else if (accountTeam && row.team === accountTeam) sameTeam.push(row);
+      else otherTeams.push(row);
+    });
+    return [
+      { key: "self", label: "Chính bạn", items: self },
+      { key: "sameTeam", label: accountTeam ? `Cùng đội ${displayTeam(accountTeam)}` : "Cùng đội/tổ", items: sameTeam },
+      { key: "otherTeams", label: "Đội/tổ khác (đăng ký giúp)", items: otherTeams },
+    ].filter((group) => group.items.length > 0);
+  }, [filteredAuthors, currentUserId, accountTeam]);
+
+  const displayedAuthorTeam = useMemo(() => {
+    if (authorPickerOpen) {
+      const q = authorQuery.trim();
+      if (!q) return "Chưa chọn tác giả";
+      if (normalizeAuthorQuery(q) === normalizeAuthorQuery(form.author_name) && form.team) {
+        return displayTeam(form.team);
+      }
+      if (filteredAuthors.length === 1 && filteredAuthors[0].team) {
+        return `${displayTeam(filteredAuthors[0].team)} (gợi ý)`;
+      }
+      return form.team ? `${displayTeam(form.team)} (đang tìm...)` : "Đang tìm...";
+    }
+    return displayTeam(form.team) || "Chưa chọn tác giả";
+  }, [authorPickerOpen, authorQuery, form.author_name, form.team, filteredAuthors]);
+
   const chooseAuthor = (row: { id: string; full_name: string; display_name: string; team: string | null }) => {
     const name = row.full_name || row.display_name || "";
     setForm((current) => ({ ...current, author_name: name, author_user_id: row.id, team: row.team ?? current.team }));
     setAuthorQuery(name);
+    setFormError("");
     setAuthorPickerOpen(false);
   };
 
@@ -1778,13 +1852,12 @@ export function FIWorkspace({
       setForm((current) => ({ ...current, author_name: "", author_user_id: "", team: defaultFormTeam }));
       setAuthorQuery("");
     }
+    setFormError("");
     setAuthorPickerOpen(false);
   };
 
   // Đóng dropdown và "chốt" lựa chọn khi rời ô / nhấn Enter. CHỈ tự nhận một nhân sự khi
   // chuỗi gõ trùng ĐẦY ĐỦ & CHÍNH XÁC mã tài khoản ("baomt", "minhvq") hoặc đúng họ tên.
-  // Gõ dở/mảnh ngắn (vd "vq", "vo") thì KHÔNG tự thành người nào — trả ô về tên đã chốt
-  // trước đó. Muốn chọn nhanh từ gợi ý thì bấm trực tiếp vào danh sách.
   const commitAuthorQuery = () => {
     setAuthorPickerOpen(false);
     const norm = normalizeAuthorQuery(authorQuery.trim());
@@ -1800,10 +1873,14 @@ export function FIWorkspace({
       const name = exact.full_name || exact.display_name;
       setForm((current) => ({ ...current, author_name: name, author_user_id: exact.id, team: exact.team ?? current.team }));
       setAuthorQuery(name);
-    } else {
-      // Không khớp đầy đủ → giữ nguyên tên tác giả đã chốt, đưa ô về đúng giá trị đó.
-      setAuthorQuery(form.author_name);
+      return;
     }
+    if (!norm && AUTHOR_ROLES.includes(role)) {
+      setForm((current) => ({ ...current, author_name: accountAuthorName, author_user_id: currentUserId, team: accountTeam ?? current.team }));
+      setAuthorQuery(accountAuthorName);
+      return;
+    }
+    setAuthorQuery(form.author_name);
   };
 
   // Reset tab nếu role thay đổi và tab hiện tại không còn hợp lệ
@@ -1848,16 +1925,22 @@ export function FIWorkspace({
       missing.push(form.completion_done ? "Ngày hoàn thành" : "Ngày dự kiến hoàn thành");
     }
     if (missing.length > 0) {
-      setError(`Vui lòng nhập: ${missing.join(", ")}.`);
+      setFormError(`Vui lòng nhập: ${missing.join(", ")}.`);
       setNotice("");
-      requestAnimationFrame(() => document.querySelector<HTMLElement>('[role="alert"]')?.focus());
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('.fi-form-panel [role="alert"]')?.focus());
+      return;
+    }
+    if (isBlankContentTemplate(form.content_description)) {
+      setFormError("Vui lòng điền nội dung thực tế thay cho mẫu gợi ý.");
+      setNotice("");
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('.fi-form-panel [role="alert"]')?.focus());
       return;
     }
     const planError = completionPlanError(form.completion_done, form.completion_plan_date);
     if (planError) {
-      setError(planError);
+      setFormError(planError);
       setNotice("");
-      requestAnimationFrame(() => document.querySelector<HTMLElement>('[role="alert"]')?.focus());
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('.fi-form-panel [role="alert"]')?.focus());
       return;
     }
     const completionPlan = formatCompletionPlan(form.completion_done, form.completion_plan_date);
@@ -1887,6 +1970,7 @@ export function FIWorkspace({
     const createKey = currentOperation.key;
     setCreating(true);
     setError("");
+    setFormError("");
     setNotice("");
     try {
       const created = currentOperation.recordId
@@ -1924,7 +2008,7 @@ export function FIWorkspace({
       reload();
       reloadDetail(created.id);
       if (failedFiles.length > 0) {
-        setError(`Đã đăng ký xét duyệt nhưng ${failedFiles.length}/${filesToUpload.length} ảnh chưa tải lên được. Có thể thử tải lại trong phần chi tiết hồ sơ.`);
+        setFormError(`Đã đăng ký xét duyệt nhưng ${failedFiles.length}/${filesToUpload.length} ảnh chưa tải lên được. Có thể thử tải lại trong phần chi tiết hồ sơ.`);
       } else {
         // Everything was received: clear the form so it is ready for the next
         // registration and leaving the tab does not ask about unsaved work.
@@ -1935,7 +2019,7 @@ export function FIWorkspace({
           : `Đã đăng ký xét duyệt${code}.`);
       }
     } catch (err: any) {
-      setError(err.message);
+      setFormError(err.message);
     } finally {
       setCreating(false);
     }
@@ -2179,6 +2263,12 @@ export function FIWorkspace({
   const openReviewDecision = (item: any) => {
     setEditTarget(null);
     setKhmtTarget(null);
+    if (selectedItem?.id !== item.id) {
+      setSelectedItem(item);
+      api.getSk(item.id)
+        .then((full) => setSelectedItem((current: any) => (current?.id === full.id ? full : current)))
+        .catch(() => {});
+    }
     setActionTarget({
       id: item.id,
       label: item.sk_code || item.title,
@@ -2186,6 +2276,7 @@ export function FIWorkspace({
       revision: item.server_revision ?? item.revision ?? 0,
     });
     setActionNote(item.decision_note || "");
+    approveNoteDraftRef.current = null;
     setError("");
     setNotice("");
   };
@@ -2209,6 +2300,16 @@ export function FIWorkspace({
   const handleEditSave = async () => {
     if (!editTarget || savingEdit || loadingEdit) return;
     const planOnly = isPlanOnlyEdit(editTarget);
+    if (!planOnly) {
+      if (!editForm.title.trim()) {
+        setError("Vui lòng nhập Tên SK-CTKT.");
+        return;
+      }
+      if (isBlankContentTemplate(editForm.content_description)) {
+        setError("Vui lòng điền nội dung thực tế trước khi lưu.");
+        return;
+      }
+    }
     const planError = completionPlanError(editForm.completion_done, editForm.completion_plan_date, !planOnly);
     if (planError) {
       setError(planError);
@@ -2385,12 +2486,12 @@ export function FIWorkspace({
   };
 
   const insertContentTemplate = () => {
-    const template = "1. Hiện trạng / Vấn đề:\n- \n\n2. Giải pháp cải tiến:\n- \n\n3. Hiệu quả dự kiến:\n- ";
+    setFormError("");
     setForm((current) => ({
       ...current,
       content_description: current.content_description.trim()
-        ? `${current.content_description.trim()}\n\n${template}`
-        : template,
+        ? `${current.content_description.trim()}\n\n${CONTENT_TEMPLATE}`
+        : CONTENT_TEMPLATE,
     }));
   };
 
@@ -2499,8 +2600,12 @@ export function FIWorkspace({
   // "Sáng kiến của tôi" bám theo tác giả/người đứng tên; "Phiếu tôi đã gửi" bám theo người tạo phiếu.
   const myItems = items.filter((item) => recordAuthorId(item) === currentUserId);
   const sentItems = items.filter((item) => recordSubmitterId(item) === currentUserId && recordAuthorId(item) !== currentUserId);
+  const teamItems = role === TEAM_ROLE && accountTeam
+    ? items.filter((item) => item.team === accountTeam && item.status !== "Draft")
+    : [];
   const myOwnershipSections = buildOwnershipSections(myItems, "mine");
   const sentOwnershipSections = buildOwnershipSections(sentItems, "sent");
+  const teamOwnershipSections = buildOwnershipSections(teamItems, "team");
   const userLabelById = useMemo(() => {
     const map = new Map<string, string>();
     authorOptions.forEach((row) => {
@@ -2659,11 +2764,32 @@ export function FIWorkspace({
     return historyKhmt.includes("out") ? `2 mục · ${periodLabel}` : periodLabel;
   })();
   const historyCompletionCounts: Record<HistoryCompletionFilter, number> = {
-    done: historyMeta?.summary?.completed_count ?? 0,
-    pending: historyMeta?.summary?.not_completed ?? 0,
-    auto_done: historyMeta?.summary?.approved_auto_done_count ?? 0,
-    paused: historyMeta?.summary?.approved_paused_count ?? 0,
+    done:
+      historyMeta?.facets?.completion?.done ??
+      historyMeta?.summary?.approved_completed_count ??
+      historyMeta?.summary?.completed_count ??
+      0,
+    pending:
+      historyMeta?.facets?.completion?.pending ??
+      (historyMeta?.summary?.approved_in_progress_count !== undefined
+        ? Number(historyMeta.summary.approved_in_progress_count ?? 0) +
+          Number(historyMeta.summary.approved_paused_count ?? 0)
+        : (historyMeta?.summary?.not_completed ?? 0)),
+    auto_done:
+      historyMeta?.facets?.completion?.auto_done ??
+      historyMeta?.summary?.approved_auto_done_count ??
+      0,
+    paused:
+      historyMeta?.facets?.completion?.paused ??
+      historyMeta?.summary?.approved_paused_count ??
+      0,
   };
+  const activeCompletionFilterOptions = [
+    ...historyCompletionFilterOptions,
+    ...(historyCompletionCounts.paused > 0 || historyCompletion.includes("paused")
+      ? [{ value: "paused" as const, label: "Tạm dừng", tone: "warning" }]
+      : []),
+  ];
   const ownTeamCode = teamFromAccount && FI_TEAMS.includes(teamFromAccount) ? teamFromAccount : null;
   const isMyTeamInProgressActive = Boolean(
     ownTeamCode
@@ -2826,26 +2952,25 @@ export function FIWorkspace({
           </div>
           <span className={`legacy-status-pill ${statusTone(item.status)}`}>{displayHistoryStatus(item)}</span>
         </div>
-        {activeTab === "review" && (
-          <div className="fi-inline-review-content">
-            <strong>{item.title}</strong>
-            <p>{item.content_description || "Chưa có mô tả nội dung."}</p>
-            <div className="fi-inline-review-content-foot">
-              <FiCompletionPill item={item} compact />
-              <button className="link-button" onClick={() => showItemDetail(item.id)} type="button">
-                Xem ảnh và chi tiết
-              </button>
-            </div>
-          </div>
-        )}
         <div className="fi-inline-review-grid">
           <label>
-            Kết luận đánh giá
+            <span>Kết luận đánh giá</span>
             <select
               value={actionTarget.decision}
-              onChange={(e) =>
-                setActionTarget({ ...actionTarget, decision: e.target.value as ReviewDecision })
-              }
+              onChange={(e) => {
+                const nextDecision = e.target.value as ReviewDecision;
+                setError("");
+                // Switching away from defer/reject/request_info to Đồng ý discards draft negative notes
+                // while preserving an existing approval note if the record is already Approved.
+                if (actionTarget.decision === "approve" && nextDecision !== "approve") {
+                  approveNoteDraftRef.current = actionNote;
+                } else if (actionTarget.decision !== "approve" && nextDecision === "approve") {
+                  setActionNote(
+                    approveNoteDraftRef.current ?? (item.status === "Approved" ? item.decision_note || "" : ""),
+                  );
+                }
+                setActionTarget({ ...actionTarget, decision: nextDecision });
+              }}
             >
               {reviewDecisionOptionsFor(item).map((option) => (
                 <option key={option.value} value={option.value}>
@@ -2855,10 +2980,15 @@ export function FIWorkspace({
             </select>
           </label>
           <label>
-            Ghi chú {requiresNote && <span className="required-mark">*</span>}
+            <span>
+              Ghi chú {requiresNote && <span className="required-mark">*</span>}
+            </span>
             <textarea
               value={actionNote}
-              onChange={(e) => setActionNote(e.target.value)}
+              onChange={(e) => {
+                setError("");
+                setActionNote(e.target.value);
+              }}
               placeholder={
                 requiresNote
                   ? `Nhập lý do "${reviewDecisionLabel(actionTarget.decision)}"...`
@@ -2871,15 +3001,15 @@ export function FIWorkspace({
         {currentOption && <p className="fi-review-helper">{currentOption.helper}</p>}
         {alreadyReviewed && (
           <p className="fi-review-helper" style={{ color: "#0369a1" }}>
-            Bạn đang chỉnh sửa quyết định trước đó. Đổi kết luận hoặc ghi chú rồi bấm "Cập nhật" để ghi đè.
+            Bạn đang chỉnh sửa quyết định trước đó. Đổi kết luận hoặc ghi chú rồi bấm "Cập nhật đánh giá" để ghi đè.
           </p>
         )}
         <div className="fi-inline-review-actions">
-          <button onClick={handleAction} type="button">
+          <button className="primary-cta" onClick={handleAction} type="button">
             <ClipboardCheck size={17} />
             {alreadyReviewed ? "Cập nhật đánh giá" : "Lưu đánh giá"}
           </button>
-          <button onClick={() => { setActionTarget(null); setActionNote(""); }} type="button">
+          <button onClick={() => { setActionTarget(null); setActionNote(""); setError(""); }} type="button">
             Hủy
           </button>
         </div>
@@ -2907,10 +3037,14 @@ export function FIWorkspace({
         const actions = visibleActionsForSk(role, currentUserId, item, editMode, currentTeam);
         const submitterId = recordSubmitterId(item);
         const authorId = recordAuthorId(item);
+        const needInfo = item.status === "NeedMoreInfo";
         return (
-          <div className={`workflow-item ${selectedItem?.id === item.id ? "active-row" : ""}`} key={item.id}>
+          <div className={`workflow-item ${selectedItem?.id === item.id ? "active-row" : ""} ${needInfo ? "is-need-info" : ""}`} key={item.id}>
             <button className="workflow-main" onClick={() => openItem(item.id)} type="button">
-              <strong>{item.sk_code}</strong>
+              <span className="fi-ownership-code-row">
+                <strong>{item.sk_code}</strong>
+                <span className={`fi-status-pill ${statusTone(item.status)}`}>{displayStatus(item.status)}</span>
+              </span>
               <span>{item.title}</span>
               <small>Tác giả: {item.author_name} · {displayTeam(item.team)}</small>
               {mode === "mine" && submitterId && submitterId !== authorId && (
@@ -2919,11 +3053,24 @@ export function FIWorkspace({
               {mode === "sent" && (
                 <small>Người đăng ký: {displaySubmitter(item)}</small>
               )}
-              <small>
-                {displayStatus(item.status)}
-                {item.submitted_at && item.status === "Submitted" && ` · đăng ký ngày ${new Date(item.submitted_at).toLocaleDateString("vi-VN")}`}
-                {isKhmtConsidered(item) && ` · ${khmtLabel(item)}`}
-              </small>
+              {mode === "team" && submitterId && submitterId !== authorId && (
+                <small>Đăng ký hộ: {displaySubmitter(item)}</small>
+              )}
+              {(Boolean(item.submitted_at && ["Submitted", "NeedMoreInfo"].includes(item.status)) || isKhmtConsidered(item)) && (
+                <small>
+                  {item.submitted_at && ["Submitted", "NeedMoreInfo"].includes(item.status)
+                    ? `Đăng ký ngày ${new Date(item.submitted_at).toLocaleDateString("vi-VN")}`
+                    : ""}
+                  {isKhmtConsidered(item)
+                    ? `${item.submitted_at && ["Submitted", "NeedMoreInfo"].includes(item.status) ? " · " : ""}${khmtLabel(item)}`
+                    : ""}
+                </small>
+              )}
+              {needInfo && item.decision_note && (
+                <span className="fi-need-info-callout">
+                  Yêu cầu bổ sung: {item.decision_note}
+                </span>
+              )}
               {EXECUTION_EDITABLE_STATUSES.includes(item.status) && (
                 <div style={{ marginTop: 4 }}>
                   <FiCompletionPill item={item} compact />
@@ -2931,6 +3078,17 @@ export function FIWorkspace({
               )}
             </button>
             <div className="toolbar">
+              {needInfo && actions.includes("edit") && (
+                <button
+                  className="fi-need-info-cta"
+                  onClick={() => openEdit(item)}
+                  title="Bổ sung thông tin và gửi xét duyệt lại"
+                  type="button"
+                >
+                  <Pencil size={14} />
+                  Bổ sung & gửi lại
+                </button>
+              )}
               {actions.includes("updatePlan") && !actions.includes("edit") && (
                 <button
                   className="fi-completion-update is-inline"
@@ -2942,7 +3100,7 @@ export function FIWorkspace({
                   Cập nhật tiến độ
                 </button>
               )}
-              {actions.includes("edit") && (
+              {actions.includes("edit") && !needInfo && (
                 <button
                   aria-label={`Sửa ${item.sk_code || item.title}`}
                   title={editActionTitle(item)}
@@ -2984,12 +3142,61 @@ export function FIWorkspace({
   };
 
   const fiSnapshotName = fiSnapshotNames[activeTab];
+  const drawerNavItems = useMemo(() => {
+    if (activeTab === "review") return reviewQueue;
+    if (activeTab === "history") return filteredHistoryItems;
+    if (activeTab === "register") {
+      const seen = new Set<string>();
+      const combined = [
+        ...(ownershipPanelTab === "team" ? [...teamOwnershipSections.pending, ...teamOwnershipSections.implementation] : []),
+        ...myOwnershipSections.pending,
+        ...myOwnershipSections.implementation,
+        ...sentOwnershipSections.pending,
+        ...sentOwnershipSections.implementation,
+      ];
+      return combined.filter((row) => {
+        if (!row?.id || seen.has(row.id)) return false;
+        seen.add(row.id);
+        return true;
+      });
+    }
+    return [];
+  }, [activeTab, ownershipPanelTab, reviewQueue, filteredHistoryItems, teamOwnershipSections, myOwnershipSections, sentOwnershipSections]);
+  const drawerNavIndex = selectedItem ? drawerNavItems.findIndex((row) => row.id === selectedItem.id) : -1;
+  const navigateDrawer = (delta: -1 | 1) => {
+    if (drawerNavIndex < 0) return;
+    const target = drawerNavItems[drawerNavIndex + delta];
+    if (!target) return;
+    if (actionTarget) {
+      openReviewDecision(target);
+    } else {
+      showItemDetail(target.id);
+    }
+  };
   return (
     <div
       className="content-grid"
       data-snapshot-target="true"
       data-snapshot-name={fiSnapshotName}
     >
+      {(notice || error) && (
+        <div className="fi-global-feedback" aria-live="polite">
+          {notice && (
+            <div className="fi-feedback-banner is-success" role="status">
+              <CheckCircle2 size={16} />
+              <span>{notice}</span>
+              <button type="button" aria-label="Đóng thông báo" onClick={() => setNotice("")}><X size={14} /></button>
+            </div>
+          )}
+          {error && (
+            <div className="fi-feedback-banner is-error" role="alert" tabIndex={-1}>
+              <Info size={16} />
+              <span>{error}</span>
+              <button type="button" aria-label="Đóng thông báo lỗi" onClick={() => setError("")}><X size={14} /></button>
+            </div>
+          )}
+        </div>
+      )}
       {recoveryWarning && <p role="alert">{recoveryWarning}<button onClick={() => downloadDraft("fi-draft.json", { form, operation })}>Tải bản nháp</button></p>}
       {recovery && <section className="panel wide" role="status">
         <p>Có bản khôi phục FI của tài khoản này.</p>
@@ -3306,165 +3513,199 @@ export function FIWorkspace({
       <div className={`fi-register-layout ${showForm ? "" : "single"}`}>
       {showForm && (
         <section className="panel fi-form-panel" onPaste={handleDraftPaste}>
-          <h2>Đăng ký SK-CTKT</h2>
-	          <p className="muted" style={{ marginTop: -6, marginBottom: 8 }}>
-	            Điền đầy đủ thông tin để gửi sáng kiến/cải tiến kỹ thuật vào quy trình xét duyệt.
-	          </p>
-	          <div className="form-stack">
-	            {canUseAuthorPicker ? (
-	              <div className="fi-account-source" aria-label="Thông tin tài khoản đăng ký">
-	                <div className="fi-author-cell">
-	                  <span>Tác giả</span>
-	                  <div
-	                    className="fi-author-picker"
-	                    onBlur={(event) => {
-	                      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-	                        commitAuthorQuery();
-	                      }
-	                    }}
-	                  >
-	                    <UserRound size={15} className="fi-author-picker-icon" aria-hidden="true" />
-	                    <input
-	                      id="fi-author-name"
-	                      role="combobox"
-	                      aria-expanded={authorPickerOpen}
-	                      aria-controls="fi-author-list"
-	                      aria-autocomplete="list"
-	                      autoComplete="off"
-	                      placeholder="Nhập tên hoặc mã tài khoản để tìm…"
-	                      value={authorPickerOpen ? authorQuery : form.author_name}
-	                      onFocus={(event) => {
-	                        setAuthorPickerOpen(true);
-	                        setAuthorQuery(form.author_name);
-	                        event.target.select();
-	                      }}
-	                      onChange={(event) => {
-	                        setAuthorPickerOpen(true);
-	                        setAuthorQuery(event.target.value);
-	                      }}
-	                      onKeyDown={(event) => {
-	                        if (event.key === "Escape") {
-	                          setAuthorQuery(form.author_name);
-	                          setAuthorPickerOpen(false);
-	                        } else if (event.key === "Enter") {
-	                          // Chỉ "ăn" khi gõ đủ mã tài khoản / đúng họ tên (commitAuthorQuery tự
-	                          // kiểm tra). Muốn chọn từ gợi ý thì bấm trực tiếp vào danh sách.
-	                          event.preventDefault();
-	                          commitAuthorQuery();
-	                        } else if (event.key === "ArrowDown" && !authorPickerOpen) {
-	                          setAuthorPickerOpen(true);
-	                        }
-	                      }}
-	                    />
-	                    {(authorPickerOpen ? authorQuery : form.author_name) && (
-	                      <button
-	                        type="button"
-	                        className="fi-author-clear"
-	                        title="Xóa tên"
-	                        tabIndex={-1}
-	                        onMouseDown={(event) => event.preventDefault()}
-	                        onClick={() => {
-	                          setForm((current) => ({ ...current, author_name: "", author_user_id: "", team: accountTeam ?? current.team }));
-	                          setAuthorQuery("");
-	                          setAuthorPickerOpen(true);
-	                        }}
-	                      >
-	                        <X size={14} />
-	                      </button>
-	                    )}
-	                    {authorPickerOpen && (
-	                      <div id="fi-author-list" className="fi-author-list" role="listbox" aria-label="Danh sách tác giả">
-	                        {filteredAuthors.length > 0 ? (
-	                          filteredAuthors.map((row) => (
-	                            <button
-	                              key={row.id}
-	                              type="button"
-	                              role="option"
-	                              aria-selected={normalizeAuthorQuery(form.author_name) === normalizeAuthorQuery(row.full_name)}
-	                              onMouseDown={(event) => event.preventDefault()}
-	                              onClick={() => chooseAuthor(row)}
-	                            >
-	                              <strong>
-	                                {row.full_name}
-	                                {row.id === currentUserId && <span className="fi-author-self-badge">Bạn</span>}
-	                              </strong>
-	                              <span>
-	                                <span className="fi-author-acct">{row.id}</span>
-	                                {displayTeam(row.team) ? ` · ${displayTeam(row.team)}` : ""}
-	                              </span>
-	                            </button>
-	                          ))
-	                        ) : (
-	                          <div className="fi-author-empty">
-	                            {authorQuery.trim() ? (
-	                              <>Không tìm thấy ai khớp “<strong>{authorQuery.trim()}</strong>”. Thử nhập đủ họ tên hoặc mã tài khoản.</>
-	                            ) : (
-	                              "Không có nhân sự để chọn."
-	                            )}
-	                          </div>
-	                        )}
-	                      </div>
-	                    )}
-	                  </div>
-	                  {isProxyAuthor && (
-	                    <small className="fi-author-proxy">
-	                      <Info size={13} aria-hidden="true" />
-	                      <span>Đang đăng ký giúp · người gửi: <strong>{registrarName}</strong></span>
-	                      <button type="button" onClick={resetAuthorSelection}>
-                          {AUTHOR_ROLES.includes(role) ? "Chọn lại tôi" : "Chọn lại"}
-                        </button>
-	                    </small>
-	                  )}
-	                </div>
-	                <div>
-	                  <span>Đội/tổ tác giả</span>
-	                  <strong>{displayTeam(form.team) || "Chưa gán đội/tổ"}</strong>
-	                </div>
-	              </div>
-	            ) : (
-	              <>
-	                <label htmlFor="fi-author-name">Tác giả <span style={{ color: "#dc2626" }}>*</span></label>
-	                <input
-	                  id="fi-author-name"
-	                  placeholder="Họ tên người đăng ký, ví dụ: Nguyễn Văn A"
-	                  value={form.author_name}
-	                  onChange={(e) => setForm({ ...form, author_name: e.target.value })}
-	                />
-	                <label htmlFor="fi-team-input">Đội/tổ</label>
-	                <select id="fi-team-input" value={form.team} onChange={(e) => setForm({ ...form, team: e.target.value })}>
-	                  {FI_TEAMS.map((team) => (
-	                    <option key={team}>{team}</option>
-	                  ))}
-	                </select>
-	              </>
-	            )}
-            <div className="period-selector fi-registration-period with-label">
-              <label htmlFor="fi-registration-month">Tháng đăng ký</label>
-              <select
-                id="fi-registration-month"
-                value={form.registration_month}
-                onChange={(e) => setForm({ ...form, registration_month: Number(e.target.value) })}
-              >
-                {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
-                  <option key={month} value={month}>T{month}</option>
-                ))}
-              </select>
-              <input
-                aria-label="Năm đăng ký"
-                max={2100}
-                min={2020}
-                type="number"
-                value={form.registration_year}
-                onChange={(e) => setForm({ ...form, registration_year: Number(e.target.value) || new Date().getFullYear() })}
-              />
-            </div>
+          <div className="fi-form-panel-head">
+            <h2>Đăng ký SK-CTKT</h2>
+            <p className="muted">
+              Điền đầy đủ thông tin để gửi sáng kiến/cải tiến kỹ thuật vào quy trình xét duyệt.
+            </p>
+          </div>
+          <div className="form-stack fi-compact-form">
+            {canUseAuthorPicker ? (
+              <div className="fi-form-top-grid" aria-label="Thông tin tác giả và kỳ đăng ký">
+                <div className="fi-account-source fi-author-cell">
+                  <span>Tác giả <small className="fi-author-hint">(mặc định là bạn — gõ tên để gửi hộ đồng nghiệp)</small></span>
+                  <div
+                    className="fi-author-picker"
+                    onBlur={(event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                        commitAuthorQuery();
+                      }
+                    }}
+                  >
+                    <UserRound size={15} className="fi-author-picker-icon" aria-hidden="true" />
+                    <input
+                      id="fi-author-name"
+                      role="combobox"
+                      aria-expanded={authorPickerOpen}
+                      aria-controls="fi-author-list"
+                      aria-autocomplete="list"
+                      autoComplete="off"
+                      placeholder="Nhập tên hoặc mã tài khoản để tìm…"
+                      value={authorPickerOpen ? authorQuery : form.author_name}
+                      onFocus={(event) => {
+                        setAuthorPickerOpen(true);
+                        setAuthorQuery(form.author_name);
+                        event.target.select();
+                      }}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setAuthorPickerOpen(true);
+                        setAuthorQuery(nextValue);
+                        setFormError("");
+                        if (!nextValue.trim()) {
+                          setForm((current) => ({ ...current, author_name: "", author_user_id: "", team: "" }));
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") {
+                          setAuthorQuery(form.author_name);
+                          setAuthorPickerOpen(false);
+                        } else if (event.key === "Enter") {
+                          event.preventDefault();
+                          commitAuthorQuery();
+                        } else if (event.key === "ArrowDown" && !authorPickerOpen) {
+                          setAuthorPickerOpen(true);
+                        }
+                      }}
+                    />
+                    {(authorPickerOpen ? authorQuery : form.author_name) && (
+                      <button
+                        type="button"
+                        className="fi-author-clear"
+                        title="Xóa tên"
+                        tabIndex={-1}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setForm((current) => ({ ...current, author_name: "", author_user_id: "", team: "" }));
+                          setAuthorQuery("");
+                          setAuthorPickerOpen(true);
+                        }}
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                    {authorPickerOpen && (
+                      <div id="fi-author-list" className="fi-author-list" role="listbox" aria-label="Danh sách tác giả">
+                        {groupedAuthors.length > 0 ? (
+                          groupedAuthors.map((group) => (
+                            <div className="fi-author-group" key={group.key}>
+                              <div className="fi-author-group-label">{group.label}</div>
+                              {group.items.map((row) => (
+                                <button
+                                  key={row.id}
+                                  type="button"
+                                  role="option"
+                                  aria-selected={normalizeAuthorQuery(form.author_name) === normalizeAuthorQuery(row.full_name)}
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onClick={() => chooseAuthor(row)}
+                                >
+                                  <strong>
+                                    {row.full_name}
+                                    {row.id === currentUserId && <span className="fi-author-self-badge">Bạn</span>}
+                                  </strong>
+                                  <span>
+                                    <span className="fi-author-acct">{row.id}</span>
+                                    {displayTeam(row.team) ? ` · ${displayTeam(row.team)}` : ""}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="fi-author-empty">
+                            {authorQuery.trim() ? (
+                              <>Không tìm thấy ai khớp “<strong>{authorQuery.trim()}</strong>”. Thử nhập đủ họ tên hoặc mã tài khoản.</>
+                            ) : (
+                              "Không có nhân sự để chọn."
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {isProxyAuthor && (
+                    <small className="fi-author-proxy">
+                      <Info size={13} aria-hidden="true" />
+                      <span>Đang đăng ký giúp · người gửi: <strong>{registrarName}</strong></span>
+                      <button type="button" onClick={resetAuthorSelection}>
+                        {AUTHOR_ROLES.includes(role) ? "Chọn lại tôi" : "Chọn lại"}
+                      </button>
+                    </small>
+                  )}
+                </div>
+                <div className="fi-account-source fi-author-team-box">
+                  <span>Đội/tổ tác giả</span>
+                  <strong>{displayedAuthorTeam}</strong>
+                </div>
+                <div className="period-selector fi-registration-period with-label">
+                  <label htmlFor="fi-registration-month">Tháng ĐK</label>
+                  <select
+                    id="fi-registration-month"
+                    value={form.registration_month}
+                    onChange={(e) => setForm({ ...form, registration_month: Number(e.target.value) })}
+                  >
+                    {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
+                      <option key={month} value={month}>T{month}</option>
+                    ))}
+                  </select>
+                  <input
+                    aria-label="Năm đăng ký"
+                    max={2100}
+                    min={2020}
+                    type="number"
+                    value={form.registration_year}
+                    onChange={(e) => setForm({ ...form, registration_year: Number(e.target.value) || new Date().getFullYear() })}
+                  />
+                </div>
+              </div>
+            ) : (
+              <>
+                <label htmlFor="fi-author-name">Tác giả <span style={{ color: "#dc2626" }}>*</span></label>
+                <input
+                  id="fi-author-name"
+                  placeholder="Họ tên người đăng ký, ví dụ: Nguyễn Văn A"
+                  value={form.author_name}
+                  onChange={(e) => { setFormError(""); setForm({ ...form, author_name: e.target.value }); }}
+                />
+                <div className="fi-form-row-2col">
+                  <div>
+                    <label htmlFor="fi-team-input">Đội/tổ</label>
+                    <select id="fi-team-input" value={form.team} onChange={(e) => setForm({ ...form, team: e.target.value })}>
+                      {FI_TEAMS.map((team) => (
+                        <option key={team}>{team}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="period-selector fi-registration-period with-label">
+                    <label htmlFor="fi-registration-month">Tháng đăng ký</label>
+                    <select
+                      id="fi-registration-month"
+                      value={form.registration_month}
+                      onChange={(e) => setForm({ ...form, registration_month: Number(e.target.value) })}
+                    >
+                      {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
+                        <option key={month} value={month}>T{month}</option>
+                      ))}
+                    </select>
+                    <input
+                      aria-label="Năm đăng ký"
+                      max={2100}
+                      min={2020}
+                      type="number"
+                      value={form.registration_year}
+                      onChange={(e) => setForm({ ...form, registration_year: Number(e.target.value) || new Date().getFullYear() })}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
             <label htmlFor="fi-title">Tên SK-CTKT <span style={{ color: "#dc2626" }}>*</span></label>
             <input
               id="fi-title"
               className="fi-title-input"
               placeholder="Vd: Cải tiến quy trình kiểm tra thiết bị"
               value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
+              onChange={(e) => { setFormError(""); setForm({ ...form, title: e.target.value }); }}
             />
             <div className="fi-content-label-row">
               <label htmlFor="fi-content">Nội dung đăng ký <span style={{ color: "#dc2626" }}>*</span></label>
@@ -3482,18 +3723,18 @@ export function FIWorkspace({
               id="fi-content"
               className="fi-content-input"
               placeholder="Mô tả hiện trạng, giải pháp và hiệu quả dự kiến..."
-              rows={9}
+              rows={5}
               value={form.content_description}
-              onChange={(e) => setForm({ ...form, content_description: e.target.value })}
+              onChange={(e) => { setFormError(""); setForm({ ...form, content_description: e.target.value }); }}
             />
             <CompletionPlanField
               date={form.completion_plan_date}
               done={form.completion_done}
               idPrefix="fi-plan"
-              onChange={(next) => setForm({ ...form, completion_done: next.done, completion_plan_date: next.date })}
+              onChange={(next) => { setFormError(""); setForm({ ...form, completion_done: next.done, completion_plan_date: next.date }); }}
             />
             <label>
-              Ảnh bằng chứng FI <span className="muted">(tùy chọn — có thể dán Ctrl+V từ Zalo / Snipping Tool hoặc kéo thả ảnh vào đây)</span>
+              Ảnh bằng chứng FI <span className="muted">(tùy chọn — dán Ctrl+V hoặc kéo thả ảnh)</span>
             </label>
             <div
               className={`fi-dropzone ${draftDragOver ? "is-drag-over" : ""}`}
@@ -3505,7 +3746,7 @@ export function FIWorkspace({
                 <ImagePlus size={16} />
                 Chọn ảnh
               </button>
-              <span className="fi-dropzone-hint">hoặc kéo thả ảnh vào khung / nhấn Ctrl+V để dán ảnh chụp màn hình</span>
+              <span className="fi-dropzone-hint">hoặc kéo thả ảnh vào khung / nhấn Ctrl+V để dán ảnh</span>
             </div>
             {evidenceFiles.length > 0 && (
               <div className="evidence-file-list">
@@ -3524,27 +3765,109 @@ export function FIWorkspace({
                 ))}
               </div>
             )}
+            {formError && <p className="error" role="alert" tabIndex={-1}>{formError}</p>}
             <button className="fi-register-submit" type="button" onClick={create} disabled={creating}>
               <ClipboardCheck size={17} />
               {creating ? "Đang đăng ký xét duyệt..." : "Đăng ký xét duyệt"}
             </button>
           </div>
-          {error && <p className="error" role="alert" tabIndex={-1}>{error}</p>}
-          {notice && <p className="success">{notice}</p>}
         </section>
       )}
 
       <section className="panel fi-processing-panel">
         <div className="panel-header">
-          <h2>Sáng kiến của tôi</h2>
+          <h2>{role === TEAM_ROLE && accountTeam ? `Theo dõi SK (${displayTeam(accountTeam)} & cá nhân)` : "Sáng kiến của tôi"}</h2>
           <button aria-label="Tải lại danh sách" disabled={dashboardLoading} onClick={() => reload()} title="Tải lại danh sách" type="button">
             <RefreshCw size={17} className={dashboardLoading ? "icon-spin" : undefined} />
           </button>
         </div>
+        {role === TEAM_ROLE && accountTeam && (
+          <div className="segmented-control fi-team-panel-tabs" role="tablist" aria-label="Phạm vi theo dõi SK">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={ownershipPanelTab === "team"}
+              className={ownershipPanelTab === "team" ? "active" : ""}
+              onClick={() => setOwnershipPanelTab("team")}
+            >
+              Đội {displayTeam(accountTeam)}
+              <span className="tab-badge">{teamOwnershipSections.pending.length + teamOwnershipSections.implementation.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={ownershipPanelTab === "mine"}
+              className={ownershipPanelTab === "mine" ? "active" : ""}
+              onClick={() => setOwnershipPanelTab("mine")}
+            >
+              Của tôi
+              <span className="tab-badge">{myOwnershipSections.pending.length + myOwnershipSections.implementation.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={ownershipPanelTab === "sent"}
+              className={ownershipPanelTab === "sent" ? "active" : ""}
+              onClick={() => setOwnershipPanelTab("sent")}
+            >
+              Gửi hộ
+              <span className="tab-badge">{sentOwnershipSections.pending.length + sentOwnershipSections.implementation.length}</span>
+            </button>
+          </div>
+        )}
         <p className="muted" style={{ marginTop: -4, marginBottom: 10 }}>
-          Chỉ hiển thị hồ sơ đang chờ xử lý và sáng kiến đã duyệt chưa hoàn tất. Các hồ sơ đã có kết quả khác vẫn được lưu đầy đủ trong Lịch sử FI.
+          {role === TEAM_ROLE && accountTeam && ownershipPanelTab === "team"
+            ? `Hiển thị các SK đang chờ xét duyệt và đã duyệt đang triển khai của đội ${displayTeam(accountTeam)}.`
+            : "Chỉ hiển thị hồ sơ đang chờ xử lý và sáng kiến đã duyệt chưa hoàn tất. Các hồ sơ đã có kết quả khác vẫn được lưu đầy đủ trong Lịch sử FI."}
         </p>
-        {error && <p className="error" role="alert" tabIndex={-1}>{error}</p>}
+        {role === TEAM_ROLE && accountTeam && ownershipPanelTab === "team" ? (
+          <>
+            <div className="fi-list-block">
+              <div className="fi-list-block-head fi-ownership-group-head">
+                <h3>
+                  <Clock3 size={16} />
+                  SK của đội đang chờ xét duyệt
+                  <span className="fi-ownership-count">{teamOwnershipSections.pending.length}</span>
+                </h3>
+              </div>
+              {renderOwnershipItems(
+                teamOwnershipSections.pending,
+                `Đội ${displayTeam(accountTeam)} chưa có SK nào đang chờ xét duyệt.`,
+                "team",
+                "teamPending",
+              )}
+            </div>
+            <div className="fi-list-block fi-implementation-block">
+              <div className="fi-list-block-head fi-ownership-group-head">
+                <div>
+                  <h3>
+                    <CheckCircle2 size={16} />
+                    SK của đội đang triển khai
+                    <span className="fi-ownership-count success">{teamOwnershipSections.implementation.length}</span>
+                  </h3>
+                  <p className="muted">Đội trưởng có thể cập nhật tiến độ hoặc gán KHMT ngay trong chi tiết.</p>
+                </div>
+              </div>
+              {renderOwnershipItems(
+                teamOwnershipSections.implementation,
+                `Đội ${displayTeam(accountTeam)} chưa có SK nào đang triển khai.`,
+                "team",
+                "teamImplementation",
+              )}
+            </div>
+            <button className="fi-ownership-history-link" onClick={() => void jumpToHistoryWithFilters({ team: accountTeam })} type="button">
+              <History size={16} />
+              <span>
+                <strong>Xem toàn bộ SK của đội {displayTeam(accountTeam)}</strong>
+                <small>Bao gồm cả SK đã hoàn thành & kết luận trước đó trong Lịch sử FI</small>
+              </span>
+              <ChevronRight size={16} />
+            </button>
+          </>
+        ) : (
+          <>
+        {(!(role === TEAM_ROLE && accountTeam) || ownershipPanelTab === "mine") && (
+          <>
         <div className="fi-list-block">
           <div className="fi-list-block-head fi-ownership-group-head">
             <h3>
@@ -3590,7 +3913,10 @@ export function FIWorkspace({
             <ChevronRight size={16} />
           </button>
         )}
-        <div className="fi-list-block fi-sent-block">
+          </>
+        )}
+        {(!(role === TEAM_ROLE && accountTeam) || ownershipPanelTab === "sent") && (
+        <div className={`fi-list-block ${role === TEAM_ROLE && accountTeam ? "" : "fi-sent-block"}`}>
           <div className="fi-list-block-head fi-ownership-group-head">
             <div>
               <h3>
@@ -3640,6 +3966,9 @@ export function FIWorkspace({
             </button>
           )}
         </div>
+        )}
+          </>
+        )}
       </section>
       </div>
         </>
@@ -3765,12 +4094,21 @@ export function FIWorkspace({
               </button>
             )}
           </div>
-          {error && <p className="error" role="alert" tabIndex={-1}>{error}</p>}
+          {role === ADMIN_ROLE && !editMode && (
+            <div className="fi-readonly-note" role="note">
+              <Info size={16} />
+              <span>
+                Đang ở chế độ chỉ xem — bật <strong>Chỉnh sửa</strong> ở góc trên để đánh giá, gán KHMT hoặc xóa SK.
+              </span>
+            </div>
+          )}
           {legacyPendingCount > 0 ? (
             <div className="warning-inline fi-legacy-pending-note" role="note">
               <span>
-                Còn {legacyPendingCount} SK nhập từ dữ liệu cũ đang chờ xét duyệt. Các hồ sơ này được xử lý ở tab Lịch sử FI
-                (bật Chỉnh sửa để đánh giá).
+                Còn {legacyPendingCount} SK nhập từ dữ liệu cũ đang chờ xét duyệt.{" "}
+                {role === ADMIN_ROLE && !editMode
+                  ? "Các hồ sơ này được xử lý ở tab Lịch sử FI (bật Chỉnh sửa để đánh giá)."
+                  : "Các hồ sơ này có thể xem và đánh giá trực tiếp ở tab Lịch sử FI."}
               </span>
               <button className="link-button" onClick={() => void selectTab("history")} type="button">Mở Lịch sử FI</button>
             </div>
@@ -3780,6 +4118,14 @@ export function FIWorkspace({
               const actions = visibleActionsForSk(role, currentUserId, item, editMode, currentTeam);
               const alreadyReviewed = REVIEWED_STATUSES.includes(item.status);
               const isReviewOpen = actionTarget?.id === item.id;
+              const submitterName = displaySubmitter(item);
+              const sameAuthorSubmitter = !submitterName || submitterName === item.author_name;
+              const imgCount = Array.isArray(item.supporting_images)
+                ? item.supporting_images.length
+                : Number(item.image_count ?? 0);
+              const planView = resolveExecutionView(item);
+              const showPlanPill =
+                EXECUTION_EDITABLE_STATUSES.includes(item.status) || Boolean(planView.dateText);
               return (
                 <div
                   className={`workflow-item fi-review-item ${selectedItem?.id === item.id ? "active-row" : ""} ${isReviewOpen ? "review-open" : ""}`}
@@ -3788,14 +4134,26 @@ export function FIWorkspace({
                   <button className="workflow-main fi-review-main" onClick={() => openItem(item.id)} type="button">
                     <span className="fi-review-code">{item.sk_code}</span>
                     <strong className="fi-review-title">{item.title}</strong>
+                    {item.content_description && (
+                      <p className="fi-review-preview">{item.content_description}</p>
+                    )}
                     <span className="fi-review-meta">
                       <UserRound size={14} />
-                      Tác giả: {item.author_name} · Người đăng ký: {displaySubmitter(item)} · {displayTeam(item.team)}
+                      Tác giả: {item.author_name}
+                      {!sameAuthorSubmitter ? ` · Đăng ký hộ: ${submitterName}` : ""}
+                      {" · "}
+                      {displayTeam(item.team)}
                     </span>
                     <span className="fi-review-state-line">
                       <span className={`fi-status-pill ${statusTone(item.status)}`}>
                         {displayStatus(item.status)}
                       </span>
+                      {showPlanPill && <FiCompletionPill item={item} compact />}
+                      {imgCount > 0 && (
+                        <span className="fi-review-img-count">
+                          <ImageIcon size={12} /> {imgCount} ảnh
+                        </span>
+                      )}
                       {item.submitted_at && (
                         <span className="fi-review-submitted">
                           đăng ký ngày {new Date(item.submitted_at).toLocaleDateString("vi-VN")}
@@ -3833,7 +4191,6 @@ export function FIWorkspace({
                       </button>
                     )}
                   </div>
-                  {selectedItem?.id !== item.id && renderReviewDecisionPanel(item)}
                 </div>
               );
             })}
@@ -3852,7 +4209,7 @@ export function FIWorkspace({
         </section>
       )}
 
-      {activeTab !== "history" && selectedItem && (
+      {selectedItem && (
         <FiDetailDrawer
           item={selectedItem}
           statusLabel={displayStatus(selectedItem.status)}
@@ -3873,6 +4230,10 @@ export function FIWorkspace({
           uploadingImages={uploadingImages}
           images={selectedImages}
           historyEntries={selectedHistory}
+          reviewOpen={actionTarget?.id === selectedItem.id}
+          positionLabel={drawerNavIndex >= 0 && drawerNavItems.length > 1 ? `${drawerNavIndex + 1}/${drawerNavItems.length}` : undefined}
+          onPrev={drawerNavIndex > 0 ? () => navigateDrawer(-1) : undefined}
+          onNext={drawerNavIndex >= 0 && drawerNavIndex < drawerNavItems.length - 1 ? () => navigateDrawer(1) : undefined}
           completionBand={
             <FiExecutionBand
               item={selectedItem}
@@ -3920,7 +4281,14 @@ export function FIWorkspace({
           }}
           onEdit={() => openEdit(selectedItem)}
           onDelete={() => handleDelete(selectedItem)}
-          onReview={() => openReviewDecision(selectedItem)}
+          onReview={() => {
+            if (actionTarget?.id === selectedItem.id) {
+              setActionTarget(null);
+              setError("");
+            } else {
+              openReviewDecision(selectedItem);
+            }
+          }}
           onTriggerImageUpload={() => detailFileInputRef.current?.click()}
           onAssignKhmt={handleAssignKhmtDirect}
           onClearKhmt={handleClearKhmtDirect}
@@ -4178,7 +4546,7 @@ export function FIWorkspace({
                 label="Hoàn thành"
                 icon={<CheckCircle2 size={14} />}
                 align="right"
-                options={historyCompletionFilterOptions.map((option) => ({
+                options={activeCompletionFilterOptions.map((option) => ({
                   ...option,
                   count: historyCompletionCounts[option.value],
                 }))}
@@ -4226,6 +4594,7 @@ export function FIWorkspace({
             const totalAllDecisions = facetDecisions
               ? passed + failed + deferred + pending
               : totalForRate;
+            const hasDecisionFilter = historyDecisions.length > 0 && facetDecisions != null;
             return (
               <div className={`fi-history-summary ${historyFiltersOpen ? "" : "is-collapsed"}`} role="group" aria-label="Tóm tắt — nhấn để lọc nhanh">
                 <button
@@ -4236,8 +4605,12 @@ export function FIWorkspace({
                   title="Hiển thị tất cả SK-CTKT"
                 >
                   <span>Tổng SK</span>
-                  <strong>{formatCount(totalForRate)}</strong>
-                  <small>{formatCount(passed)} đồng ý · {formatCount(pending)} chờ duyệt</small>
+                  <strong>{formatCount(hasDecisionFilter ? totalAllDecisions : totalForRate)}</strong>
+                  <small>
+                    {hasDecisionFilter
+                      ? `Đang lọc: ${formatCount(totalForRate)} SK`
+                      : `${formatCount(passed)} đồng ý · ${formatCount(pending)} chờ duyệt`}
+                  </small>
                 </button>
                 <button
                   type="button"
@@ -4338,9 +4711,6 @@ export function FIWorkspace({
               {group.items.map((item) => {
                 const isOpen = selectedItem?.id === item.id;
                 const actions = visibleActionsForSk(role, currentUserId, item, editMode, currentTeam);
-                const detail: any = isOpen ? (selectedItem ?? item) : item;
-                const detailImages = Array.isArray(detail.supporting_images) ? detail.supporting_images : [];
-                const isHistorical = Boolean(detail.is_historical_import);
                 return (
                 <div className="legacy-record" key={item.id}>
                   <div className={`legacy-row ${isOpen ? "active-row" : ""}`}>
@@ -4422,194 +4792,11 @@ export function FIWorkspace({
                           </button>
                         )}
                         <button className="legacy-row-action" onClick={() => openHistoryItem(item)} type="button">
-                          {isOpen ? "Thu gọn" : "Xem chi tiết"}
+                          {isOpen ? "Đang xem" : "Xem chi tiết"}
                         </button>
                       </div>
                     </div>
                   </div>
-                  {renderReviewDecisionPanel(item)}
-                  {isOpen && (
-                    <div className="legacy-inline-detail">
-                      <div className="detail-grid">
-                        <div>
-                          <span>Tác giả</span>
-                          <strong>{detail.author_name}</strong>
-                        </div>
-                        <div>
-                          <span>Người đăng ký</span>
-                          <strong>{displaySubmitter(detail)}</strong>
-                        </div>
-                        <div>
-                          <span>Trạng thái</span>
-                          <strong>{displayHistoryStatus(detail)}</strong>
-                        </div>
-                        <div>
-                          <span>Tháng đăng ký</span>
-                          <strong>{registrationMonthLabel(detail)}</strong>
-                        </div>
-                        <div>
-                          <span>Xét vào KHMT</span>
-                          <strong>{khmtLabel(detail)}</strong>
-                        </div>
-                      </div>
-                      <FiExecutionBand
-                        item={detail}
-                        canUpdate={canUpdateExecution(role, currentUserId, currentTeam, detail, editMode)}
-                        confirmingAutoDone={confirmingAutoDoneId === detail.id}
-                        onUpdate={() => openExecutionModal(detail)}
-                        onQuickConfirm={() => void handleQuickConfirmAutoDone(detail)}
-                        onQuickExtend={() => openExecutionModal(detail, "in_progress")}
-                        hint={executionBlockedHint(role, currentUserId, currentTeam, detail, editMode)}
-                        actorName={displayUser}
-                      />
-                      <div className="legacy-expanded-content">
-                        <section>
-                          <span>Nội dung đăng ký</span>
-                          <p>{detail.content_description || "Chưa có mô tả nội dung."}</p>
-                        </section>
-                        {(detail.fi_coordinator_comments || detail.bm01_raw_conclusion) && (
-                          <section className="legacy-review-note">
-                            <span>Xét duyệt</span>
-                            <p>{detail.fi_coordinator_comments || detail.bm01_raw_conclusion}</p>
-                          </section>
-                        )}
-                        {detail.workshop_leader_conclusion && (
-                          <section>
-                            <span>Kết luận LĐX (dữ liệu cũ)</span>
-                            <p>{detail.workshop_leader_conclusion}</p>
-                          </section>
-                        )}
-                        {detail.decision_note && (
-                          <section className="legacy-review-note">
-                            <span>Ghi chú đánh giá</span>
-                            <p>{detail.decision_note}</p>
-                          </section>
-                        )}
-                        {planUpdateHistory(detail).length > 0 && (
-                          <section className="legacy-plan-history">
-                            <span>Lịch sử cập nhật tình hình thực hiện</span>
-                            <ul>
-                              {planUpdateHistory(detail).map((history: any, index: number) => (
-                                <li key={`${history.changed_at}-${index}`}>
-                                  <time>{formatHistoryTime(history.changed_at)}</time>
-                                  {" · "}
-                                  {displayUser(history.changed_by)}
-                                  {": "}
-                                  {historyDetail(history)?.text}
-                                </li>
-                              ))}
-                            </ul>
-                          </section>
-                        )}
-                      </div>
-                      {(() => {
-                        const isApprovedItem = EXECUTION_EDITABLE_STATUSES.includes(detail.status);
-                        const canUploadHere = canUploadImages(role, currentUserId, detail, editMode, currentTeam);
-                        const staged = splitImagesByStage(detailImages);
-                        const idxById = new Map<string, number>();
-                        detailImages.forEach((img: any, idx: number) => idxById.set(String(img.id), idx));
-                        const renderThumb = (img: any) => {
-                          const canDel = canDeleteSkImage(role, currentUserId, currentTeam, detail, img, editMode);
-                          return (
-                            <div key={img.id} className="legacy-evidence-thumb image-card" title={img.file_name}>
-                              <AuthenticatedSkImage
-                                skId={detail.id}
-                                image={img}
-                                onOpen={() => {
-                                  setSelectedItem(detail);
-                                  setImagePreviewIndex(idxById.get(String(img.id)) ?? 0);
-                                }}
-                              />
-                              {canDel && (
-                                <button
-                                  aria-label={`Xóa ảnh ${img.file_name}`}
-                                  className="image-card-delete"
-                                  title="Xóa ảnh"
-                                  onClick={() => handleDeleteImage(detail.id, img.id)}
-                                  type="button"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              )}
-                            </div>
-                          );
-                        };
-
-                        return (
-                          <div className="legacy-evidence">
-                            <div className="legacy-evidence-head">
-                              <span className="legacy-evidence-title">
-                                <ImageIcon size={15} />
-                                Ảnh bằng chứng
-                                {detailImages.length > 0 && <em>({detailImages.length})</em>}
-                              </span>
-                              {!isApprovedItem && isHistorical && detailImages.length === 0 && (
-                                <small className="muted"><Info size={13} /> Chưa có ảnh minh chứng.</small>
-                              )}
-                            </div>
-                            {isApprovedItem ? (
-                              <div className="fi-evidence-stages">
-                                {staged.registration.length > 0 && (
-                                  <div className="fi-evidence-stage-group">
-                                    <div className="fi-evidence-stage-head">
-                                      <span className="fi-evidence-stage-title">
-                                        Ảnh đăng ký <em>({staged.registration.length})</em>
-                                      </span>
-                                    </div>
-                                    <div className="legacy-evidence-grid">
-                                      {staged.registration.map(renderThumb)}
-                                    </div>
-                                  </div>
-                                )}
-                                <div className="fi-evidence-stage-group is-completion">
-                                  <div className="fi-evidence-stage-head">
-                                    <span className="fi-evidence-stage-title">
-                                      Ảnh hoàn thành <em>({staged.completion.length})</em>
-                                    </span>
-                                    {canUploadHere && (
-                                      <button
-                                        type="button"
-                                        className="fi-evidence-upload-btn"
-                                        disabled={uploadingImages}
-                                        onClick={() => {
-                                          setSelectedItem(detail);
-                                          detailFileInputRef.current?.click();
-                                        }}
-                                      >
-                                        <ImagePlus size={14} />
-                                        {uploadingImages ? "Đang tải..." : "Thêm ảnh hoàn thành"}
-                                      </button>
-                                    )}
-                                  </div>
-                                  {staged.completion.length > 0 ? (
-                                    <div className="legacy-evidence-grid">
-                                      {staged.completion.map(renderThumb)}
-                                    </div>
-                                  ) : (
-                                    <div className="legacy-evidence-empty">
-                                      <ImageIcon size={18} />
-                                      <span>Chưa có ảnh bằng chứng hoàn thành cho SK này.</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            ) : detailImages.length > 0 ? (
-                              <div className="legacy-evidence-grid">
-                                {detailImages.map(renderThumb)}
-                              </div>
-                            ) : (
-                              !isHistorical && (
-                                <div className="legacy-evidence-empty">
-                                  <ImageIcon size={20} />
-                                  <span>Chưa có ảnh bằng chứng cho SK này.</span>
-                                </div>
-                              )
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
                 </div>
                 );
               })}

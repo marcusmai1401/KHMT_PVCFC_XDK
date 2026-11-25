@@ -729,6 +729,19 @@ def test_fi_history_export_uses_history_filters(client, admin_headers):
             completed_at=completed_at,
         )
 
+    pending_approved = record(
+        "sk-export-approved-pending",
+        team="TCĐK",
+        status="Approved",
+        month=6,
+        title="Approved in-progress export",
+        consider_for_khmt=True,
+        completed_at=None,
+        sequence=2,
+    )
+    pending_approved.khmt_month = 7
+    pending_approved.completion_plan = "Dự kiến hoàn thành 31/12/2026"
+
     with create_session() as db:
         db.add_all(
             [
@@ -762,6 +775,7 @@ def test_fi_history_export_uses_history_filters(client, admin_headers):
                     month=6,
                     title="Pending export",
                 ),
+                pending_approved,
                 record(
                     "sk-export-draft",
                     team="TBCH",
@@ -820,9 +834,7 @@ def test_fi_history_export_uses_history_filters(client, admin_headers):
         "FI/06/2026-TCĐK-01",
     }
     assert set(exported_codes("?completion=pending")) == {
-        "FI/05/2026-TBCH-01",
-        "FI/06/2026-TBCH-01",
-        "FI/06/2026-TCĐK-01",
+        "FI/06/2026-TCĐK-02",
     }
     assert exported_codes(
         "?teams=TBĐL&registration_months=6&decisions=approved&khmt=in&khmt_periods=2026-6&completion=done"

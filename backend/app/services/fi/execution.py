@@ -263,6 +263,15 @@ def resolve_execution_state(
         status_value = EXECUTION_STATUS_IN_PROGRESS
         is_auto = False
 
+    updated_at_iso: str | None = None
+    if record.execution_updated_at is not None:
+        aware_updated = (
+            record.execution_updated_at
+            if record.execution_updated_at.tzinfo is not None
+            else record.execution_updated_at.replace(tzinfo=timezone.utc)
+        )
+        updated_at_iso = aware_updated.isoformat()
+
     payload: dict[str, Any] = {
         "status": status_value,
         "raw_status": record.execution_status,
@@ -271,7 +280,7 @@ def resolve_execution_state(
         "due_date": due.isoformat() if due else None,
         "completed_date": completed_on.isoformat() if (status_value == EXECUTION_STATUS_COMPLETED and completed_on) else None,
         "note": record.execution_note,
-        "updated_at": record.execution_updated_at.isoformat() if record.execution_updated_at else None,
+        "updated_at": updated_at_iso,
         "updated_by": record.execution_updated_by,
         "updated_by_name": _actor_display_name(db, record.execution_updated_by),
     }
